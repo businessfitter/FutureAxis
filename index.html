@@ -168,6 +168,7 @@ svg text{fill:var(--muted);font:11px var(--f-body)}
         <span class="mut">to</span>
         <input type="date" id="pEnd" aria-label="Period end">
       </div>
+      <label class="period" id="curBar" hidden><span class="note">Show in</span><select id="viewCur" aria-label="Display currency"></select></label>
       <div class="who" id="who" hidden><span id="whoEmail"></span><button class="btn sm" id="signOut" type="button">Sign out</button></div>
       </div>
     </div>
@@ -181,6 +182,7 @@ svg text{fill:var(--muted);font:11px var(--f-body)}
 <div id="toast" class="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
 <script>
 /* ---------- constants ---------- */
@@ -194,17 +196,30 @@ const TYPES = {
   "Investor Profit Accrued":    {pay:1, share:1},
   "Investor Profit Paid":       {cash:-1, pay:-1},
   "Investor Capital Repaid":    {cash:-1, icap:-1},
-  "Operating Expense":          {cash:-1, opex:1}
+  "Operating Expense":          {cash:-1, opex:1},
+  "Other Income":               {cash:1, oinc:1}
 };
 const INV_TYPES = ["Investor Profit Accrued","Investor Profit Paid","Investor Capital Repaid"];
 const VEN_TYPES = ["Investment Addition","Investment Withdrawal","Profit Accrued","Profit Received"];
-const TABS = [["dashboard","Dashboard"],["|"],["ventures","Ventures"],["investors","Investors"],["|"],["ledger","Ledger"],["|"],["returns","Investor returns"],["monthly","Monthly profit"],["statements","Financial statements"],["|"],["users","Users"],["settings","Settings"]];
+const TABS = [["dashboard","Dashboard"],["|"],["capital","Share capital"],["ventures","Ventures"],["investors","Investors"],["|"],["ledger","Ledger"],["bank","Bank"],["|"],["returns","Investor returns"],["monthly","Monthly profit"],["statements","Financial statements"],["|"],["import","Import"],["users","Users"],["settings","Settings"]];
+const MODES = ["Mudarabah","Musharakah","Equity","Loan","Profit participation","Other"];
+const METHODS = ["Bank transfer","Cheque","Cash","Card","Other"];
+const isCashType = t => !!(TYPES[t]||{}).cash;
+/* ---- currencies: data is stored in the base currency; the screen shows the chosen view currency ---- */
+const CURS = ["USD","AED"];
+const BASE = () => String(S.cfg.base || "USD").toUpperCase();
+const PER_USD = () => ({USD:1, AED: num(S.cfg.aedRate) || 3.6725});
+const conv = (v, from, to) => { const r = PER_USD(); return num(v) / (r[from] || 1) * (r[to] || 1); };
+const VIEW = () => String(S.view || S.cfg.view || BASE()).toUpperCase();
+const VX = () => conv(1, BASE(), VIEW());
+const MONEY_FIELDS = {ledger:["amount","ownPart"], placements:["amount"]};
+function scaleDoc(col, d, f){ const ks = MONEY_FIELDS[col]; if (!ks) return d; const o = {...d}; for (const k of ks) if (o[k]!=="" && o[k]!=null && isFinite(+o[k])) o[k] = +o[k] * f; return o; }
 const COLS = ["var(--c1)","var(--c2)","var(--c3)","var(--c4)","var(--c5)","var(--c6)","var(--c7)","var(--c8)"];
 /* a venture keeps the same colour everywhere, set by its position in the register */
 const vcol = id => { const i = S.biz.findIndex(b=>b.id===id); return i<0 ? "var(--muted)" : COLS[i % COLS.length]; };
 const ORIGIN = "0000-01-01";
 
-const S = {biz:[], pl:[], led:[], cfg:{entity:"Future Axis Holdings", currency:"AED"},
+const S = {biz:[], pl:[], led:[], bank:[], bl:[], sh:[], raw:null, view:"", bankSel:"", blf:"all", imp:null, cfg:{entity:"Future Axis Holdings", currency:"AED"},
   loaded:{biz:false,pl:false,led:false}, db:null, dl:null, canWrite:null, tab:"dashboard",
   start:"", end:"", preset:"ytd", lf:{biz:"",type:"",q:""}, year:null, csv:{}};
 
@@ -225,6 +240,8 @@ const fmtDate = s => s ? D(s).toLocaleDateString("en-GB",{day:"2-digit",month:"s
 const div = (a,b) => b ? a/b : 0;
 const bizName = id => id ? (S.biz.find(b=>b.id===id)?.name || "Unknown venture") : "Future Axis (HQ)";
 const bizCode = id => id ? (S.biz.find(b=>b.id===id)?.code || "?") : "HQ";
+const bankCode = id => S.bank.find(a=>a.id===id)?.code || "";
+const bankName = id => { const a = S.bank.find(x=>x.id===id); return a ? `${a.code} · ${a.name}` : ""; };
 const plLabel = id => { const p = S.pl.find(x=>x.id===id); return p ? `${p.code||""} · ${p.investor}` : ""; };
 function toast(m){ const t=$("#toast"); t.textContent=m; t.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>t.hidden=true,2600); }
 const store = { get(k){ try{return localStorage.getItem(k)}catch(e){return null} }, set(k,v){ try{localStorage.setItem(k,v)}catch(e){} } };
@@ -262,13 +279,13 @@ function balanceSheet(d){
   const cash = bal("cash",d) + placed(ORIGIN,d);
   const inv = bal("inv",d), rec = bal("rec",d);
   const icap = placed(ORIGIN,d) + bal("icap",d), pay = bal("pay",d);
-  const owner = bal("owner",d), re = bal("inc",d) - bal("share",d) - bal("opex",d);
+  const owner = bal("owner",d), re = bal("inc",d) - bal("share",d) - bal("opex",d) + bal("oinc",d);
   const assets = cash+inv+rec, liab = icap+pay, eq = owner+re;
   return {cash,inv,rec,assets,icap,pay,liab,owner,re,eq,le:liab+eq,diff:assets-liab-eq};
 }
 function pnl(from,to){
-  const inc = flow("inc",from,to), share = flow("share",from,to), opex = flow("opex",from,to);
-  return {inc, share, spread:inc-share, opex, net:inc-share-opex};
+  const inc = flow("inc",from,to), share = flow("share",from,to), opex = flow("opex",from,to), oinc = flow("oinc",from,to);
+  return {inc, share, spread:inc-share, oinc, opex, net:inc-share+oinc-opex};
 }
 function ventureAccounts(){
   const {start, end} = S, pd = days(start,end)+1;
@@ -301,8 +318,8 @@ function investorReturns(){
 function ratios(){
   const P = pnl(S.start,S.end), va = ventureAccounts(), pd = days(S.start,S.end)+1;
   const T = va.reduce((s,x)=>s+x.net,0), K = va.reduce((s,x)=>s+x.icap,0), O = T-K;
-  const incOwn = div(P.inc*O, T), incInv = P.inc - incOwn;
-  const netOwn = incOwn - P.opex, netInv = incInv - P.share;
+  const sp = incomeSplit(S.start, S.end), incOwn = sp.own, incInv = sp.inv;
+  const netOwn = incOwn + P.oinc - P.opex, netInv = incInv - P.share;
   const an = 365/pd;
   return {P, T, K, O, incOwn, incInv, netOwn, netInv, pd, an,
     npr: div(P.net,P.inc), nprOwn: div(netOwn,O), nprInv: div(netInv,K), invRet: div(P.share,K), roc: div(P.net,T)};
@@ -402,7 +419,7 @@ function viewDashboard(){
     <td><div class="split" title="Own ${ownW.toFixed(0)}% · Investor ${invW.toFixed(0)}%"><i style="width:${ownW}%;background:var(--accent)"></i><i style="width:${invW}%;background:var(--gold)"></i></div></td>
     <td class="n">${pct(div(x.net,R.T))}</td><td class="n">${pct(num(x.b.rate))}</td><td class="n">${pct(x.yld)}</td><td class="n">${money(x.contrib)}</td></tr>`; }).join("");
   const warn = Math.abs(bs.diff)>0.5 ? `<div class="banner">Balance sheet is out by ${nf.format(bs.diff)}. Check the ledger for entries with a missing venture or placement.</div>`:"";
-  return `<div class="head"><div><span class="eyebrow">Position at ${fmtDate(S.end)}</span><h1>Dashboard</h1><p>Profit figures cover ${fmtDate(S.start)} to ${fmtDate(S.end)} (${R.pd} days). Capital figures are balances at period end.</p></div></div>
+  return `<div class="head"><div><span class="eyebrow">Position at ${fmtDate(S.end)} · ${h(VIEW())}</span><h1>Dashboard</h1><p>Profit figures cover ${fmtDate(S.start)} to ${fmtDate(S.end)} (${R.pd} days). Capital figures are balances at period end.</p></div></div>
   <div class="stack">${warn}
   <div class="kpis">
     ${k("Capital deployed",money(R.T),`${active} active venture${active===1?"":"s"}`)}
@@ -412,6 +429,13 @@ function viewDashboard(){
     ${k("Profit receivable",money(bs.rec),"due from ventures")}
     ${k("Cash",money(bs.cash),`investor profit payable ${nf.format(bs.pay)}`)}
   </div>
+  <section class="sheet"><div class="sheet-h"><div><h2>Profit by source</h2><p>${fmtDate(S.start)} to ${fmtDate(S.end)} · venture profit split by whose capital earned it, day by day</p></div><div class="row">${S.canWrite!==false?'<button class="btn sm" data-acc="1">Run profit accruals</button>':""}<button class="btn sm" data-go="capital">Share capital</button></div></div>
+    <div class="kpis" style="border:0;border-radius:0">
+      ${k("Profit from paid-up capital", money(R.incOwn), `on ${nf.format(R.O)} own capital · ${pct(div(R.incOwn,R.O)*R.an)} p.a.`)}
+      ${k("Profit from investor funds", money(R.incInv - R.P.share), `${nf.format(R.incInv)} earned less ${nf.format(R.P.share)} investor share`)}
+      ${k("Other income less expenses", money(R.P.oinc - R.P.opex), `other income ${nf.format(R.P.oinc)} · expenses ${nf.format(R.P.opex)}`)}
+      ${k("Net profit", money(R.P.net), "sum of the three")}
+    </div></section>
   <div class="grid4">
     <section class="sheet"><div class="sheet-h"><div><h2>Investment allocation</h2><p>Share of capital deployed in each venture at ${fmtDate(S.end)}</p></div></div>
       <div class="sheet-b">${donut(inv.map(x=>({l:x.b.name, v:x.net, c:vcol(x.b.id)})), {center:"Deployed", fmt:kfmt, aria:"Investment allocation by venture", empty:"Allocation appears once capital is invested in a venture."})}</div></section>
@@ -431,7 +455,7 @@ function viewDashboard(){
     ${rr("Return credited to investors",R.invRet,R.invRet*R.an,"Investor profit share accrued ÷ investor capital")}
     ${rr("Return on capital deployed",R.roc,R.roc*R.an,"Net profit ÷ total capital deployed")}
     </tbody></table></div>
-    <div class="sheet-b note" style="border-top:1px solid var(--line)">Venture income is split between own and investor capital in proportion to capital deployed at period end: ${nf.format(R.incOwn)} on own capital, ${nf.format(R.incInv)} on investor capital. Operating expenses are borne by Future Axis's own capital.</div>
+    <div class="sheet-b note" style="border-top:1px solid var(--line)">Each venture's income is split between own and investor capital by the capital each had in the venture when it was earned (day by day for automatic accruals): ${nf.format(R.incOwn)} on own capital, ${nf.format(R.incInv)} on investor capital. Operating expenses are borne by Future Axis's own capital.</div>
   </section>
   <section class="sheet"><div class="sheet-h"><div><h2>Venture allocations</h2><p><span class="pill">Own</span> <span class="pill inv">Investor</span> split of each venture's capital</p></div></div>
     <div class="tbl"><table><thead><tr><th>Venture</th><th class="n">Deployed</th><th class="n">Own</th><th class="n">Investor</th><th>Split</th><th class="n">Share</th><th class="n">Expected p.a.</th><th class="n">Actual p.a.</th><th class="n">Net contribution</th></tr></thead>
@@ -442,16 +466,16 @@ function viewDashboard(){
 
 function viewVentures(){
   const va = ventureAccounts();
-  csvReg("ventures",["ID","Name","Nature","Address","Contact person","Phone","Email","Expected rate","Start date","Status"], S.biz.map(b=>[b.code,b.name,b.nature,b.address,b.contact,b.phone,b.email,p2(num(b.rate)),b.startDate,b.status]));
+  csvReg("ventures",["ID","Name","Nature","Address","Contact person","Phone","Email","Expected rate","Mode of investment","Start date","Status"], S.biz.map(b=>[b.code,b.name,b.nature,b.address,b.contact,b.phone,b.email,p2(num(b.rate)),b.mode,b.startDate,b.status]));
   csvReg("venture-accounts",["ID","Venture","Invested","Withdrawn","Net investment","Investor capital","Own investment","Profit accrued (period)","Profit received (period)","Receivable","Investor share (period)","Investor payable","Net contribution","Actual yield p.a.","Expected p.a."], va.map(x=>[x.b.code,x.b.name,r0(x.added),r0(x.wd),r0(x.net),r0(x.icap),r0(x.own),r0(x.acc),r0(x.recd),r0(x.rec),r0(x.share),r0(x.pay),r0(x.contrib),p2(x.yld),p2(num(x.b.rate))]));
   const st = s => `<span class="pill ${s==="Active"?"ok":s==="Exited"?"":"warn"}">${h(s||"Active")}</span>`;
-  const rows = S.biz.map(b=>`<tr class="click" data-edit="biz:${b.id}"><td class="n" style="text-align:left">${h(b.code)}</td><td><b style="font-weight:600">${h(b.name)}</b><div class="note">${h(b.nature||"")}</div></td><td>${h(b.contact||"")}<div class="note">${h([b.phone,b.email].filter(Boolean).join(" · "))}</div></td><td class="note" style="max-width:26ch">${h(b.address||"")}</td><td class="n">${pct(num(b.rate))}</td><td class="n">${fmtDate(b.startDate)}</td><td>${st(b.status)}${b.example?' <span class="pill warn">Example</span>':""}</td></tr>`).join("");
+  const rows = S.biz.map(b=>`<tr class="click" data-edit="biz:${b.id}"><td class="n" style="text-align:left">${h(b.code)}</td><td><b style="font-weight:600">${h(b.name)}</b><div class="note">${h(b.nature||"")}</div></td><td>${h(b.contact||"")}<div class="note">${h([b.phone,b.email].filter(Boolean).join(" · "))}</div></td><td class="note" style="max-width:26ch">${h(b.address||"")}</td><td class="n">${pct(num(b.rate))}</td><td>${h(b.mode||"")}</td><td class="n">${fmtDate(b.startDate)}</td><td>${st(b.status)}${b.example?' <span class="pill warn">Example</span>':""}</td></tr>`).join("");
   const T = k => va.reduce((s,x)=>s+x[k],0);
   const acc = va.map(x=>`<tr class="click" data-goledger="${x.b.id}"><td>${h(x.b.name)}</td><td class="n">${money(x.added)}</td><td class="n">${money(x.wd)}</td><td class="n">${money(x.net)}</td><td class="n">${money(x.icap)}</td><td class="n">${money(x.own)}</td><td class="n">${money(x.acc)}</td><td class="n">${money(x.recd)}</td><td class="n">${money(x.rec)}</td><td class="n">${money(x.share)}</td><td class="n">${money(x.pay)}</td><td class="n">${money(x.contrib)}</td><td class="n">${pct(x.yld)}</td><td class="n">${x.net?pct(x.varr):'<span class="mut">–</span>'}</td></tr>`).join("");
   return `<div class="head"><div><span class="eyebrow">Master data</span><h1>Ventures</h1><p>Each business Future Axis places capital in. Click a row to edit it.</p></div>${S.canWrite!==false?'<button class="btn primary" data-new="biz">Add venture</button>':""}</div>
   <div class="stack">
   <section class="sheet"><div class="sheet-h"><div><h2>Venture register</h2><p>${S.biz.length} venture${S.biz.length===1?"":"s"}</p></div>${csvBtn("ventures")}</div>
-   <div class="tbl"><table><thead><tr><th>ID</th><th>Venture</th><th>Contact person</th><th>Address</th><th class="n">Expected p.a.</th><th class="n">Start</th><th>Status</th></tr></thead><tbody>${rows || `<tr><td colspan="7"><div class="empty"><b>No ventures yet</b>Add a venture to start allocating capital.</div></td></tr>`}</tbody></table></div></section>
+   <div class="tbl"><table><thead><tr><th>ID</th><th>Venture</th><th>Contact person</th><th>Address</th><th class="n">Expected p.a.</th><th>Mode</th><th class="n">Start</th><th>Status</th></tr></thead><tbody>${rows || `<tr><td colspan="8"><div class="empty"><b>No ventures yet</b>Add a venture to start allocating capital.</div></td></tr>`}</tbody></table></div></section>
   <section class="sheet"><div class="sheet-h"><div><h2>Venture accounts</h2><p>Receivable and payable position per venture. Balances at ${fmtDate(S.end)}; profit columns for the period. Click a row to open its ledger.</p></div>${csvBtn("venture-accounts")}</div>
    <div class="tbl"><table><thead><tr><th>Venture</th><th class="n">Invested</th><th class="n">Withdrawn</th><th class="n">Net investment</th><th class="n">Investor capital</th><th class="n">Own investment</th><th class="n">Profit accrued</th><th class="n">Profit received</th><th class="n">Receivable</th><th class="n">Investor share</th><th class="n">Investor payable</th><th class="n">Net contribution</th><th class="n">Actual p.a.</th><th class="n">vs expected</th></tr></thead>
    <tbody>${acc || `<tr><td colspan="14" class="empty">No ventures yet.</td></tr>`}</tbody>
@@ -460,16 +484,16 @@ function viewVentures(){
 }
 
 function viewInvestors(){
-  csvReg("placements",["Placement ID","Investor","Contact","Venture","Amount","Agreed rate","Placement date","Maturity","Payout","Status","Notes"], S.pl.map(p=>[p.code,p.investor,p.contact,bizName(p.bizId),r0(num(p.amount)),p2(num(p.rate)),p.date,p.maturity,p.frequency,p.status,p.notes]));
+  csvReg("placements",["Placement ID","Investor","Contact","Venture","Amount","Agreed rate","Placement date","Maturity","Payout","Mode of investment","Payment method","Bank account","Status","Notes"], S.pl.map(p=>[p.code,p.investor,p.contact,bizName(p.bizId),r0(num(p.amount)),p2(num(p.rate)),p.date,p.maturity,p.frequency,p.mode,p.method,bankCode(p.bankId),p.status,p.notes]));
   const pls = [...S.pl].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
-  const rows = pls.map(p=>`<tr class="click" data-edit="pl:${p.id}"><td class="n" style="text-align:left">${h(p.code)}</td><td><b style="font-weight:600">${h(p.investor)}</b><div class="note">${h(p.contact||"")}</div></td><td>${h(bizName(p.bizId))}</td><td class="n">${money(num(p.amount))}</td><td class="n">${pct(num(p.rate))}</td><td class="n">${fmtDate(p.date)}</td><td class="n">${p.maturity?fmtDate(p.maturity):'<span class="mut">Open</span>'}</td><td>${h(p.frequency||"")}</td><td><span class="pill ${(p.status||"Active")==="Active"?"ok":""}">${h(p.status||"Active")}</span>${p.example?' <span class="pill warn">Example</span>':""}</td></tr>`).join("");
+  const rows = pls.map(p=>`<tr class="click" data-edit="pl:${p.id}"><td class="n" style="text-align:left">${h(p.code)}</td><td><b style="font-weight:600">${h(p.investor)}</b><div class="note">${h(p.contact||"")}</div></td><td>${h(bizName(p.bizId))}</td><td class="n">${money(num(p.amount))}</td><td class="n">${pct(num(p.rate))}</td><td class="n">${fmtDate(p.date)}</td><td class="n">${p.maturity?fmtDate(p.maturity):'<span class="mut">Open</span>'}</td><td>${h(p.frequency||"")}</td><td>${h(p.mode||"")}<div class="note">${h([p.method, bankCode(p.bankId)].filter(Boolean).join(" · "))}</div></td><td><span class="pill ${(p.status||"Active")==="Active"?"ok":""}">${h(p.status||"Active")}</span>${p.example?' <span class="pill warn">Example</span>':""}</td></tr>`).join("");
   const tot = S.pl.reduce((s,p)=>s+num(p.amount),0);
   const wr = div(S.pl.reduce((s,p)=>s+num(p.amount)*num(p.rate),0), tot);
   return `<div class="head"><div><span class="eyebrow">Master data</span><h1>Investors</h1><p>One row per placement: who invested, how much, in which venture, at what agreed profit rate. An investor in two ventures has two placements.</p></div>${S.canWrite!==false?`<button class="btn primary" data-new="pl" ${S.biz.length?"":"disabled title='Add a venture first'"}>Add placement</button>`:""}</div>
   <section class="sheet"><div class="sheet-h"><div><h2>Placements</h2><p>${S.pl.length} placements · ${nf.format(tot)} committed · weighted agreed rate ${pct(wr)}</p></div>${csvBtn("placements")}</div>
-   <div class="tbl"><table><thead><tr><th>ID</th><th>Investor</th><th>Allocated to</th><th class="n">Amount</th><th class="n">Agreed p.a.</th><th class="n">Placed</th><th class="n">Maturity</th><th>Payout</th><th>Status</th></tr></thead>
-   <tbody>${rows || `<tr><td colspan="9"><div class="empty"><b>No placements yet</b>${S.biz.length?"Record the first investor placement.":"Add a venture first, then record placements against it."}</div></td></tr>`}</tbody>
-   ${rows?`<tfoot><tr><td colspan="3">Total</td><td class="n">${money(tot)}</td><td class="n">${pct(wr)}</td><td colspan="4"></td></tr></tfoot>`:""}</table></div></section>`;
+   <div class="tbl"><table><thead><tr><th>ID</th><th>Investor</th><th>Allocated to</th><th class="n">Amount</th><th class="n">Agreed p.a.</th><th class="n">Placed</th><th class="n">Maturity</th><th>Payout</th><th>Mode · received via</th><th>Status</th></tr></thead>
+   <tbody>${rows || `<tr><td colspan="10"><div class="empty"><b>No placements yet</b>${S.biz.length?"Record the first investor placement.":"Add a venture first, then record placements against it."}</div></td></tr>`}</tbody>
+   ${rows?`<tfoot><tr><td colspan="3">Total</td><td class="n">${money(tot)}</td><td class="n">${pct(wr)}</td><td colspan="5"></td></tr></tfoot>`:""}</table></div></section>`;
 }
 
 function viewLedger(){
@@ -480,18 +504,18 @@ function viewLedger(){
   let ri=0, rr=0, rp=0;
   const lines = rows.map(t=>{ const a=num(t.amount); ri+=a*eff(t,"inv"); rr+=a*eff(t,"rec"); rp+=a*eff(t,"pay");
     const cls = INV_TYPES.includes(t.type)?"inv":VEN_TYPES.includes(t.type)?"ok":"";
-    return {t, html:`<tr class="click" data-edit="led:${t.id}"><td class="n" style="text-align:left">${fmtDate(t.date)}</td><td>${h(bizCode(t.bizId))}<div class="note">${h(bizName(t.bizId))}</div></td><td><span class="pill ${cls}">${h(t.type)}</span>${t.example?' <span class="pill warn">Example</span>':""}</td><td>${h(plLabel(t.placementId))}</td><td class="note">${h(t.ref||"")}</td><td class="n">${money(a)}</td>${single?`<td class="n">${money(ri)}</td><td class="n">${money(rr)}</td><td class="n">${money(rp)}</td>`:""}</tr>`, ri, rr, rp}; });
-  csvReg("ledger",["Date","Venture ID","Venture","Type","Placement","Reference","Amount"], rows.map(t=>[t.date,bizCode(t.bizId),bizName(t.bizId),t.type,plLabel(t.placementId),t.ref,num(t.amount)]));
+    return {t, html:`<tr class="click" data-edit="led:${t.id}"><td class="n" style="text-align:left">${fmtDate(t.date)}</td><td>${h(bizCode(t.bizId))}<div class="note">${h(bizName(t.bizId))}</div></td><td><span class="pill ${cls}">${h(t.type)}</span>${t.auto?' <span class="pill">Auto</span>':""}${t.example?' <span class="pill warn">Example</span>':""}</td><td>${h(plLabel(t.placementId) || shName(t.shareholderId))}</td><td class="note">${h(t.ref||"")}</td><td class="note">${isCashType(t.type)?h([t.method, bankCode(t.bankId)].filter(Boolean).join(" · ")||"–")+(MATCHED().has("led:"+t.id)?' <span class="pill ok">Reconciled</span>':""):""}</td><td class="n">${money(a)}</td>${single?`<td class="n">${money(ri)}</td><td class="n">${money(rr)}</td><td class="n">${money(rp)}</td>`:""}</tr>`, ri, rr, rp}; });
+  csvReg("ledger",["Date","Venture ID","Venture","Type","Placement","Reference","Payment method","Bank account","Amount"], rows.map(t=>[t.date,bizCode(t.bizId),bizName(t.bizId),t.type,plLabel(t.placementId),t.ref,t.method,bankCode(t.bankId),num(t.amount)]));
   const body = lines.reverse().map(l=>l.html).join("");
   const opt = (v,l,sel)=>`<option value="${h(v)}" ${sel===v?"selected":""}>${h(l)}</option>`;
-  return `<div class="head"><div><span class="eyebrow">Receivable &amp; payable ledger</span><h1>Ledger</h1><p>Every movement with a venture or investor: investments in and out, profit accrued and received, investor profit accrued and paid. Newest first.</p></div>${S.canWrite!==false?`<button class="btn primary" data-new="led">Add entry</button>`:""}</div>
+  return `<div class="head"><div><span class="eyebrow">Receivable &amp; payable ledger</span><h1>Ledger</h1><p>Every movement with a venture or investor: investments in and out, profit accrued and received, investor profit accrued and paid. Newest first.</p></div>${S.canWrite!==false?`<div class="row"><button class="btn" data-acc="1">Run profit accruals</button><button class="btn primary" data-new="led">Add entry</button></div>`:""}</div>
   <section class="sheet"><div class="sheet-h"><div class="filters" style="flex:1 1 520px">
     <select id="lfBiz" aria-label="Venture filter">${opt("","All ventures",lf.biz)}${opt("HQ","Future Axis (HQ)",lf.biz)}${S.biz.map(b=>opt(b.id,`${b.code} · ${b.name}`,lf.biz)).join("")}</select>
     <select id="lfType" aria-label="Type filter">${opt("","All transaction types",lf.type)}${Object.keys(TYPES).map(t=>opt(t,t,lf.type)).join("")}</select>
     <input id="lfQ" placeholder="Search reference or investor" value="${h(lf.q)}" aria-label="Search">
   </div>${csvBtn("ledger")}</div>
   ${single?`<div class="sheet-b note" style="border-bottom:1px solid var(--line)">Venture statement for <b>${h(bizName(lf.biz))}</b>: running balances of investment, profit receivable and investor profit payable.</div>`:""}
-  <div class="tbl"><table><thead><tr><th>Date</th><th>Venture</th><th>Type</th><th>Placement</th><th>Reference</th><th class="n">Amount</th>${single?'<th class="n">Investment bal.</th><th class="n">Receivable bal.</th><th class="n">Payable bal.</th>':""}</tr></thead>
+  <div class="tbl"><table><thead><tr><th>Date</th><th>Venture</th><th>Type</th><th>Placement / shareholder</th><th>Reference</th><th>Paid via</th><th class="n">Amount</th>${single?'<th class="n">Investment bal.</th><th class="n">Receivable bal.</th><th class="n">Payable bal.</th>':""}</tr></thead>
   <tbody>${body || `<tr><td colspan="9"><div class="empty"><b>No entries${lf.biz||lf.type||lf.q?" match these filters":" yet"}</b>${lf.biz||lf.type||lf.q?"Clear a filter to see more.":"Post the first investment or owner capital contribution."}</div></td></tr>`}</tbody></table></div>
   <div class="sheet-b note" style="border-top:1px solid var(--line)">${rows.length} entr${rows.length===1?"y":"ies"} shown of ${S.led.length}. Investor placements are taken from the Investors register, so they are not posted here.</div></section>`;
 }
@@ -505,7 +529,7 @@ function viewReturns(){
   csvReg("investor-summary",["Investor","Placements","Ventures","Capital outstanding","Profit accrued (period)","Accrued to date","Paid to date","Payable"], inv.map(o=>[o.name,o.n,[...o.ventures].join("; "),r0(o.out),r0(o.per),r0(o.acc),r0(o.paid),r0(o.pay)]));
   const T = k => ir.reduce((s,x)=>s+x[k],0);
   const gap = x => Math.abs(x.varr) < 1 ? '<span class="pill ok">On track</span>' : x.varr>0 ? `<span class="pill warn" title="Accrue ${nf.format(x.varr)} more to match the agreed rate">Under ${nf.format(x.varr)}</span>` : `<span class="pill bad">Over ${nf.format(-x.varr)}</span>`;
-  return `<div class="head"><div><span class="eyebrow">Report</span><h1>Investor returns</h1><p>Profit owed to each investor at the agreed rate, compared with what has been accrued and paid. Position at ${fmtDate(S.end)}, cumulative from each placement date.</p></div></div>
+  return `<div class="head"><div><span class="eyebrow">Report</span><h1>Investor returns</h1><p>Profit owed to each investor at the agreed rate, compared with what has been accrued and paid. Position at ${fmtDate(S.end)}, cumulative from each placement date.</p></div>${S.canWrite!==false?'<button class="btn primary" data-acc="1">Run profit accruals</button>':""}</div>
   <div class="stack">
   <section class="sheet"><div class="sheet-h"><div><h2>By investor</h2><p>${inv.length} investors</p></div>${csvBtn("investor-summary")}</div>
    <div class="tbl"><table><thead><tr><th>Investor</th><th>Ventures</th><th class="n">Capital outstanding</th><th class="n">Profit this period</th><th class="n">Accrued to date</th><th class="n">Paid to date</th><th class="n">Payable</th><th class="n">Return p.a. (period)</th></tr></thead>
@@ -543,39 +567,43 @@ function viewMonthly(){
 function viewStatements(){
   const {start,end} = S, open = addDays(start,-1);
   const P = pnl(start,end), I = pnl(ORIGIN,end), B = balanceSheet(end), O = balanceSheet(open);
+  const sP = incomeSplit(start,end), sI = incomeSplit(ORIGIN,end);
   const cf = {
-    recd: tsum("Profit Received",start,end), ipaid: -tsum("Investor Profit Paid",start,end), opex: -tsum("Operating Expense",start,end),
+    recd: tsum("Profit Received",start,end), oinc: tsum("Other Income",start,end), ipaid: -tsum("Investor Profit Paid",start,end), opex: -tsum("Operating Expense",start,end),
     add: -tsum("Investment Addition",start,end), wd: tsum("Investment Withdrawal",start,end),
     own: tsum("Owner Capital Contribution",start,end), draw: -tsum("Owner Drawing",start,end), plc: placed(start,end), rep: -tsum("Investor Capital Repaid",start,end)
   };
-  cf.op = cf.recd+cf.ipaid+cf.opex; cf.iv = cf.add+cf.wd; cf.fi = cf.own+cf.draw+cf.plc+cf.rep; cf.net = cf.op+cf.iv+cf.fi;
+  cf.op = cf.recd+cf.oinc+cf.ipaid+cf.opex; cf.iv = cf.add+cf.wd; cf.fi = cf.own+cf.draw+cf.plc+cf.rep; cf.net = cf.op+cf.iv+cf.fi;
   const cfChk = cf.net + O.cash - B.cash;
   const L = (l,a,b,cls="ind")=>`<tr class="${cls}"><td>${l}</td><td class="n">${money(a)}</td><td class="n">${b===undefined?"":money(b)}</td></tr>`;
   const sub = l=>`<tr class="sub"><td colspan="3">${l}</td></tr>`;
   const ok = v => Math.abs(v)<0.5 ? '<span class="pill ok">Balanced</span>' : `<span class="pill bad">Difference ${nf.format(v)}</span>`;
-  const cur = h(S.cfg.currency||"AED");
+  const cur = h(VIEW());
   csvReg("financial-statements",["Statement","Line","Col 1","Col 2"],[
-    ["Income statement","Profit income from ventures",r0(P.inc),r0(I.inc)],["Income statement","Investor profit share",r0(-P.share),r0(-I.share)],["Income statement","Net income from ventures",r0(P.spread),r0(I.spread)],["Income statement","Operating expenses",r0(-P.opex),r0(-I.opex)],["Income statement","Net profit",r0(P.net),r0(I.net)],
-    ["Balance sheet","Cash",r0(B.cash),r0(O.cash)],["Balance sheet","Investment in ventures",r0(B.inv),r0(O.inv)],["Balance sheet","Profit receivable",r0(B.rec),r0(O.rec)],["Balance sheet","Total assets",r0(B.assets),r0(O.assets)],["Balance sheet","Investor capital",r0(B.icap),r0(O.icap)],["Balance sheet","Investor profit payable",r0(B.pay),r0(O.pay)],["Balance sheet","Owner capital",r0(B.owner),r0(O.owner)],["Balance sheet","Retained earnings",r0(B.re),r0(O.re)],["Balance sheet","Total liabilities and equity",r0(B.le),r0(O.le)],
+    ["Income statement","Owner income (profit on own capital)",r0(sP.own),r0(sI.own)],["Income statement","Profit on investor capital",r0(sP.inv),r0(sI.inv)],["Income statement","Less: profit share to investors",r0(-P.share),r0(-I.share)],["Income statement","Income from investor placements",r0(sP.inv-P.share),r0(sI.inv-I.share)],["Income statement","Other income",r0(P.oinc),r0(I.oinc)],["Income statement","Operating expenses",r0(-P.opex),r0(-I.opex)],["Income statement","Net profit",r0(P.net),r0(I.net)],
+    ["Balance sheet","Cash",r0(B.cash),r0(O.cash)],["Balance sheet","Investment in ventures",r0(B.inv),r0(O.inv)],["Balance sheet","Profit receivable",r0(B.rec),r0(O.rec)],["Balance sheet","Total assets",r0(B.assets),r0(O.assets)],["Balance sheet","Investor capital",r0(B.icap),r0(O.icap)],["Balance sheet","Investor profit payable",r0(B.pay),r0(O.pay)],["Balance sheet","Share capital (owner investment)",r0(B.owner),r0(O.owner)],["Balance sheet","Retained earnings",r0(B.re),r0(O.re)],["Balance sheet","Total liabilities and equity",r0(B.le),r0(O.le)],
     ["Cash flow","Net cash from operating",r0(cf.op),""],["Cash flow","Net cash from investing",r0(cf.iv),""],["Cash flow","Net cash from financing",r0(cf.fi),""],["Cash flow","Net change in cash",r0(cf.net),""],["Cash flow","Opening cash",r0(O.cash),""],["Cash flow","Closing cash",r0(B.cash),""]]);
   return `<div class="head"><div><span class="eyebrow">${h(S.cfg.entity)} · ${cur}</span><h1>Financial statements</h1><p>For the period ${fmtDate(start)} to ${fmtDate(end)}. Built directly from the ledger and investor register.</p></div>${csvBtn("financial-statements")}</div>
   <div class="stack">
   <section class="sheet fs"><div class="sheet-h"><h2>Statement of profit or loss</h2></div><div class="tbl"><table>
     <thead><tr><th></th><th class="n">This period</th><th class="n">Inception to ${fmtDate(end)}</th></tr></thead><tbody>
-    ${L("Profit income from ventures",P.inc,I.inc)}${L("Less: investor profit share",-P.share,-I.share)}${L("Net income from ventures",P.spread,I.spread,"tot")}
-    ${L("Less: operating expenses",-P.opex,-I.opex)}${L("Net profit",P.net,I.net,"gt")}
+    ${sub("Owner income")}${L("Profit on own capital invested in ventures",sP.own,sI.own)}${L("Total owner income",sP.own,sI.own,"tot")}
+    ${sub("Income from investor placements")}${L("Profit on investor capital invested in ventures",sP.inv,sI.inv)}${L("Less: profit share to investors",-P.share,-I.share)}${L("Net income from investor placements",sP.inv-P.share,sI.inv-I.share,"tot")}
+    ${sub("Other")}${L("Other income",P.oinc,I.oinc)}${L("Less: operating expenses",-P.opex,-I.opex)}
+    ${L("Net profit",P.net,I.net,"gt")}
+    <tr class="ind"><td class="note">Owner income as % of net profit</td><td class="n">${pct(div(sP.own,P.net))}</td><td class="n">${pct(div(sI.own,I.net))}</td></tr>
     <tr class="ind"><td class="note">Net profit ratio</td><td class="n">${pct(div(P.net,P.inc))}</td><td class="n">${pct(div(I.net,I.inc))}</td></tr></tbody></table></div></section>
   <section class="sheet fs"><div class="sheet-h"><h2>Statement of financial position</h2><span class="chk">${ok(B.diff)}</span></div><div class="tbl"><table>
     <thead><tr><th></th><th class="n">${fmtDate(end)}</th><th class="n">${fmtDate(open)}</th></tr></thead><tbody>
     ${sub("Assets")}${L("Cash and bank",B.cash,O.cash)}${L("Investment in ventures",B.inv,O.inv)}${L("Profit receivable from ventures",B.rec,O.rec)}${L("Total assets",B.assets,O.assets,"tot")}
     ${sub("Liabilities")}${L("Investor capital (placements outstanding)",B.icap,O.icap)}${L("Investor profit payable",B.pay,O.pay)}${L("Total liabilities",B.liab,O.liab,"tot")}
-    ${sub("Equity")}${L("Owner capital",B.owner,O.owner)}${L("Retained earnings",B.re,O.re)}${L("Total equity",B.eq,O.eq,"tot")}
+    ${sub("Equity")}${L("Share capital (owner investment)",B.owner,O.owner)}${L("Retained earnings",B.re,O.re)}${L("Total equity",B.eq,O.eq,"tot")}
     ${L("Total liabilities and equity",B.le,O.le,"gt")}</tbody></table></div></section>
   <section class="sheet fs"><div class="sheet-h"><h2>Statement of cash flows</h2><span class="chk">${ok(cfChk)}</span></div><div class="tbl"><table>
     <thead><tr><th></th><th class="n">This period</th><th></th></tr></thead><tbody>
-    ${sub("Operating activities")}${L("Profit received from ventures",cf.recd)}${L("Profit paid to investors",cf.ipaid)}${L("Operating expenses paid",cf.opex)}${L("Net cash from operating activities",cf.op,undefined,"tot")}
+    ${sub("Operating activities")}${L("Profit received from ventures",cf.recd)}${L("Other income received",cf.oinc)}${L("Profit paid to investors",cf.ipaid)}${L("Operating expenses paid",cf.opex)}${L("Net cash from operating activities",cf.op,undefined,"tot")}
     ${sub("Investing activities")}${L("Investments made in ventures",cf.add)}${L("Investments withdrawn from ventures",cf.wd)}${L("Net cash from investing activities",cf.iv,undefined,"tot")}
-    ${sub("Financing activities")}${L("Owner capital contributed",cf.own)}${L("Owner drawings",cf.draw)}${L("Investor placements received",cf.plc)}${L("Investor capital repaid",cf.rep)}${L("Net cash from financing activities",cf.fi,undefined,"tot")}
+    ${sub("Financing activities")}${L("Share capital contributed",cf.own)}${L("Owner drawings",cf.draw)}${L("Investor placements received",cf.plc)}${L("Investor capital repaid",cf.rep)}${L("Net cash from financing activities",cf.fi,undefined,"tot")}
     ${L("Net change in cash",cf.net,undefined,"tot")}${L("Opening cash",O.cash)}${L("Closing cash",B.cash,undefined,"gt")}</tbody></table></div></section>
   <p class="note">Investor capital is shown as a liability because placements are repayable under the profit participation terms. Reclassify to equity if your final structure issues shares to investors.</p>
   </div>`;
@@ -588,7 +616,10 @@ function viewSettings(){
   <section class="sheet"><div class="sheet-h"><h2>Entity</h2></div><div class="sheet-b">
     <form id="cfgForm" class="form">
       <label>Entity name<input id="cfgEntity" value="${h(S.cfg.entity)}" ${S.canWrite===false?"disabled":""}></label>
-      <label>Reporting currency<input id="cfgCur" value="${h(S.cfg.currency)}" maxlength="5" ${S.canWrite===false?"disabled":""}></label>
+      <label>Base currency (amounts are stored in this)<select id="cfgBase" ${S.canWrite===false||S.led.length||S.pl.length?"disabled":""}>${CURS.map(c=>`<option ${c===BASE()?"selected":""}>${c}</option>`).join("")}</select></label>
+      <label>Default display currency<select id="cfgView" ${S.canWrite===false?"disabled":""}>${CURS.map(c=>`<option ${c===(S.cfg.view||BASE())?"selected":""}>${c}</option>`).join("")}</select></label>
+      <label>AED per 1 USD<input id="cfgRate" type="number" step="any" min="0" value="${h(num(S.cfg.aedRate)||3.6725)}" ${S.canWrite===false?"disabled":""}></label>
+      <p class="full note" style="margin:0">Everyone can also switch the view at the top of the screen ("Show in"); that choice is remembered on their device. ${S.led.length||S.pl.length?"The base currency can't be changed once data exists.":""}</p>
       ${S.canWrite!==false?'<div class="full row"><button class="btn primary" type="submit">Save settings</button></div>':""}
     </form></div></section>
   <section class="sheet"><div class="sheet-h"><h2>How entries post</h2><p>Each ledger type moves these balances. Amounts are always entered as positive numbers.</p></div>
@@ -598,6 +629,8 @@ function viewSettings(){
   <section class="sheet"><div class="sheet-h"><div><h2>Your password</h2><p>Signed in as ${h(S.user?.email||"")} · ${ROLE_LABEL[S.role]||""}</p></div></div><div class="sheet-b">
     <form id="pwForm" class="form"><label>New password<input id="pwNew" type="password" minlength="8" autocomplete="new-password" required></label><label>Repeat new password<input id="pwRep" type="password" minlength="8" autocomplete="new-password" required></label>
     <div class="full row"><button class="btn" type="submit">Change password</button><span class="ok-msg" id="pwMsg"></span></div></form></div></section>
+  ${S.isAdmin?`<section class="sheet"><div class="sheet-h"><div><h2>Start again</h2><p>Deletes all shareholders, ventures, placements, ledger entries, bank accounts and statement lines. Users and settings are kept. This can't be undone.</p></div></div>
+    <div class="sheet-b row"><input id="resetTxt" placeholder="Type DELETE to confirm" style="max-width:220px"><button class="btn danger" id="resetBtn" type="button">Delete all data</button></div></section>`:""}
   ${ex && S.canWrite!==false?`<section class="sheet"><div class="sheet-h"><div><h2>Example data</h2><p>${ex} records are marked Example. Remove them before entering your real figures.</p></div><button class="btn danger" id="clearEx">Remove example data</button></div></section>`:""}
   </div>`;
 }
@@ -607,35 +640,57 @@ const FORMS = {
   biz: {col:"businesses", title:"Venture", list:()=>S.biz, fields:[
     ["code","Business ID","text",1],["name","Business name","text",1],["nature","Nature of business","text",0,"full"],["address","Address","textarea",0,"full"],
     ["contact","Contact person","text"],["phone","Phone","text"],["email","Email","email",0,"full"],["rate","Expected profit rate (% p.a.)","pct",1],["startDate","Start date","date"],
-    ["status","Status","select",0,"",["Active","Pipeline","Exited"]],["notes","Notes","textarea",0,"full"]]},
+    ["mode","Mode of investment","select",0,"",["",...MODES]],["status","Status","select",0,"",["Active","Pipeline","Exited"]],["notes","Notes","textarea",0,"full"]]},
   pl: {col:"placements", title:"Placement", list:()=>S.pl, fields:[
     ["code","Placement ID","text",1],["investor","Investor name","text",1],["contact","Investor contact (phone / email)","text",0,"full"],
     ["bizId","Allocated to venture","biz",1,"full"],["amount","Amount","money",1],["rate","Agreed profit rate (% p.a.)","pct",1],["date","Placement date","date",1],["maturity","Maturity date (optional)","date"],
-    ["frequency","Profit payout","select",0,"",["Monthly","Quarterly","Semi-annual","Annual","At maturity"]],["status","Status","select",0,"",["Active","Exited"]],["notes","Notes","textarea",0,"full"]]},
+    ["frequency","Profit payout","select",0,"",["Monthly","Quarterly","Semi-annual","Annual","At maturity"]],["mode","Mode of investment","select",0,"",["",...MODES]],
+    ["method","Payment received by","select",0,"",METHODS],["bankId","Received into bank account","bank",0,""],
+    ["status","Status","select",0,"",["Active","Exited"]],["notes","Notes","textarea",0,"full"]]},
   led: {col:"ledger", title:"Ledger entry", list:()=>S.led, fields:[
-    ["date","Date","date",1],["type","Transaction type","type",1],["bizId","Venture","bizhq",0,"full"],["placementId","Investor placement","pl",0,"full"],
-    ["amount","Amount","money",1],["ref","Reference / description","text",0,"full"]]}
+    ["date","Date","date",1],["type","Transaction type","type",1],["bizId","Venture","bizhq",0,"full"],["placementId","Investor placement","pl",0,"full"],["shareholderId","Shareholder","sh",0,"full"],
+    ["amount","Amount","money",1],["method","Payment method","select",0,"",METHODS],["bankId","Bank account","bank",0,""],["ref","Reference / description","text",0,"full"]]},
+  sh: {col:"shareholders", title:"Shareholder", list:()=>S.sh, fields:[
+    ["code","Shareholder ID","text",1],["name","Name","text",1],["contact","Contact (phone / email)","text",0,"full"],["shares","Number of shares (optional)","signed"],["notes","Notes","textarea",0,"full"]]},
+  bank: {col:"bankAccounts", title:"Bank account", list:()=>S.bank, fields:[
+    ["code","Account ID","text",1],["name","Account name","text",1],["bankName","Bank","text"],["number","Account number (last 4 digits)","text"],
+    ["currency","Account currency","select",0,"",CURS],["openBal","Statement opening balance","signed"],["openDate","Opening balance date","date"],["notes","Notes","textarea",0,"full"]]},
+  bl: {col:"bankLines", title:"Statement line", list:()=>S.bl, fields:[
+    ["date","Date","date",1],["desc","Description","text",1,"full"],["ref","Reference","text",0,"full"],["dr","Money out (debit)","money"],["cr","Money in (credit)","money"]]}
 };
-function nextCode(kind){ const pre = kind==="biz"?"V":"P"; const n = Math.max(0,...FORMS[kind].list().map(x=>parseInt(String(x.code||"").replace(/\D/g,""))||0))+1; return pre+String(n).padStart(3,"0"); }
+function nextCode(kind){ const pre = {biz:"V",pl:"P",bank:"B",sh:"S"}[kind]; const n = Math.max(0,...FORMS[kind].list().map(x=>parseInt(String(x.code||"").replace(/\D/g,""))||0))+1; return pre+String(n).padStart(3,"0"); }
+let FORM_KIND = "";
 function fieldHtml(f, v){
-  const [k,l,type,req,cls,opts] = f, id="ff_"+k, r = req?"required":"";
+  const [k,l0,type,req,cls,opts] = f, id="ff_"+k, r = req?"required":"";
+  const l = l0 + ((type==="money" && (FORM_KIND==="led" || FORM_KIND==="pl")) ? ` (${VIEW()})` : "");
   let c;
   if (type==="textarea") c = `<textarea id="${id}" ${r}>${h(v)}</textarea>`;
-  else if (type==="select") c = `<select id="${id}">${opts.map(o=>`<option ${o===v?"selected":""}>${o}</option>`).join("")}</select>`;
+  else if (type==="select") c = `<select id="${id}">${opts.map(o=>`<option value="${h(o)}" ${o===v?"selected":""}>${o===""?"Not set":h(o)}</option>`).join("")}</select>`;
+  else if (type==="sh") c = `<select id="${id}"><option value="">${S.sh.length?"Not assigned":"No shareholders yet (add them in Share capital)"}</option>${S.sh.map(a=>`<option value="${a.id}" ${a.id===v?"selected":""}>${h(a.code)} · ${h(a.name)}</option>`).join("")}</select>`;
+  else if (type==="bank") c = `<select id="${id}"><option value="">${S.bank.length?"None":"No bank accounts yet (add one in the Bank tab)"}</option>${S.bank.map(a=>`<option value="${a.id}" ${a.id===v?"selected":""}>${h(a.code)} · ${h(a.name)}</option>`).join("")}</select>`;
+  else if (type==="signed") c = `<input id="${id}" type="number" step="any" inputmode="decimal" value="${h(v)}">`;
   else if (type==="type") c = `<select id="${id}" ${r}>${Object.keys(TYPES).map(o=>`<option ${o===v?"selected":""}>${o}</option>`).join("")}</select>`;
   else if (type==="biz"||type==="bizhq") c = `<select id="${id}" ${r}>${type==="bizhq"?`<option value="">Future Axis (HQ) – no venture</option>`:`<option value="">Choose a venture</option>`}${S.biz.map(b=>`<option value="${b.id}" ${b.id===v?"selected":""}>${h(b.code)} · ${h(b.name)}</option>`).join("")}</select>`;
   else if (type==="pl") c = `<select id="${id}"><option value="">None</option>${S.pl.map(p=>`<option value="${p.id}" data-biz="${p.bizId}" ${p.id===v?"selected":""}>${h(p.code)} · ${h(p.investor)} · ${h(bizName(p.bizId))}</option>`).join("")}</select>`;
   else if (type==="pct") c = `<input id="${id}" type="number" step="0.01" inputmode="decimal" value="${v===""||v==null?"":+(num(v)*100).toFixed(4)}" ${r}>`;
-  else if (type==="money") c = `<input id="${id}" type="number" step="0.01" min="0" inputmode="decimal" value="${h(v)}" ${r}>`;
+  else if (type==="money") c = `<input id="${id}" type="number" step="any" min="0" inputmode="decimal" value="${v===""||v==null?"":+(+v).toFixed(2)===+v?h(v):+(+v).toFixed(6)}" ${r}>`;
   else c = `<input id="${id}" type="${type==="email"?"email":type==="date"?"date":"text"}" value="${h(v)}" ${r}>`;
   return `<label class="${cls||""}" id="fl_${k}">${l}${req?"":""}${c}</label>`;
 }
-function openForm(kind, id){
+function openForm(kind, id, opt={}){
   const F = FORMS[kind], rec = id ? F.list().find(x=>x.id===id) : null;
-  const def = rec || (kind==="led" ? {date:todayIso(), type:"Profit Accrued", bizId:S.lf.biz&&S.lf.biz!=="HQ"?S.lf.biz:""} : kind==="pl" ? {code:nextCode("pl"), date:todayIso(), status:"Active", frequency:"Quarterly"} : {code:nextCode("biz"), status:"Active", startDate:todayIso()});
+  const base = kind==="led" ? {date:todayIso(), type:"Profit Accrued", method:"Bank transfer", bizId:S.lf.biz&&S.lf.biz!=="HQ"?S.lf.biz:"", bankId:S.bank.length===1?S.bank[0].id:""}
+    : kind==="pl" ? {code:nextCode("pl"), date:todayIso(), status:"Active", frequency:"Quarterly", method:"Bank transfer", bankId:S.bank.length===1?S.bank[0].id:""}
+    : kind==="sh" ? {code:nextCode("sh")}
+    : kind==="bank" ? {code:nextCode("bank"), currency:"AED", openBal:0}
+    : kind==="bl" ? {date:todayIso()}
+    : {code:nextCode("biz"), status:"Active", startDate:todayIso()};
+  const def = rec || {...base, ...(opt.prefill||{})};
+  FORM_KIND = kind;
   const ro = S.canWrite===false;
   $("#ovHost").innerHTML = `<div class="ov" id="ov"><div class="panel" role="dialog" aria-modal="true" aria-labelledby="fTitle">
     <div class="row" style="justify-content:space-between"><h2 id="fTitle">${rec?"Edit":"New"} ${F.title.toLowerCase()}</h2><button class="btn sm" id="fClose" type="button">Close</button></div>
+    ${opt.note?`<div class="banner">${opt.note}</div>`:""}
     <form id="fForm" class="form">${F.fields.map(f=>fieldHtml(f, def[f[0]] ?? "")).join("")}
       <div class="full err" id="fErr"></div>
       <div class="full row" style="justify-content:space-between">${ro?"<span class='note'>You have view access only.</span>":`<button class="btn primary" type="submit">${rec?"Save changes":"Add "+F.title.toLowerCase()}</button>`}${rec&&!ro?`<button class="btn danger" type="button" id="fDel">Delete</button>`:""}</div>
@@ -645,40 +700,914 @@ function openForm(kind, id){
   $("#fClose").onclick = close; $("#ov").onclick = e => { if (e.target.id==="ov") close(); };
   document.addEventListener("keydown", function esc(e){ if (e.key==="Escape"){ close(); document.removeEventListener("keydown",esc);} });
   if (kind==="led"){
-    const sync = ()=>{ const t=$("#ff_type").value; $("#fl_placementId").hidden = !INV_TYPES.includes(t); $("#fl_bizId").hidden = INV_TYPES.includes(t); };
+    const sync = ()=>{ const t=$("#ff_type").value; $("#fl_placementId").hidden = !INV_TYPES.includes(t); $("#fl_bizId").hidden = INV_TYPES.includes(t);
+      $("#fl_method").hidden = $("#fl_bankId").hidden = !isCashType(t); $("#fl_shareholderId").hidden = !OWNER_TYPES.includes(t); };
     $("#ff_type").onchange = sync; sync();
   }
   $("#fForm").onsubmit = async e => {
-    e.preventDefault(); const data = {}; let err = "";
+    e.preventDefault(); let data = {}; let err = "";
     for (const f of F.fields){ const el = $("#ff_"+f[0]); let v = el.value.trim();
-      if (f[2]==="pct") v = v===""?"":num(v)/100; else if (f[2]==="money") v = v===""?"":num(v);
+      if (f[2]==="pct") v = v===""?"":num(v)/100; else if (f[2]==="money"||f[2]==="signed") v = v===""?(f[2]==="signed"?0:""):num(v);
       if (f[3] && (v==="" || v==null)) err = err || `${f[1]} is required.`;
       data[f[0]] = v; }
     if (kind==="led"){
       if (INV_TYPES.includes(data.type)){ if (!data.placementId) err = err || "Choose the investor placement for this entry."; else data.bizId = S.pl.find(p=>p.id===data.placementId)?.bizId || ""; }
       else { data.placementId = ""; if (VEN_TYPES.includes(data.type) && !data.bizId) err = err || "Choose the venture for this entry."; }
       if (!(data.amount>0)) err = err || "Amount must be greater than zero.";
+      if (!isCashType(data.type)){ data.method = ""; data.bankId = ""; }
+      if (!OWNER_TYPES.includes(data.type)) data.shareholderId = "";
+      if (opt.sign && (TYPES[data.type]||{}).cash !== opt.sign) err = err || (opt.sign>0 ? "This bank line is money IN. Choose a type that brings money in, such as Profit Received, Investment Withdrawal or Owner Capital Contribution." : "This bank line is money OUT. Choose a type that pays money out, such as Operating Expense, Investment Addition or Investor Profit Paid.");
     }
-    if (kind!=="led"){ const dup = F.list().find(x=>x.id!==id && String(x.code).toLowerCase()===String(data.code).toLowerCase()); if (dup) err = err || `ID ${data.code} is already used.`; }
+    if (kind==="bl"){
+      const dr = num(data.dr), cr = num(data.cr);
+      if ((dr>0) === (cr>0)) err = err || "Enter either money out or money in (one of them, not both).";
+      data.dr = dr; data.cr = cr; data.accountId = rec?.accountId || S.bankSel;
+      data.matchKey = rec?.matchKey || ""; data.seq = rec?.seq || Date.now()*1000; data.hash = rec?.hash || ("manual|"+Date.now()+Math.random());
+      data.balance = rec?.balance ?? null; data.batchId = rec?.batchId || "manual";
+    }
+    if (kind!=="led" && kind!=="bl"){ const dup = F.list().find(x=>x.id!==id && String(x.code).toLowerCase()===String(data.code).toLowerCase()); if (dup) err = err || `ID ${data.code} is already used.`; }
     if (kind==="pl" && !(data.amount>0)) err = err || "Amount must be greater than zero.";
     if (err){ $("#fErr").textContent = err; return; }
     data.example = false; data.updatedAt = new Date().toISOString(); if (!rec) data.createdAt = data.updatedAt; else data.createdAt = rec.createdAt || data.updatedAt;
-    try { const ref = id ? S.db.collection(F.col).doc(id) : S.db.collection(F.col).doc(); await ref.set(data); close(); toast(rec?"Saved":`${F.title} added`); }
+    if (rec) data = {...rec, ...data}, delete data.id;
+    try { const ref = id ? S.db.collection(F.col).doc(id) : S.db.collection(F.col).doc(); await ref.set(data); close(); toast(rec?"Saved":`${F.title} added`); if (opt.onSaved) opt.onSaved(ref.id, data); }
     catch(x){ $("#fErr").textContent = x?.code==="invalid_argument" ? "You don't have permission to change this data." : x?.code==="quota_exceeded" ? "The database is full. Remove old records to add more." : "Could not save. Try again in a moment."; if (x?.code==="invalid_argument"){ S.canWrite=false; } }
   };
   const del = $("#fDel");
   if (del) del.onclick = async () => {
     if (kind==="biz"){ const n = S.pl.filter(p=>p.bizId===id).length + S.led.filter(t=>t.bizId===id).length; if (n){ $("#fErr").textContent = `This venture has ${n} placements or ledger entries. Delete or move those first.`; return; } }
+    if (kind==="sh"){ const n = S.led.filter(t=>t.shareholderId===id).length; if (n){ $("#fErr").textContent = `${n} capital entries belong to this shareholder. Reassign or delete them first.`; return; } }
+    if (kind==="bank"){ const n = S.bl.filter(l=>l.accountId===id).length + S.led.filter(t=>t.bankId===id).length + S.pl.filter(p=>p.bankId===id).length; if (n){ $("#fErr").textContent = `${n} statement lines or entries use this account. Remove or reassign them first.`; return; } }
     if (kind==="pl"){ const n = S.led.filter(t=>t.placementId===id).length; if (n){ $("#fErr").textContent = `${n} ledger entries use this placement. Delete those first.`; return; } }
     if (!del.classList.contains("armed")){ del.classList.add("armed"); del.textContent="Confirm delete"; return; }
     try { await S.db.collection(F.col).doc(id).delete(); close(); toast("Deleted"); } catch(x){ $("#fErr").textContent = "Could not delete. Try again."; }
   };
 }
 
+/* ---------- parsing helpers (bank files + import template) ---------- */
+const normH = v => String(v ?? "").toLowerCase().replace(/\*/g,"").replace(/\(.*?\)/g,"").replace(/[^a-z0-9%]+/g," ").trim();
+function validYMD(y,m,d){ const t = new Date(y, m-1, d); return t.getFullYear()===y && t.getMonth()===m-1 && t.getDate()===d ? `${y}-${pad(m)}-${pad(d)}` : ""; }
+const MONTHS = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12};
+function parseDateAny(v, fmt="dmy"){
+  if (v === "" || v == null) return "";
+  if (v instanceof Date && !isNaN(v)) return iso(v);
+  if (typeof v === "number"){ if (v > 20000 && v < 80000 && window.XLSX){ const d = XLSX.SSF.parse_date_code(v); return d ? validYMD(d.y, d.m, d.d) : ""; } return ""; }
+  const s = String(v).trim().replace(/\s+/g," ");
+  let m = /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/.exec(s); if (m) return validYMD(+m[1], +m[2], +m[3]);
+  m = /^(\d{1,2})[-\/. ](\d{1,2})[-\/. ](\d{2,4})\b/.exec(s);
+  if (m){ let a=+m[1], b=+m[2], y=+m[3]; if (y<100) y+=2000; let d=a, mo=b; if (fmt==="mdy" || (a<=12 && b>12)) { d=b; mo=a; } return validYMD(y, mo, d); }
+  m = /^(\d{1,2})[-\/ ]([A-Za-z]{3,9})[-\/ ,]*(\d{2,4})/.exec(s);
+  if (m){ const mo = MONTHS[m[2].slice(0,4).toLowerCase()] || MONTHS[m[2].slice(0,3).toLowerCase()]; let y=+m[3]; if (y<100) y+=2000; return mo ? validYMD(y, mo, +m[1]) : ""; }
+  m = /^([A-Za-z]{3,9}) (\d{1,2}),? (\d{4})/.exec(s);
+  if (m){ const mo = MONTHS[m[1].slice(0,3).toLowerCase()]; return mo ? validYMD(+m[3], mo, +m[2]) : ""; }
+  return "";
+}
+function parseAmt(v){
+  if (v === "" || v == null) return NaN;
+  if (typeof v === "number") return v;
+  let s = String(v).trim(); if (!s) return NaN;
+  let sign = 1;
+  if (/^\(.*\)$/.test(s)) { sign = -1; }
+  if (/\bdr\b|debit/i.test(s)) sign = -1;
+  if (/^-/.test(s) || /-$/.test(s)) sign = -1;
+  s = s.replace(/[^0-9.]/g, "");
+  const n = parseFloat(s); return isFinite(n) ? sign*n : NaN;
+}
+function parseRate(v){
+  if (v === "" || v == null) return NaN;
+  if (typeof v === "string" && v.trim().endsWith("%")) return parseAmt(v)/100;
+  const n = parseAmt(v); if (!isFinite(n)) return NaN;
+  return Math.abs(n) > 1 ? n/100 : n;
+}
+function pickOpt(v, list){ const s = String(v ?? "").trim().toLowerCase(); if (!s) return ""; return list.find(o => o.toLowerCase()===s) || list.find(o => o.toLowerCase().startsWith(s)) || null; }
+async function readWorkbook(file){
+  if (!window.XLSX) throw new Error("The spreadsheet reader didn't load. Check your internet connection and reload the page.");
+  const buf = await file.arrayBuffer();
+  return XLSX.read(buf, {type:"array", cellDates:false, raw:false});
+}
+const sheetRows = ws => XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:"", blankrows:false});
+
+/* ---------- bank: book items, matching, reconciliation ---------- */
+function bookItems(){
+  const out = [];
+  for (const t of S.led){ const c = (TYPES[t.type]||{}).cash; if (!c) continue;
+    out.push({key:"led:"+t.id, kind:"led", id:t.id, bankId:t.bankId||"", date:t.date, amt:c*num(t.amount), fx: t.fxCur ? {cur:t.fxCur, amt:c*num(t.fxAmount)} : null, label:`${t.type}${t.bizId?" · "+bizCode(t.bizId):""}${t.placementId?" · "+plLabel(t.placementId):""}`, ref:t.ref||""}); }
+  for (const p of S.pl){ if (!p.date) continue;
+    out.push({key:"pl:"+p.id, kind:"pl", id:p.id, bankId:p.bankId||"", date:p.date, amt:num(p.amount), label:`Investor placement ${p.code||""} · ${p.investor||""}`, ref:p.notes||""}); }
+  return out;
+}
+function MATCHED(){
+  if (MATCHED.cache) return MATCHED.cache;
+  const items = new Map(bookItems().map(i=>[i.key,i]));
+  const set = new Set(); for (const l of S.bl) if (l.matchKey && items.has(l.matchKey)) set.add(l.matchKey);
+  MATCHED.cache = set; MATCHED.items = items; return set;
+}
+const lineAmt = l => num(l.cr) - num(l.dr);
+const near = (a,b) => Math.abs(a-b) < 0.005;
+const nearA = (a,b) => Math.abs(a-b) < 0.025;
+const acctCur = id => (S.bank.find(a=>a.id===id)?.currency || "AED").toUpperCase();
+const itemIn = (it, cur) => it.fx && String(it.fx.cur).toUpperCase()===cur ? it.fx.amt : conv(it.amt, VIEW(), cur);
+function recon(acct, D){
+  MATCHED(); const items = MATCHED.items, cur = (acct.currency||"AED").toUpperCase();
+  const A = it => itemIn(it, cur);
+  const openD = acct.openDate || "";
+  const lines = S.bl.filter(l => l.accountId===acct.id && l.date<=D && (!openD || l.date>openD));
+  const allBook = [...items.values()].filter(i => i.bankId===acct.id && i.date<=D);
+  const book = allBook.filter(i => !openD || i.date>openD);
+  const stmtBal = num(acct.openBal) + lines.reduce((s,l)=>s+lineAmt(l),0);
+  const bookBal = allBook.reduce((s,i)=>s+A(i),0);
+  const okLine = l => { const it = l.matchKey && items.get(l.matchKey); return it && it.date<=D && nearA(A(it), lineAmt(l)); };
+  const matchedKeys = new Set(lines.filter(okLine).map(l=>l.matchKey));
+  const ulines = lines.filter(l => !okLine(l));
+  const ubook = book.filter(i => !matchedKeys.has(i.key)).map(i => ({...i, amtA: A(i)}));
+  const bankIn = ulines.filter(l=>lineAmt(l)>0).reduce((s,l)=>s+lineAmt(l),0);
+  const bankOut = -ulines.filter(l=>lineAmt(l)<0).reduce((s,l)=>s+lineAmt(l),0);
+  const bookIn = ubook.filter(i=>i.amtA>0).reduce((s,i)=>s+i.amtA,0);
+  const bookOut = -ubook.filter(i=>i.amtA<0).reduce((s,i)=>s+i.amtA,0);
+  const adjusted = stmtBal - bankIn + bankOut + bookIn - bookOut;
+  const bookAtOpen = openD ? allBook.filter(i=>i.date<=openD).reduce((s,i)=>s+A(i),0) : 0;
+  const withBal = S.bl.filter(l => l.accountId===acct.id && l.date<=D && l.balance!=null && l.balance!=="").sort((a,b)=>a.date.localeCompare(b.date) || num(a.seq)-num(b.seq));
+  const fileBal = withBal.length ? num(withBal[withBal.length-1].balance) : null;
+  return {lines, ulines, ubook, stmtBal, bookBal, bankIn, bankOut, bookIn, bookOut, adjusted, diff: adjusted - bookBal, bookAtOpen, fileBal, cur};
+}
+function candidatesFor(line){
+  MATCHED(); const used = MATCHED.cache, a = lineAmt(line), cur = acctCur(line.accountId);
+  return [...MATCHED.items.values()]
+    .filter(i => !used.has(i.key) && nearA(itemIn(i, cur), a) && (i.bankId===line.accountId || !i.bankId))
+    .sort((p,q) => Math.abs(days(p.date, line.date)) - Math.abs(days(q.date, line.date)));
+}
+async function linkLine(line, item){
+  const {id, ...data} = line;
+  if (item.kind==="led" || item.kind==="pl"){
+    const col = item.kind==="led" ? "ledger" : "placements", list = item.kind==="led" ? S.led : S.pl;
+    const rec = list.find(x=>x.id===item.id);
+    if (rec && !rec.bankId){ const {id:rid, ...rd} = rec; await S.db.collection(col).doc(item.id).set({...rd, bankId: line.accountId, method: rd.method || "Bank transfer"}); }
+  }
+  await S.db.collection("bankLines").doc(id).set({...data, matchKey: item.key});
+}
+async function autoMatch(acctId){
+  MATCHED(); const used = new Set(MATCHED.cache), items = [...MATCHED.items.values()];
+  const lines = S.bl.filter(l => l.accountId===acctId && !(l.matchKey && MATCHED.items.has(l.matchKey))).sort((a,b)=>a.date.localeCompare(b.date));
+  const upd = [], assign = [];
+  for (const l of lines){
+    const a = lineAmt(l);
+    const c = items.filter(i => !used.has(i.key) && nearA(itemIn(i, acctCur(acctId)), a) && (i.bankId===acctId || !i.bankId) && Math.abs(days(i.date, l.date))<=10)
+      .sort((p,q) => (p.bankId===acctId?0:1)-(q.bankId===acctId?0:1) || Math.abs(days(p.date,l.date)) - Math.abs(days(q.date,l.date)))[0];
+    if (!c) continue;
+    used.add(c.key); const {id, ...d} = l; upd.push({id, data:{...d, matchKey:c.key}});
+    if (!c.bankId) assign.push(c);
+  }
+  for (const c of assign){
+    const col = c.kind==="led" ? "ledger" : "placements", rec = (c.kind==="led"?S.led:S.pl).find(x=>x.id===c.id);
+    if (rec){ const {id, ...rd} = rec; await S.db.collection(col).doc(id).set({...rd, bankId:acctId, method: rd.method || "Bank transfer"}); }
+  }
+  if (upd.length) await S.db.bulk("bankLines", upd);
+  return upd.length;
+}
+function lineHash(acctId, date, desc, dr, cr, bal){ return `${acctId}|${date}|${String(desc||"").trim().toLowerCase()}|${num(dr).toFixed(2)}|${num(cr).toFixed(2)}|${bal==null||bal===""?"":num(bal).toFixed(2)}`; }
+function withOccurrence(rows){ const seen = {}; return rows.map(r => { const n = (seen[r.hash] = (seen[r.hash]||0)+1); return {...r, hash: r.hash+"#"+n}; }); }
+
+/* ---------- bank: view ---------- */
+function viewBank(){
+  const head = `<div class="head"><div><span class="eyebrow">Cash</span><h1>Bank</h1><p>Upload bank statements, match each line to the ledger, and reconcile the bank balance with the books at ${fmtDate(S.end)}. Amounts on this page are in each account's own currency.</p></div>
+    <div class="row">${S.canWrite!==false?'<button class="btn" data-new="bank">Add bank account</button>':""}</div></div>`;
+  if (!S.bank.length) return head + `<div class="sheet"><div class="empty"><b>No bank accounts yet</b>Add each bank account Future Axis uses. Then upload its statements here, or include them in the Import template.<div class="row" style="justify-content:center;margin-top:14px">${S.canWrite!==false?'<button class="btn primary" data-new="bank">Add bank account</button>':""}</div></div></div>`;
+  const a = S.bank.find(x=>x.id===S.bankSel) || S.bank[0]; S.bankSel = a.id;
+  const R = recon(a, S.end), cur = h(a.currency || S.cfg.currency || "");
+  const ok = Math.abs(R.diff) < 0.5;
+  const unassigned = bookItems().filter(i => !i.bankId && i.date<=S.end && !(i.kind==="led" && (S.led.find(t=>t.id===i.id)?.method==="Cash"))).length;
+  const k = (l,v,s)=>`<div class="kpi"><span class="eyebrow">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`;
+  const items = MATCHED.items;
+  const filt = S.blf;
+  const lines = S.bl.filter(l => l.accountId===a.id).sort((p,q)=>q.date.localeCompare(p.date) || num(q.seq)-num(p.seq));
+  const isM = l => l.matchKey && items.has(l.matchKey) && nearA(itemIn(items.get(l.matchKey), R.cur), lineAmt(l));
+  const shown = lines.filter(l => filt==="all" || (filt==="un" ? !isM(l) : isM(l)));
+  const W = S.canWrite!==false;
+  const rows = shown.slice(0, 500).map(l => { const m = isM(l), it = m && items.get(l.matchKey), cands = !m && W ? candidatesFor(l).length : 0;
+    return `<tr><td class="n" style="text-align:left">${fmtDate(l.date)}</td><td>${h(l.desc||"")}${l.ref?`<div class="note">${h(l.ref)}</div>`:""}</td>
+      <td class="n">${num(l.dr)?money(num(l.dr)):""}</td><td class="n">${num(l.cr)?money(num(l.cr)):""}</td><td class="n">${l.balance!=null&&l.balance!==""?money(num(l.balance)):""}</td>
+      <td>${m?`<span class="pill ok">Matched</span><div class="note">${h(it.label)} · ${fmtDate(it.date)}</div>`:(l.matchKey?'<span class="pill bad">Linked entry missing</span>':'<span class="pill warn">Unmatched</span>')}</td>
+      <td>${W?`<div class="row">${m?`<button class="btn sm" data-bact="unmatch" data-lid="${l.id}">Unmatch</button>`:`<button class="btn sm ${cands?"primary":""}" data-bact="match" data-lid="${l.id}">Match${cands?` (${cands})`:""}</button><button class="btn sm" data-bact="create" data-lid="${l.id}">Create entry</button>`}<button class="btn sm danger" data-bact="dline" data-lid="${l.id}" title="Delete this statement line">✕</button></div>`:""}</td></tr>`; }).join("");
+  csvReg("bank-statement",["Date","Description","Reference","Money out","Money in","Balance","Status","Matched to"], lines.map(l=>[l.date,l.desc,l.ref,num(l.dr),num(l.cr),l.balance??"",isM(l)?"Matched":"Unmatched",isM(l)?items.get(l.matchKey).label:""]));
+  const ob = R.ubook.sort((p,q)=>p.date.localeCompare(q.date));
+  const L = (l,v,cls="ind")=>`<tr class="${cls}"><td>${l}</td><td class="n">${money(v)}</td></tr>`;
+  const batches = [...new Set(lines.filter(l=>l.batchId && l.batchId!=="manual").map(l=>l.batchId))];
+  return head + `<div class="stack">
+  <div class="row" style="gap:10px"><label for="bankSel" class="note">Account</label><select id="bankSel">${S.bank.map(x=>`<option value="${x.id}" ${x.id===a.id?"selected":""}>${h(x.code)} · ${h(x.name)}${x.bankName?" · "+h(x.bankName):""}${x.number?" ···"+h(x.number):""}</option>`).join("")}</select>
+    ${W?`<button class="btn sm" data-edit="bank:${a.id}">Edit account</button><button class="btn sm primary" data-bact="upload">Upload statement</button><button class="btn sm" data-new="bl">Add line</button><button class="btn sm" data-bact="auto">Auto-match</button>${R.ulines.length||S.bl.some(l=>l.accountId===a.id && !l.matchKey)?`<button class="btn sm primary" data-bact="record">Record unmatched lines</button>`:""}`:""}${csvBtn("bank-statement")}</div>
+  ${unassigned?`<div class="banner">${unassigned} cash entr${unassigned===1?"y has":"ies have"} no bank account, so ${unassigned===1?"it":"they"} can't be reconciled. Matching a statement line to ${unassigned===1?"it":"them"} assigns this account automatically, or edit ${unassigned===1?"it":"them"} in Ledger / Investors.</div>`:""}
+  <div class="kpis">
+    ${k("Balance per statement", money(R.stmtBal), `${cur} at ${fmtDate(S.end)}`)}
+    ${k("Balance per books", money(R.bookBal), "cash entries on this account")}
+    ${k("Statement lines unmatched", R.ulines.length, `of ${R.lines.length} up to ${fmtDate(S.end)}`)}
+    ${k("Book entries not on statement", R.ubook.length, "deposits / payments in transit")}
+    ${k("Reconciliation", ok?'<span class="pos">Reconciled</span>':`<span class="neg">${nf.format(R.diff)}</span>`, ok?"bank and books agree":"difference to explain")}
+  </div>
+  ${R.fileBal!=null && Math.abs(R.fileBal - R.stmtBal) > 0.5 ? `<div class="banner">The last balance shown on the statement is ${nf.format(R.fileBal)}, but opening balance + lines gives ${nf.format(R.stmtBal)}. Some statement lines may be missing, or the opening balance on this account needs correcting.</div>`:""}
+  <div class="grid2">
+  <section class="sheet fs"><div class="sheet-h"><div><h2>Bank reconciliation statement</h2><p>${h(a.name)} at ${fmtDate(S.end)}</p></div><span class="chk">${ok?'<span class="pill ok">Reconciled</span>':'<span class="pill bad">Not reconciled</span>'}</span></div><div class="tbl"><table><tbody>
+    ${L("Balance per bank statement", R.stmtBal, "tot")}
+    ${L("Less: money in on statement, not yet in books", -R.bankIn)}
+    ${L("Add: money out on statement, not yet in books", R.bankOut)}
+    ${L("Add: deposits in books, not yet on statement", R.bookIn)}
+    ${L("Less: payments in books, not yet on statement", -R.bookOut)}
+    ${L("Adjusted bank balance", R.adjusted, "tot")}
+    ${L("Balance per books", R.bookBal, "tot")}
+    ${L("Difference", R.diff, "gt")}
+  </tbody></table></div>
+  ${!ok && a.openDate ? `<div class="sheet-b note" style="border-top:1px solid var(--line)">Opening check: the statement opens at ${nf.format(num(a.openBal))} on ${fmtDate(a.openDate)}; the books show ${nf.format(R.bookAtOpen)} on this account by that date. Record the opening amount in the Ledger (for example as Owner Capital Contribution, dated on or before ${fmtDate(a.openDate)}, on this bank account).</div>`:""}
+  </section>
+  <section class="sheet"><div class="sheet-h"><div><h2>In books, not yet on statement</h2><p>${ob.length} entr${ob.length===1?"y":"ies"} up to ${fmtDate(S.end)}</p></div></div>
+    <div class="tbl"><table><thead><tr><th>Date</th><th>Entry</th><th class="n">Amount</th></tr></thead><tbody>
+    ${ob.map(i=>`<tr class="click" data-edit="${i.kind}:${i.id}"><td class="n" style="text-align:left">${fmtDate(i.date)}</td><td>${h(i.label)}${i.ref?`<div class="note">${h(i.ref)}</div>`:""}</td><td class="n">${money(i.amtA)}</td></tr>`).join("") || `<tr><td colspan="3" class="empty">Everything in the books appears on the statement.</td></tr>`}
+    </tbody></table></div></section>
+  </div>
+  <section class="sheet"><div class="sheet-h"><div><h2>Statement lines</h2><p>${lines.length} line${lines.length===1?"":"s"} on this account${shown.length>500?" · showing the latest 500":""}</p></div>
+    <div class="row">${[["all","All"],["un","Unmatched"],["m","Matched"]].map(([v,t])=>`<button class="btn sm ${filt===v?"primary":""}" data-blf="${v}">${t}</button>`).join("")}${W&&batches.length?`<button class="btn sm danger" data-bact="dbatch" title="Remove the most recent upload for this account">Undo last upload</button>`:""}</div></div>
+    <div class="tbl"><table><thead><tr><th>Date</th><th>Description</th><th class="n">Money out</th><th class="n">Money in</th><th class="n">Balance</th><th>Status</th><th></th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="7"><div class="empty"><b>No statement lines${filt!=="all"?" in this view":""}</b>${filt==="all"?"Upload a statement (Excel or CSV) from your bank, or add lines one by one.":""}</div></td></tr>`}</tbody></table></div></section>
+  </div>`;
+}
+
+/* ---------- bank: actions ---------- */
+async function bankAction(b){
+  const a = b.dataset.bact, l = S.bl.find(x=>x.id===b.dataset.lid);
+  try {
+    if (a==="upload") return openBankUpload();
+    if (a==="record") return openRecord(S.bankSel);
+    if (a==="auto"){ b.disabled = true; const n = await autoMatch(S.bankSel); toast(n ? `Matched ${n} line${n===1?"":"s"}` : "No new matches found (same amount within 10 days)"); return; }
+    if (a==="unmatch" && l){ const {id, ...d} = l; await S.db.collection("bankLines").doc(id).set({...d, matchKey:""}); toast("Unmatched"); return; }
+    if (a==="dline" && l){
+      if (!b.classList.contains("armed")){ b.classList.add("armed"); b.textContent = "Delete?"; return; }
+      await S.db.collection("bankLines").doc(l.id).delete(); toast("Line deleted"); return;
+    }
+    if (a==="dbatch"){
+      const lines = S.bl.filter(x=>x.accountId===S.bankSel && x.batchId && x.batchId!=="manual");
+      const last = lines.sort((p,q)=>String(q.batchId).localeCompare(String(p.batchId)))[0]?.batchId; if (!last) return;
+      const n = lines.filter(x=>x.batchId===last).length;
+      if (!b.classList.contains("armed")){ b.classList.add("armed"); b.textContent = `Delete ${n} lines from last upload?`; return; }
+      for (const x of lines.filter(x=>x.batchId===last)) await S.db.collection("bankLines").doc(x.id).delete();
+      toast(`Removed ${n} lines`); return;
+    }
+    if (a==="match" && l) return openMatch(l);
+    if (a==="create" && l){
+      const amt = lineAmt(l);
+      const ac = acctCur(l.accountId);
+      return openForm("led", null, {prefill:{date:l.date, amount:conv(Math.abs(amt), ac, VIEW()), type: amt>0 ? "Profit Received" : "Operating Expense", method:"Bank transfer", bankId:l.accountId, ref:l.desc + (l.ref?" · "+l.ref:"")},
+        sign: amt>0 ? 1 : -1, note:`Creating a ledger entry for the statement line <b>${h(l.desc)}</b> (${amt>0?"money in":"money out"} ${ac} ${Math.abs(amt).toLocaleString("en-US",{maximumFractionDigits:2})}${ac!==VIEW()?` = ${VIEW()} ${conv(Math.abs(amt), ac, VIEW()).toLocaleString("en-US",{maximumFractionDigits:2})}`:""}). It will be matched automatically.`,
+        onSaved: async (newId, saved) => { const {id, ...d} = l;
+          if (nearA(conv(num(saved.amount), VIEW(), ac), Math.abs(amt))) await S.db.collection("ledger").doc(newId).set({...saved, fxAmount:Math.abs(amt), fxCur:ac});
+          await S.db.collection("bankLines").doc(id).set({...d, matchKey:"led:"+newId}); }});
+    }
+  } catch(x){ toast("Could not complete that: " + (x.message || "try again")); }
+}
+function openMatch(l){
+  const c = candidatesFor(l), amt = lineAmt(l);
+  $("#ovHost").innerHTML = `<div class="ov" id="ov"><div class="panel" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="row" style="justify-content:space-between"><h2 id="mTitle">Match statement line</h2><button class="btn sm" id="mClose" type="button">Close</button></div>
+    <div class="banner"><b>${fmtDate(l.date)}</b> · ${h(l.desc)}<br>${amt>0?"Money in":"Money out"}: <b>${nf.format(Math.abs(amt))}</b></div>
+    <p class="note" style="margin:0">Book entries with exactly the same amount and direction, nearest date first. Entries with no bank account are included and will be assigned to this account.</p>
+    <div class="tbl"><table><thead><tr><th>Date</th><th>Entry</th><th></th></tr></thead><tbody>
+    ${c.map(i=>`<tr><td class="n" style="text-align:left">${fmtDate(i.date)}<div class="note">${Math.abs(days(i.date,l.date))} day${Math.abs(days(i.date,l.date))===1?"":"s"} apart</div></td><td>${h(i.label)}${i.ref?`<div class="note">${h(i.ref)}</div>`:""}${!i.bankId?'<div class="note">No bank account yet</div>':""}</td><td><button class="btn sm primary" data-mpick="${h(i.key)}">Match</button></td></tr>`).join("") || `<tr><td colspan="3"><div class="empty"><b>No entry with this amount</b>Use Create entry to record it in the ledger, or check whether the amount was recorded differently.</div></td></tr>`}
+    </tbody></table></div>
+    <div class="row"><button class="btn" id="mCreate" type="button">Create a new entry instead</button></div></div></div>`;
+  const close = () => { $("#ovHost").innerHTML = ""; render(); };
+  $("#mClose").onclick = close; $("#ov").onclick = e => { if (e.target.id==="ov") close(); };
+  $("#mCreate").onclick = () => { $("#ovHost").innerHTML = ""; bankAction({dataset:{bact:"create", lid:l.id}}); };
+  document.querySelectorAll("[data-mpick]").forEach(btn => btn.onclick = async () => {
+    btn.disabled = true; const item = c.find(i=>i.key===btn.dataset.mpick);
+    try { await linkLine(l, item); toast("Matched"); close(); } catch(x){ toast("Could not match: " + (x.message||"")); btn.disabled = false; }
+  });
+}
+
+/* ---------- bank: statement upload with column mapping ---------- */
+function guessCol(hdr, re, not){ const i = hdr.findIndex(x => re.test(x) && !(not && not.test(x))); return i; }
+function openBankUpload(){
+  const a = S.bank.find(x=>x.id===S.bankSel);
+  $("#ovHost").innerHTML = `<div class="ov" id="ov"><div class="panel" role="dialog" aria-modal="true" aria-labelledby="uTitle" style="width:min(760px,100%)">
+    <div class="row" style="justify-content:space-between"><h2 id="uTitle">Upload statement · ${h(a.code)} ${h(a.name)}</h2><button class="btn sm" id="uClose" type="button">Close</button></div>
+    <p class="note" style="margin:0">Upload the <b>PDF statement</b> from Wio Bank as it is, or an <b>Excel / CSV</b> export from any bank. Lines already uploaded are skipped automatically. After upload you'll be asked to record any lines that aren't in the ledger yet.</p>
+    <label class="note" style="display:flex;flex-direction:column;gap:6px">Statement file<input type="file" id="uFile" accept=".pdf,.xlsx,.xls,.csv"></label>
+    <div id="uMap"></div><div class="err" id="uErr"></div></div></div>`;
+  const close = () => { $("#ovHost").innerHTML = ""; render(); };
+  $("#uClose").onclick = close; $("#ov").onclick = e => { if (e.target.id==="ov") close(); };
+  $("#uFile").onchange = async e => {
+    const f = e.target.files[0]; if (!f) return; $("#uErr").textContent = "";
+    if (/\.pdf$/i.test(f.name) || f.type==="application/pdf"){ $("#uMap").innerHTML = '<p class="note">Reading the PDF…</p>'; try { await pdfUpload(f); } catch(x){ $("#uMap").innerHTML = ""; $("#uErr").textContent = x.message || "Could not read that PDF."; } return; }
+    try {
+      const wb = await readWorkbook(f), rows = sheetRows(wb.Sheets[wb.SheetNames[0]]);
+      let hi = rows.findIndex((r,i) => i<40 && r.filter(c=>String(c).trim()).length>=3 && r.some(c=>/date/i.test(String(c))));
+      if (hi < 0) hi = 0;
+      const hdr = rows[hi].map(c => String(c).trim()), nh = hdr.map(x=>x.toLowerCase());
+      const g = {
+        date: guessCol(nh, /date/, /value date/) >= 0 ? guessCol(nh, /date/, /value date/) : guessCol(nh, /date/),
+        desc: guessCol(nh, /desc|narrat|detail|particular|remark|transaction|memo/),
+        ref: guessCol(nh, /ref|cheque|chq|doc/),
+        dr: guessCol(nh, /debit|withdraw|money out|paid out|\bdr\b|outflow/),
+        cr: guessCol(nh, /credit|deposit|money in|paid in|\bcr\b|inflow/),
+        amt: -1, bal: guessCol(nh, /balance/)
+      };
+      if (g.dr<0 && g.cr<0) g.amt = guessCol(nh, /amount|value/);
+      showUploadMap(a, hdr, rows.slice(hi+1), g);
+    } catch(x){ $("#uErr").textContent = x.message || "Could not read that file."; }
+  };
+}
+function showUploadMap(acct, hdr, data, g){
+  const opts = sel => `<option value="-1">(not in file)</option>` + hdr.map((x,i)=>`<option value="${i}" ${i===sel?"selected":""}>${h(x||"Column "+(i+1))}</option>`).join("");
+  const F = [["date","Date *"],["desc","Description *"],["ref","Reference"],["dr","Money out (debit)"],["cr","Money in (credit)"],["amt","Single amount column (+ in / − out)"],["bal","Balance"]];
+  $("#uMap").innerHTML = `<div class="stack" style="gap:14px">
+    <p class="note" style="margin:0">Check which column is which. Use either <b>Money out + Money in</b>, or a <b>single amount</b> column where money out is negative.</p>
+    <div class="form">${F.map(([k,l])=>`<label>${l}<select id="um_${k}">${opts(g[k])}</select></label>`).join("")}
+      <label>Date format<select id="um_fmt"><option value="dmy">Day/Month/Year (31/08/2026)</option><option value="mdy">Month/Day/Year (08/31/2026)</option></select></label></div>
+    <div id="uPrev"></div>
+    <label class="row" style="gap:8px;font-size:13px"><input type="checkbox" id="uAuto" checked> Auto-match to the ledger after upload</label>
+    <div class="row"><button class="btn primary" id="uGo" type="button">Import lines</button><span class="note" id="uProg"></span></div></div>`;
+  const parse = () => {
+    const c = Object.fromEntries(F.map(([k])=>[k, +$("#um_"+k).value])), fmt = $("#um_fmt").value;
+    const out = [], bad = [];
+    data.forEach((r, i) => {
+      if (!r.some(x=>String(x).trim())) return;
+      const date = parseDateAny(r[c.date], fmt), desc = c.desc>=0 ? String(r[c.desc]).trim() : "";
+      let dr = 0, cr = 0;
+      if (c.amt >= 0){ const v = parseAmt(r[c.amt]); if (isFinite(v)){ if (v<0) dr = -v; else cr = v; } }
+      else { const o = parseAmt(r[c.dr]), n = parseAmt(r[c.cr]); dr = isFinite(o) ? Math.abs(o) : 0; cr = isFinite(n) ? Math.abs(n) : 0; }
+      const bal = c.bal>=0 ? parseAmt(r[c.bal]) : NaN;
+      if (!date || (!dr && !cr)){ bad.push(i); return; }
+      const ref = c.ref>=0 ? String(r[c.ref]).trim() : "";
+      out.push({date, desc, ref, dr, cr, balance: isFinite(bal) ? bal : null, hash: ref && ref.length >= 6 ? `${acct.id}|ref|${ref}` : lineHash(acct.id, date, desc, dr, cr, isFinite(bal)?bal:null)});
+    });
+    const rows = withOccurrence(out), have = new Set(S.bl.map(l=>l.hash));
+    return {rows, fresh: rows.filter(r=>!have.has(r.hash)), dup: rows.filter(r=>have.has(r.hash)).length, bad: bad.length, c};
+  };
+  const preview = () => {
+    const P = parse();
+    $("#uPrev").innerHTML = `<div class="banner">${P.fresh.length} new line${P.fresh.length===1?"":"s"} ready${P.dup?` · ${P.dup} already uploaded (will be skipped)`:""}${P.bad?` · ${P.bad} row${P.bad===1?"":"s"} ignored (no valid date or amount, e.g. headers or totals)`:""}</div>
+      <div class="tbl" style="margin-top:10px"><table><thead><tr><th>Date</th><th>Description</th><th class="n">Out</th><th class="n">In</th><th class="n">Balance</th></tr></thead><tbody>
+      ${P.rows.slice(0,8).map(r=>`<tr><td class="n" style="text-align:left">${fmtDate(r.date)}</td><td>${h(r.desc)}</td><td class="n">${r.dr?money(r.dr):""}</td><td class="n">${r.cr?money(r.cr):""}</td><td class="n">${r.balance!=null?money(r.balance):""}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">No usable lines with these settings. Check the Date and amount columns.</td></tr>`}
+      </tbody></table></div>`;
+    $("#uGo").disabled = !P.fresh.length;
+    if (P.c.date<0 || P.c.desc<0) $("#uGo").disabled = true;
+    return P;
+  };
+  document.querySelectorAll("#uMap select").forEach(s => s.onchange = preview);
+  preview();
+  $("#uGo").onclick = async () => {
+    const P = preview(); if (!P.fresh.length) return;
+    $("#uGo").disabled = true; const batch = "b" + Date.now(), base = Date.now()*1000;
+    try {
+      const ids = P.fresh.map(() => newId());
+      await S.db.bulk("bankLines", P.fresh.map((r,i) => ({id:ids[i], data:{accountId:acct.id, date:r.date, desc:r.desc, ref:r.ref, dr:r.dr, cr:r.cr, balance:r.balance, hash:r.hash, seq:base+i, batchId:batch, matchKey:"", importedAt:new Date().toISOString()}})),
+        (d,t) => $("#uProg").textContent = `Saving ${d} of ${t}…`);
+      await loadAll();
+      let n = 0; if ($("#uAuto")?.checked) n = await autoMatch(acct.id);
+      await loadAll(); $("#ovHost").innerHTML = ""; S.blf = "all"; render();
+      toast(`${P.fresh.length} lines imported${n?` · ${n} matched automatically`:""}`);
+      openRecord(acct.id, new Set(ids));
+    } catch(x){ $("#uErr").textContent = "Upload failed: " + (x.message || "try again"); $("#uGo").disabled = false; }
+  };
+}
+
+/* ---------- import from the Excel template ---------- */
+const PAYOUTS = ["Monthly","Quarterly","Semi-annual","Annual","At maturity"];
+const IMP = {
+  bank: {title:"Bank accounts", names:["bank accounts","banks"], cols:{code:"account id", name:"account name", bankName:"bank", number:"account number", currency:"currency", openBal:"statement opening balance", openDate:"opening balance date", notes:"notes"}},
+  sh:   {title:"Shareholders", names:["shareholders","share capital","owners"], cols:{code:"shareholder id", name:"name", contact:"contact", shares:"number of shares", notes:"notes"}},
+  biz:  {title:"Ventures", names:["ventures","businesses","business"], cols:{code:"business id", name:"business name", nature:"nature of business", address:"address", contact:"contact person", phone:"phone", email:"email", rate:"expected profit rate %", startDate:"start date", mode:"mode of investment", status:"status", notes:"notes"}},
+  pl:   {title:"Placements", names:["placements","investors","investor placements"], cols:{code:"placement id", investor:"investor name", contact:"investor contact", ven:"venture id", amount:"amount", rate:"agreed profit rate %", date:"placement date", maturity:"maturity date", frequency:"profit payout", mode:"mode of investment", method:"payment method", bank:"bank account id", status:"status", notes:"notes"}},
+  led:  {title:"Ledger", names:["ledger","ledger entries","transactions"], cols:{date:"date", type:"transaction type", ven:"venture id", plc:"placement id", sh:"shareholder id", amount:"amount", method:"payment method", bank:"bank account id", ref:"reference"}},
+  bl:   {title:"Bank statement", names:["bank statement","bank statements","statement"], cols:{acct:"account id", date:"date", desc:"description", ref:"reference", dr:"money out", cr:"money in", balance:"balance"}}
+};
+function readSheet(wb, spec){
+  const name = wb.SheetNames.find(n => spec.names.includes(normH(n)));
+  if (!name) return null;
+  const rows = sheetRows(wb.Sheets[name]); const keys = Object.values(spec.cols);
+  const hi = rows.findIndex((r,i) => i<20 && r.map(normH).filter(x=>keys.includes(x)).length >= 2);
+  if (hi < 0) return {name, rows:[], missing:true};
+  const H = rows[hi].map(normH), idx = {};
+  for (const [f, k] of Object.entries(spec.cols)) idx[f] = H.indexOf(k);
+  const out = [];
+  rows.slice(hi+1).forEach((r, i) => {
+    const first = r.find(c => String(c).trim() !== "");
+    if (first === undefined) return;
+    if (/^e\.?g\.?\b/i.test(String(first).trim())) return;
+    const o = {_row: hi + 2 + i}; for (const [f, j] of Object.entries(idx)) o[f] = j >= 0 ? (typeof r[j] === "string" ? r[j].trim() : r[j]) : "";
+    out.push(o);
+  });
+  return {name, rows: out};
+}
+function analyzeWorkbook(wb){
+  const E = [], err = (sh, row, msg) => E.push({sh, row, msg});
+  const st = {}, ops = {bank:[], sh:[], biz:[], pl:[], led:[], bl:[]}, now = new Date().toISOString(), batch = "imp" + Date.now();
+  const lc = v => String(v ?? "").trim().toLowerCase();
+  const maps = { sh: new Map(S.sh.map(x=>[lc(x.code), x.id])), bank: new Map(S.bank.map(x=>[lc(x.code), x.id])), biz: new Map(S.biz.map(x=>[lc(x.code), x.id])), pl: new Map(S.pl.map(x=>[lc(x.code), x])) };
+  const found = {};
+  const strip = r => { const {id, ...d} = r; return d; };
+  // 1. bank accounts
+  const run = (key, fn) => { const sh = readSheet(wb, IMP[key]); found[key] = !!sh; st[key] = {read:0, add:0, upd:0, skip:0, err:0, sheet: sh?.name || IMP[key].title};
+    if (!sh) return; if (sh.missing){ err(IMP[key].title, 1, "Header row not recognised. Keep the column titles from the template."); return; }
+    const seen = new Set(); for (const r of sh.rows){ st[key].read++; const before = E.length; fn(r, seen, st[key]); if (E.length > before) st[key].err++; } };
+  run("bank", (r, seen, s) => {
+    const T = "Bank accounts", code = String(r.code||"").trim();
+    if (!code) return err(T, r._row, "Account ID is required.");
+    if (seen.has(lc(code))) return err(T, r._row, `Account ID ${code} appears more than once.`); seen.add(lc(code));
+    if (!String(r.name||"").trim()) return err(T, r._row, "Account name is required.");
+    const ob = r.openBal===""||r.openBal==null ? 0 : parseAmt(r.openBal); if (!isFinite(ob)) return err(T, r._row, "Statement opening balance is not a number.");
+    const od = r.openDate ? parseDateAny(r.openDate) : ""; if (r.openDate && !od) return err(T, r._row, "Opening balance date is not a valid date.");
+    const ex = S.bank.find(x=>lc(x.code)===lc(code)), id = ex?.id || newId();
+    ops.bank.push({id, data:{...(ex?strip(ex):{createdAt:now}), code, name:String(r.name).trim(), bankName:String(r.bankName||"").trim(), number:String(r.number||"").trim(), currency:String(r.currency||"AED").trim().toUpperCase(), openBal:ob, openDate:od, notes:String(r.notes||""), updatedAt:now}});
+    maps.bank.set(lc(code), id); ex ? s.upd++ : s.add++;
+  });
+  run("sh", (r, seen, s) => {
+    const T = "Shareholders", code = String(r.code||"").trim();
+    if (!code) return err(T, r._row, "Shareholder ID is required.");
+    if (seen.has(lc(code))) return err(T, r._row, `Shareholder ID ${code} appears more than once.`); seen.add(lc(code));
+    if (!String(r.name||"").trim()) return err(T, r._row, "Name is required.");
+    const sh = r.shares===""||r.shares==null ? "" : parseAmt(r.shares); if (sh!=="" && !isFinite(sh)) return err(T, r._row, "Number of shares is not a number.");
+    const ex = S.sh.find(x=>lc(x.code)===lc(code)), id = ex?.id || newId();
+    ops.sh.push({id, data:{...(ex?strip(ex):{createdAt:now}), code, name:String(r.name).trim(), contact:String(r.contact||""), shares:sh, notes:String(r.notes||""), updatedAt:now}});
+    maps.sh.set(lc(code), id); ex ? s.upd++ : s.add++;
+  });
+  const vkey = n => sigWords(n).sort().join(" ");
+  const findVen = (code, name) => {
+    const byCode = S.biz.find(x=>lc(x.code)===lc(code));
+    const k = vkey(name), byName = S.biz.filter(x => { const sx = sigWords(x.name); return lc(x.name)===lc(name) || (k && sx.length && (vkey(x.name)===k || sx.every(w=>k.split(" ").includes(w)) || k.split(" ").every(w=>sx.includes(w)))); });
+    if (byCode && (lc(byCode.name)===lc(name) || byName.includes(byCode))) return byCode;
+    if (byName.length === 1) return byName[0];
+    return byCode || null;
+  };
+  run("biz", (r, seen, s) => {
+    const T = "Ventures", code = String(r.code||"").trim();
+    if (!code) return err(T, r._row, "Business ID is required.");
+    if (seen.has(lc(code))) return err(T, r._row, `Business ID ${code} appears more than once.`); seen.add(lc(code));
+    const name = String(r.name||"").trim(); if (!name) return err(T, r._row, "Business name is required.");
+    const ex = findVen(code, name);
+    const rate = r.rate===""||r.rate==null ? null : parseRate(r.rate); if (rate!==null && !isFinite(rate)) return err(T, r._row, "Expected profit rate % is not a number.");
+    if (!ex && rate===null) return err(T, r._row, `${name} is a new venture, so its expected profit rate % is required.`);
+    const mode = r.mode ? pickOpt(r.mode, MODES) : ""; if (mode===null) return err(T, r._row, `Mode of investment must be one of: ${MODES.join(", ")}.`);
+    const status = r.status ? pickOpt(r.status, ["Active","Pipeline","Exited"]) : ""; if (status===null) return err(T, r._row, "Status must be Active, Pipeline or Exited.");
+    const sd = r.startDate ? parseDateAny(r.startDate) : ""; if (r.startDate && !sd) return err(T, r._row, "Start date is not a valid date.");
+    const id = ex?.id || newId();
+    const given = {nature:String(r.nature||"").trim(), address:String(r.address||"").trim(), contact:String(r.contact||"").trim(), phone:String(r.phone||"").trim(), email:String(r.email||"").trim(), startDate:sd, mode, status, notes:String(r.notes||"").trim()};
+    if (rate!==null) given.rate = rate;
+    const keep = Object.fromEntries(Object.entries(given).filter(([,v]) => v!=="" && v!=null));
+    const data = ex ? {...strip(ex), ...keep, updatedAt:now} : {code, name, nature:"", address:"", contact:"", phone:"", email:"", startDate:"", mode:"", status:"Active", notes:"", ...keep, rate, example:false, createdAt:now, updatedAt:now};
+    ops.biz.push({id, data, note: ex ? `${code} → ${ex.code} · ${ex.name}` : ""});
+    maps.biz.set(lc(code), id); maps.biz.set(lc(name), id); ex ? s.upd++ : s.add++;
+  });
+  const bankRef = (T, row, v) => { if (!String(v||"").trim()) return ""; const id = maps.bank.get(lc(v)); if (!id){ err(T, row, `Bank account ID ${v} not found. Add it on the Bank accounts sheet or in the Bank tab.`); return null; } return id; };
+  run("pl", (r, seen, s) => {
+    const T = "Placements", code = String(r.code||"").trim();
+    if (!code) return err(T, r._row, "Placement ID is required.");
+    if (seen.has(lc(code))) return err(T, r._row, `Placement ID ${code} appears more than once.`); seen.add(lc(code));
+    if (!String(r.investor||"").trim()) return err(T, r._row, "Investor name is required.");
+    const bizId = maps.biz.get(lc(r.ven)); if (!bizId) return err(T, r._row, r.ven ? `Venture ID ${r.ven} not found on the Ventures sheet or in the system.` : "Venture ID is required.");
+    const amount = parseAmt(r.amount); if (!(amount > 0)) return err(T, r._row, "Amount must be a number greater than zero.");
+    const rate = parseRate(r.rate); if (!isFinite(rate)) return err(T, r._row, "Agreed profit rate % is required (for example 12).");
+    const date = parseDateAny(r.date); if (!date) return err(T, r._row, "Placement date is missing or not a valid date.");
+    const mat = r.maturity ? parseDateAny(r.maturity) : ""; if (r.maturity && !mat) return err(T, r._row, "Maturity date is not a valid date.");
+    const frequency = r.frequency ? pickOpt(r.frequency, PAYOUTS) : "Quarterly"; if (frequency===null) return err(T, r._row, `Profit payout must be one of: ${PAYOUTS.join(", ")}.`);
+    const mode = r.mode ? pickOpt(r.mode, MODES) : ""; if (mode===null) return err(T, r._row, `Mode of investment must be one of: ${MODES.join(", ")}.`);
+    const method = r.method ? pickOpt(r.method, METHODS) : "Bank transfer"; if (method===null) return err(T, r._row, `Payment method must be one of: ${METHODS.join(", ")}.`);
+    const bankId = bankRef(T, r._row, r.bank); if (bankId===null) return;
+    const status = r.status ? pickOpt(r.status, ["Active","Exited"]) : "Active"; if (status===null) return err(T, r._row, "Status must be Active or Exited.");
+    const ex = S.pl.find(x=>lc(x.code)===lc(code)), id = ex?.id || newId();
+    const data = {...(ex?strip(ex):{createdAt:now}), code, investor:String(r.investor).trim(), contact:String(r.contact||""), bizId, amount, rate, date, maturity:mat, frequency, mode, method, bankId, status, notes:String(r.notes||""), example:false, updatedAt:now};
+    ops.pl.push({id, data}); maps.pl.set(lc(code), {id, ...data}); ex ? s.upd++ : s.add++;
+  });
+  const lkey = t => `${t.date}|${t.type}|${t.bizId||""}|${t.placementId||""}|${num(t.amount).toFixed(2)}|${lc(t.ref)}`;
+  const haveLed = {}; for (const t0 of S.led){ const t = {...t0, amount: num(t0.amount)/VX()}; const k = lkey(t); haveLed[k] = (haveLed[k]||0) + 1; }
+  const seenLed = {};
+  run("led", (r, _seen, s) => {
+    const T = "Ledger";
+    const date = parseDateAny(r.date); if (!date) return err(T, r._row, "Date is missing or not a valid date.");
+    const type = pickOpt(r.type, Object.keys(TYPES)); if (!type) return err(T, r._row, r.type ? `Transaction type "${r.type}" is not recognised. Use the drop-down list.` : "Transaction type is required.");
+    const amount = parseAmt(r.amount); if (!(amount > 0)) return err(T, r._row, "Amount must be a number greater than zero.");
+    let bizId = "", placementId = "";
+    if (INV_TYPES.includes(type)){ const p = maps.pl.get(lc(r.plc)); if (!p) return err(T, r._row, r.plc ? `Placement ID ${r.plc} not found.` : `${type} needs a Placement ID.`); placementId = p.id; bizId = p.bizId; }
+    else if (r.ven){ bizId = maps.biz.get(lc(r.ven)); if (!bizId) return err(T, r._row, `Venture ID ${r.ven} not found.`); }
+    if (VEN_TYPES.includes(type) && !bizId) return err(T, r._row, `${type} needs a Venture ID.`);
+    let shareholderId = "";
+    if (OWNER_TYPES.includes(type) && String(r.sh||"").trim()){ shareholderId = maps.sh.get(lc(r.sh)); if (!shareholderId) return err(T, r._row, `Shareholder ID ${r.sh} not found. Add it on the Shareholders sheet.`); }
+    let method = "", bankId = "";
+    if (isCashType(type)){ method = r.method ? pickOpt(r.method, METHODS) : "Bank transfer"; if (method===null) return err(T, r._row, `Payment method must be one of: ${METHODS.join(", ")}.`); bankId = bankRef(T, r._row, r.bank); if (bankId===null) return; }
+    const data = {date, type, bizId, placementId, shareholderId, amount, method, bankId, ref:String(r.ref||""), example:false, createdAt:now, updatedAt:now, importBatch:batch};
+    const k = lkey(data), n = (seenLed[k] = (seenLed[k]||0) + 1);
+    if (n <= (haveLed[k]||0)) { s.skip++; return; }
+    ops.led.push({id:newId(), data}); s.add++;
+  });
+  const haveBl = new Set(S.bl.map(l=>l.hash)); const blRaw = [];
+  run("bl", (r, _seen, s) => {
+    const T = "Bank statement";
+    const acctId = maps.bank.get(lc(r.acct)); if (!acctId) return err(T, r._row, r.acct ? `Account ID ${r.acct} not found.` : "Account ID is required.");
+    const date = parseDateAny(r.date); if (!date) return err(T, r._row, "Date is missing or not a valid date.");
+    const desc = String(r.desc||"").trim(); if (!desc) return err(T, r._row, "Description is required.");
+    const o = parseAmt(r.dr), n = parseAmt(r.cr), dr = isFinite(o) ? Math.abs(o) : 0, cr = isFinite(n) ? Math.abs(n) : 0;
+    if ((dr>0) === (cr>0)) return err(T, r._row, "Enter either Money out or Money in (one of them).");
+    const bal = parseAmt(r.balance);
+    blRaw.push({_s:s, acctId, date, desc, ref:String(r.ref||""), dr, cr, balance: isFinite(bal) ? bal : null, hash: lineHash(acctId, date, desc, dr, cr, isFinite(bal)?bal:null)});
+  });
+  const base = Date.now()*1000;
+  withOccurrence(blRaw).forEach((r, i) => { if (haveBl.has(r.hash)){ r._s.skip++; return; } r._s.add++;
+    ops.bl.push({id:newId(), data:{accountId:r.acctId, date:r.date, desc:r.desc, ref:r.ref, dr:r.dr, cr:r.cr, balance:r.balance, hash:r.hash, seq:base+i, batchId:batch, matchKey:"", importedAt:now}}); });
+  const total = Object.values(ops).reduce((s,a)=>s+a.length,0);
+  return {E, st, ops, found, total, batch};
+}
+async function runImport(btn){
+  const I = S.imp; if (!I || I.E.length || !I.total) return;
+  btn.disabled = true; const prog = $("#impProg");
+  try {
+    const order = [["bank","bankAccounts"],["sh","shareholders"],["biz","businesses"],["pl","placements"],["led","ledger"],["bl","bankLines"]];
+    for (const [k, col] of order) if (I.ops[k].length) await S.db.bulk(col, I.ops[k].map(o => ({id:o.id, data: col==="placements" && S.pl.some(p=>p.id===o.id) ? {...o.data, amount:o.data.amount} : o.data})), (d,t) => prog.textContent = `Saving ${IMP[k].title.toLowerCase()}: ${d} of ${t}…`, true);
+    await loadAll();
+    let matched = 0;
+    if ($("#impAuto")?.checked) for (const acct of new Set(I.ops.bl.map(x=>x.data.accountId))) matched += await autoMatch(acct);
+    const done = Object.entries(I.ops).filter(([,a])=>a.length).map(([k,a])=>`${a.length} ${IMP[k].title.toLowerCase()}`).join(", ");
+    S.imp = {...I, done: `Imported ${done}.${matched?` ${matched} bank lines matched automatically.`:""}`};
+    if (I.ops.led.length || I.ops.pl.length) { S.preset = "itd"; store.set("fa.preset","itd"); applyPreset("itd"); syncPeriodInputs(); }
+    render(); toast("Import complete");
+  } catch(x){ prog.textContent = ""; toast("Import stopped: " + (x.message || "try again")); btn.disabled = false; }
+}
+function viewImport(){
+  const ex = S.biz.filter(x=>x.example).length + S.pl.filter(x=>x.example).length + S.led.filter(x=>x.example).length;
+  const I = S.imp;
+  const sheets = [["Bank accounts","Each bank account: ID, name, bank, opening balance and date."],["Shareholders","Each owner: ID, name, number of shares."],["Ventures","Each business: ID, nature, address, contact person, expected profit rate, mode of investment."],
+    ["Placements","Each investor placement: investor, venture, amount, agreed rate, placement date, mode, bank account."],["Ledger","All movements up to now: share capital contributions (with Shareholder ID), investments in and out, profit accrued and received, investor profit accrued and paid, expenses."],
+    ["Bank statement","Statement lines for each account: date, description, money out, money in, balance."]];
+  let res = "";
+  if (I){
+    const keys = ["bank","sh","biz","pl","led","bl"];
+    res = `<section class="sheet"><div class="sheet-h"><div><h2>3 · Check and import</h2><p>${h(I.file||"")}</p></div></div>
+      <div class="tbl"><table><thead><tr><th>Sheet</th><th class="n">Rows read</th><th class="n">New</th><th class="n">Updates</th><th class="n">Already in system</th><th class="n">Errors</th></tr></thead><tbody>
+      ${keys.map(k=>{ const s = I.st[k]; return `<tr><td>${IMP[k].title}${I.found[k]?"":' <span class="note">(sheet not in file)</span>'}</td><td class="n">${s.read||"–"}</td><td class="n">${s.add||"–"}</td><td class="n">${s.upd||"–"}</td><td class="n">${s.skip||"–"}</td><td class="n">${s.err?`<span class="neg">${s.err}</span>`:"–"}</td></tr>`; }).join("")}
+      </tbody></table></div>
+      ${I.ops.biz.some(o=>o.note)?`<div class="sheet-b note" style="border-top:1px solid var(--line)">Ventures linked to existing records (their rates are kept unless the file gives one): ${I.ops.biz.filter(o=>o.note).map(o=>h(o.note)).join("; ")}</div>`:""}
+      ${I.E.length ? `<div class="sheet-b"><div class="banner" style="border-color:var(--neg)"><b>${I.E.length} row${I.E.length===1?"":"s"} need fixing.</b> Nothing has been saved. Correct these rows in Excel and upload the file again.</div>
+        <div class="tbl" style="margin-top:12px"><table><thead><tr><th>Sheet</th><th class="n">Row</th><th>Problem</th></tr></thead><tbody>${I.E.slice(0,200).map(e=>`<tr><td>${h(e.sh)}</td><td class="n">${e.row}</td><td>${h(e.msg)}</td></tr>`).join("")}</tbody></table></div></div>`
+      : I.done ? `<div class="sheet-b"><div class="banner"><b>Done.</b> ${h(I.done)} Check the Dashboard, Ledger and Bank tabs.</div></div>`
+      : `<div class="sheet-b stack" style="gap:12px">${I.total ? `<div class="banner">All rows are valid. ${I.total} record${I.total===1?"":"s"} will be added or updated. Records already in the system are skipped, so uploading the same file twice is safe.</div>
+          <label class="row" style="gap:8px;font-size:13px"><input type="checkbox" id="impAuto" checked> Auto-match bank statement lines to the ledger after import</label>
+          <div class="row"><button class="btn primary" data-iact="run">Import ${I.total} records</button><span class="note" id="impProg"></span></div>` : `<div class="banner">Nothing new to import: every row is already in the system.</div>`}</div>`}
+    </section>`;
+  }
+  return `<div class="head"><div><span class="eyebrow">Data</span><h1>Import</h1><p>Bring in historical data in one go. Fill in the Excel template (for example everything up to August or September), upload it, check the results, then import. Amounts in the template are in the base currency (${h(BASE())}); bank statement lines and bank opening balances are in each bank account's own currency.</p></div></div>
+  <div class="stack">
+  ${ex?`<div class="banner">${ex} example records are still in the system. Remove them first under <b>Settings → Remove example data</b>, so your figures aren't mixed with the samples.</div>`:""}
+  <div class="grid2">
+  <section class="sheet"><div class="sheet-h"><div><h2>1 · Download the template</h2><p>One Excel file with a sheet for each kind of data. Drop-down lists show the allowed values.</p></div></div>
+    <div class="sheet-b stack" style="gap:12px"><div><a class="btn primary" href="import-template.xlsx" download="Future-Axis-import-template.xlsx">Download Excel template</a></div>
+    <div class="tbl"><table><tbody>${sheets.map(([n,d])=>`<tr><td style="white-space:nowrap"><b style="font-weight:600">${n}</b></td><td class="note">${d}</td></tr>`).join("")}</tbody></table></div>
+    <p class="note" style="margin:0">The grey rows starting with <b>e.g.</b> are examples and are ignored. You can leave sheets empty if you have nothing for them.</p></div></section>
+  <section class="sheet"><div class="sheet-h"><div><h2>2 · Upload your completed file</h2><p>Every row is checked first. Nothing is saved until you click Import.</p></div></div>
+    <div class="sheet-b stack" style="gap:12px"><label class="note" style="display:flex;flex-direction:column;gap:6px">Completed template (.xlsx)<input type="file" id="impFile" accept=".xlsx,.xls"></label>
+    <p class="note" style="margin:0">Ventures, placements and bank accounts are matched by their ID: an existing ID is updated, a new ID is added. Ledger entries and statement lines that are already in the system are skipped.</p></div></section>
+  </div>
+  ${res}
+  </div>`;
+}
+
+/* ---------- PDF bank statements (Wio Bank layout: Date · Ref · Description · Amount · Balance) ---------- */
+const PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+function ensurePdfJs(){
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  return new Promise((res, rej) => { const s = document.createElement("script"); s.src = PDFJS + "pdf.min.js";
+    s.onload = () => { pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + "pdf.worker.min.js"; res(pdfjsLib); };
+    s.onerror = () => rej(new Error("The PDF reader didn't load. Check your internet connection and try again.")); document.head.appendChild(s); });
+}
+async function pdfLines(file){
+  const lib = await ensurePdfJs();
+  const pdf = await lib.getDocument({data: new Uint8Array(await file.arrayBuffer())}).promise;
+  const out = [];
+  for (let n = 1; n <= pdf.numPages; n++){
+    const page = await pdf.getPage(n), tc = await page.getTextContent();
+    const items = tc.items.filter(i => i.str && i.str.trim()).map(i => ({s:i.str, x:i.transform[4], y:i.transform[5], w:i.width}));
+    const rows = [];
+    for (const it of items.sort((a,b)=>b.y-a.y || a.x-b.x)){
+      let r = rows.find(r => Math.abs(r.y - it.y) < 2.5); if (!r){ r = {y:it.y, items:[]}; rows.push(r); } r.items.push(it);
+    }
+    for (const r of rows.sort((a,b)=>b.y-a.y)){
+      const its = r.items.sort((a,b)=>a.x-b.x), cells = [];
+      for (const it of its){ const last = cells[cells.length-1];
+        if (last && it.x - (last.x2) < 6) { last.s += (it.x - last.x2 > 0.8 ? " " : "") + it.s; last.x2 = it.x + it.w; }
+        else cells.push({s:it.s, x:it.x, x2:it.x + it.w}); }
+      out.push({page:n, cells: cells.map(c => ({s:c.s.trim(), x:c.x})).filter(c=>c.s), text: cells.map(c=>c.s.trim()).join("  ")});
+    }
+  }
+  return out;
+}
+const NUMRE = /^-?\(?[\d,]+(\.\d+)?\)?$/;
+function parseStatementPdf(lines){
+  const tx = [], info = {};
+  const all = lines.map(l => l.text).join("\n");
+  let m = /FROM\s+(\d{2}\/\d{2}\/\d{4})\s+TO\s+(\d{2}\/\d{2}\/\d{4})/i.exec(all); if (m){ info.from = parseDateAny(m[1]); info.to = parseDateAny(m[2]); }
+  m = /\b(AE\d{21})\b/.exec(all.replace(/\s+/g," ")); if (m) info.iban = m[1];
+  m = /ACCOUNT NUMBER[\s\S]{0,80}?\b(\d{8,16})\b/i.exec(all); if (m) info.number = m[1];
+  m = /\b(AED|USD|EUR|GBP|SAR|PKR)\b/.exec(all); if (m) info.currency = m[1];
+  const oi = lines.findIndex(l => /OPENING BALANCE/i.test(l.text) && /CLOSING BALANCE/i.test(l.text));
+  if (oi >= 0) for (const l of lines.slice(oi+1, oi+8)){ const nums = l.cells.map(c=>c.s).filter(s => NUMRE.test(s) && /\d/.test(s)); if (nums.length >= 2){ info.open = parseAmt(nums[0]); info.close = parseAmt(nums[1]); break; } }
+  const bankName = /wio bank/i.test(all) ? "Wio Bank" : ""; if (bankName) info.bank = bankName;
+  for (const l of lines){
+    const c = l.cells.map(x => x.s); if (c.length < 4) continue;
+    const date = /^\d{2}\/\d{2}\/\d{4}$/.test(c[0]) ? parseDateAny(c[0]) : ""; if (!date) continue;
+    const nums = []; let k = c.length - 1;
+    while (k > 0 && nums.length < 2 && NUMRE.test(c[k].replace(/\s/g,"")) && /\d/.test(c[k])) { nums.unshift(c[k]); k--; }
+    if (nums.length < 2) continue;
+    const mid = c.slice(1, k+1); let ref = "";
+    if (mid.length > 1 && /^[A-Z]{0,3}\d{5,}$/.test(mid[0])) ref = mid.shift();
+    const amt = parseAmt(nums[0].replace(/[()]/g, m => m==="(" ? "-" : "")), bal = parseAmt(nums[1]);
+    if (!isFinite(amt) || !amt) continue;
+    tx.push({date, ref, desc: mid.join(" ").replace(/\s+/g," ").trim(), dr: amt < 0 ? -amt : 0, cr: amt > 0 ? amt : 0, balance: isFinite(bal) ? bal : null});
+  }
+  // checks: running balance and opening → closing
+  let run = info.open, breaks = 0;
+  if (isFinite(run)) for (const t of tx){ run = Math.round((run + t.cr - t.dr)*100)/100; if (t.balance != null && Math.abs(run - t.balance) > 0.01) { breaks++; run = t.balance; } }
+  info.sumOk = isFinite(info.open) && isFinite(info.close) ? Math.abs(info.open + tx.reduce((s,t)=>s+t.cr-t.dr,0) - info.close) < 0.01 : null;
+  info.breaks = breaks;
+  return {tx, info};
+}
+
+/* ---------- record unmatched bank lines: suggestions + remembered rules ---------- */
+const IN_TYPES = ["Profit Received","Investment Withdrawal","Owner Capital Contribution","Other Income"];
+const OUT_TYPES = ["Operating Expense","Investment Addition","Investor Profit Paid","Investor Capital Repaid","Owner Drawing"];
+const GENERIC = new Set(["fund","group","fze","fzco","llc","ltd","limited","trading","company","co","the","and","pvt","private","smc","general","holding","holdings","investment","investments","global","solution","solutions"]);
+const ruleKey = d => String(d||"").toLowerCase().replace(/\(rate:[^)]*\)/g,"").replace(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/g,"").replace(/[0-9]+/g,"").replace(/[^a-z& ]+/g," ").replace(/\s+/g," ").trim();
+const sigWords = s => String(s||"").toLowerCase().replace(/[^a-z ]+/g," ").split(/\s+/).filter(w => w.length >= 4 && !GENERIC.has(w));
+function suggest(line){
+  const amt = lineAmt(line), d = String(line.desc||""), dl = d.toLowerCase(), rk = ruleKey(d);
+  const rule = (S.cfg.bankRules || {})[rk];
+  if (rule && (amt>0 ? IN_TYPES : OUT_TYPES).includes(rule.type)) return {...rule, why:"Same as last time"};
+  if (amt < 0 && /\bfee\b|charge|subscription|commission|\bvat\b|foreign exchange/.test(dl)) return {type:"Operating Expense", why:"Bank fee / charge"};
+  const party = dl.replace(/^(from|to)\s+/,"").replace(/^salary from\s+/,"");
+  const ven = S.biz.find(b => sigWords(b.name).some(w => party.includes(w)));
+  if (ven) return amt > 0 ? {type:"Profit Received", bizId:ven.id, why:`Looks like ${ven.name}`} : {type:"Investment Addition", bizId:ven.id, why:`Looks like ${ven.name}`};
+  const inv = S.pl.filter(p => sigWords(p.investor).length && sigWords(p.investor).every(w => party.includes(w)));
+  if (inv.length === 1 && amt < 0) return {type:"Investor Profit Paid", placementId:inv[0].id, bizId:inv[0].bizId, why:`Looks like ${inv[0].investor}`};
+  if (inv.length && amt > 0) return {type:"", hint:`Looks like investor ${inv[0].investor}. If this is a new placement, add it under Investors and then use Match.`};
+  if (/^salary/i.test(d) && amt > 0) return {type:"Other Income", why:"Salary credit"};
+  return {type:""};
+}
+function openRecord(acctId, onlyIds){
+  MATCHED();
+  const lines = S.bl.filter(l => l.accountId===acctId && !(l.matchKey && MATCHED.items.has(l.matchKey)) && (!onlyIds || onlyIds.has(l.id)))
+    .sort((a,b)=>a.date.localeCompare(b.date) || num(a.seq)-num(b.seq));
+  if (!lines.length){ toast("Every statement line on this account is recorded"); return; }
+  const sug = Object.fromEntries(lines.map(l => [l.id, suggest(l)]));
+  const venOpts = sel => `<option value="">Choose venture</option>` + S.biz.map(b=>`<option value="${b.id}" ${b.id===sel?"selected":""}>${h(b.code)} · ${h(b.name)}</option>`).join("");
+  const plOpts = sel => `<option value="">Choose placement</option>` + S.pl.map(p=>`<option value="${p.id}" ${p.id===sel?"selected":""}>${h(p.code)} · ${h(p.investor)}</option>`).join("");
+  const row = l => { const a = lineAmt(l), s = sug[l.id], types = a>0 ? IN_TYPES : OUT_TYPES;
+    return `<tr data-rl="${l.id}"><td class="n" style="text-align:left">${fmtDate(l.date)}</td>
+      <td style="min-width:200px">${h(l.desc)}${l.ref?`<div class="note">${h(l.ref)}</div>`:""}${s.why?`<div class="note">Suggested: ${h(s.why)}</div>`:""}${s.hint?`<div class="note" style="color:var(--warn)">${h(s.hint)}</div>`:""}</td>
+      <td class="n">${a<0?`<span class="neg">${nf.format(-a)}</span>`:""}</td><td class="n">${a>0?nf.format(a):""}</td>
+      <td><select class="rt" aria-label="Type"><option value="">Skip for now</option>${types.map(t=>`<option ${t===s.type?"selected":""}>${t}</option>`).join("")}</select></td>
+      <td><select class="rv" aria-label="Venture">${venOpts(s.bizId)}</select><select class="rp" aria-label="Placement">${plOpts(s.placementId)}</select><select class="rs" aria-label="Shareholder"><option value="">Shareholder (optional)</option>${S.sh.map(x=>`<option value="${x.id}" ${x.id===s.shareholderId?"selected":""}>${h(x.code)} · ${h(x.name)}</option>`).join("")}</select></td></tr>`; };
+  $("#ovHost").innerHTML = `<div class="ov" id="ov"><div class="panel" role="dialog" aria-modal="true" aria-labelledby="rTitle" style="width:min(1100px,100%)">
+    <div class="row" style="justify-content:space-between"><h2 id="rTitle">Record statement lines</h2><button class="btn sm" id="rClose" type="button">Close</button></div>
+    <p class="note" style="margin:0">${lines.length} line${lines.length===1?" isn't":"s aren't"} in the ledger yet. Choose what each one is and click <b>Record</b>: a ledger entry is created on ${h(bankName(acctId))} and matched to the line, so the account reconciles. Suggestions come from your ventures and from how you recorded similar lines before. Lines left on "Skip for now" stay unmatched.</p>
+    <div class="row"><button class="btn sm" type="button" id="rAllExp">Set all unchosen money-out lines to Operating Expense</button></div>
+    <div class="tbl"><table><thead><tr><th>Date</th><th>Description</th><th class="n">Out</th><th class="n">In</th><th>Record as</th><th>Venture / placement</th></tr></thead><tbody>${lines.map(row).join("")}</tbody></table></div>
+    <label class="row" style="gap:8px;font-size:13px"><input type="checkbox" id="rRemember" checked> Remember my choices for similar lines in future statements</label>
+    <div class="err" id="rErr"></div>
+    <div class="row"><button class="btn primary" id="rGo" type="button">Record</button><span class="note" id="rCount"></span></div></div></div>`;
+  const close = () => { $("#ovHost").innerHTML = ""; render(); };
+  $("#rClose").onclick = close; $("#ov").onclick = e => { if (e.target.id==="ov") close(); };
+  const sync = tr => { const t = tr.querySelector(".rt").value; tr.querySelector(".rv").hidden = !(VEN_TYPES.includes(t)); tr.querySelector(".rp").hidden = !INV_TYPES.includes(t); tr.querySelector(".rs").hidden = !OWNER_TYPES.includes(t); };
+  const count = () => { const n = [...document.querySelectorAll("[data-rl] .rt")].filter(s=>s.value).length; $("#rCount").textContent = `${n} of ${lines.length} chosen`; $("#rGo").textContent = n ? `Record ${n} line${n===1?"":"s"}` : "Record"; $("#rGo").disabled = !n; };
+  document.querySelectorAll("[data-rl]").forEach(tr => { sync(tr); tr.querySelector(".rt").onchange = () => { sync(tr); count(); }; });
+  $("#rAllExp").onclick = () => { document.querySelectorAll("[data-rl]").forEach(tr => { const s = tr.querySelector(".rt"); if (!s.value && [...s.options].some(o=>o.value==="Operating Expense")){ s.value = "Operating Expense"; sync(tr); } }); count(); };
+  count();
+  $("#rGo").onclick = async () => {
+    const recs = [], errs = [];
+    document.querySelectorAll("[data-rl]").forEach(tr => {
+      const l = lines.find(x=>x.id===tr.dataset.rl), type = tr.querySelector(".rt").value; if (!type) return;
+      let bizId = "", placementId = "";
+      if (VEN_TYPES.includes(type)){ bizId = tr.querySelector(".rv").value; if (!bizId) return errs.push(`${fmtDate(l.date)} ${l.desc}: choose the venture.`); }
+      if (INV_TYPES.includes(type)){ placementId = tr.querySelector(".rp").value; if (!placementId) return errs.push(`${fmtDate(l.date)} ${l.desc}: choose the placement.`); bizId = S.pl.find(p=>p.id===placementId)?.bizId || ""; }
+      const shareholderId = OWNER_TYPES.includes(type) ? tr.querySelector(".rs").value : "";
+      recs.push({l, type, bizId, placementId, shareholderId});
+    });
+    if (errs.length){ $("#rErr").innerHTML = errs.slice(0,6).map(h).join("<br>"); return; }
+    $("#rGo").disabled = true; $("#rErr").textContent = "";
+    try {
+      const now = new Date().toISOString(), led = [], upd = [], rules = {...(S.cfg.bankRules||{})};
+      for (const r of recs){ const id = newId(), {id:lid, ...ld} = r.l;
+        led.push({id, data:{date:r.l.date, type:r.type, bizId:r.bizId, placementId:r.placementId, shareholderId:r.shareholderId, amount:conv(Math.abs(lineAmt(r.l)), acctCur(acctId), VIEW()), fxAmount:Math.abs(lineAmt(r.l)), fxCur:acctCur(acctId), method:"Bank transfer", bankId:acctId, ref:r.l.desc + (r.l.ref?" · "+r.l.ref:""), example:false, createdAt:now, updatedAt:now, fromBankLine:lid}});
+        upd.push({id:lid, data:{...ld, matchKey:"led:"+id}});
+        rules[ruleKey(r.l.desc)] = {type:r.type, bizId:r.bizId, placementId:r.placementId, shareholderId:r.shareholderId}; }
+      await S.db.bulk("ledger", led); await S.db.bulk("bankLines", upd);
+      if ($("#rRemember").checked){ const {bankRules, ...cfg} = S.cfg; await S.db.doc("config/settings").set({...cfg, bankRules: rules}); }
+      await loadAll(); $("#ovHost").innerHTML = ""; render(); toast(`${recs.length} line${recs.length===1?"":"s"} recorded and reconciled`);
+    } catch(x){ $("#rErr").textContent = "Could not save: " + (x.message || "try again"); $("#rGo").disabled = false; }
+  };
+}
+
+/* ---------- PDF upload path ---------- */
+async function pdfUpload(file){
+  const {tx, info} = parseStatementPdf(await pdfLines(file));
+  if (!tx.length) throw new Error("No transactions were recognised in this PDF. Download the Excel or CSV version of the statement from online banking and upload that instead.");
+  let acct = S.bank.find(x=>x.id===S.bankSel);
+  const byNum = info.number && S.bank.find(a => a.number && info.number.endsWith(String(a.number).replace(/\D/g,"")));
+  if (byNum) acct = byNum;
+  const fresh = withOccurrence(tx.map(t => ({...t, hash: t.ref ? `${acct.id}|ref|${t.ref}` : lineHash(acct.id, t.date, t.desc, t.dr, t.cr, t.balance)})));
+  const have = new Set(S.bl.map(l=>l.hash)), add = fresh.filter(t => !have.has(t.hash)), dup = fresh.length - add.length;
+  const canOpen = !acct.openDate && isFinite(info.open) && info.from && !S.bl.some(l=>l.accountId===acct.id && l.date < info.from);
+  const openDate = info.from ? addDays(info.from, -1) : "";
+  const checks = [info.sumOk===true ? `<span class="pill ok">Opening + lines = closing</span>` : info.sumOk===false ? `<span class="pill bad">Opening + lines ≠ closing</span>` : "", info.breaks ? `<span class="pill bad">${info.breaks} running-balance break${info.breaks===1?"":"s"}</span>` : `<span class="pill ok">Running balance checks out</span>`].join(" ");
+  $("#uMap").innerHTML = `<div class="stack" style="gap:12px">
+    <div class="banner"><b>${h(info.bank||"Bank")} statement</b>${info.from?` · ${fmtDate(info.from)} to ${fmtDate(info.to)}`:""}${info.number?` · account ${h(info.number)}`:""}<br>
+      Opening ${isFinite(info.open)?nf.format(info.open):"–"} · closing ${isFinite(info.close)?nf.format(info.close):"–"} ${h(info.currency||"")} · ${tx.length} transactions read<br>${checks}</div>
+    ${byNum && byNum.id!==S.bankSel ? `<div class="note">Account number matches <b>${h(acct.code)} · ${h(acct.name)}</b>, so the lines go there.</div>` : `<div class="note">Lines go to <b>${h(acct.code)} · ${h(acct.name)}</b>.</div>`}
+    ${dup?`<div class="note">${dup} line${dup===1?" is":"s are"} already uploaded and will be skipped.</div>`:""}
+    ${canOpen?`<label class="row" style="gap:8px;font-size:13px"><input type="checkbox" id="uOpen" checked> Set this account's opening balance to ${nf.format(info.open)} at ${fmtDate(openDate)} (first statement)</label>`:""}
+    ${!acct.number && info.number ? `<label class="row" style="gap:8px;font-size:13px"><input type="checkbox" id="uNum" checked> Save account number ${h(info.number.slice(-4))} on this account so future statements are recognised</label>`:""}
+    <div class="tbl"><table><thead><tr><th>Date</th><th>Description</th><th class="n">Out</th><th class="n">In</th><th class="n">Balance</th></tr></thead><tbody>
+      ${tx.slice(0,6).map(r=>`<tr><td class="n" style="text-align:left">${fmtDate(r.date)}</td><td>${h(r.desc)}<div class="note">${h(r.ref)}</div></td><td class="n">${r.dr?money(r.dr):""}</td><td class="n">${r.cr?money(r.cr):""}</td><td class="n">${r.balance!=null?money(r.balance):""}</td></tr>`).join("")}
+      ${tx.length>6?`<tr><td colspan="5" class="note">…and ${tx.length-6} more</td></tr>`:""}</tbody></table></div>
+    <div class="row"><button class="btn primary" id="uGo" type="button" ${add.length?"":"disabled"}>Import ${add.length} line${add.length===1?"":"s"} and record</button><span class="note" id="uProg"></span></div></div>`;
+  $("#uGo").onclick = async () => {
+    $("#uGo").disabled = true; const batch = "b" + Date.now(), base = Date.now()*1000;
+    try {
+      if ($("#uOpen")?.checked || $("#uNum")?.checked){ const {id, ...ad} = acct;
+        await S.db.collection("bankAccounts").doc(id).set({...ad, ...($("#uOpen")?.checked ? {openBal:info.open, openDate} : {}), ...($("#uNum")?.checked ? {number:info.number.slice(-4), bankName: ad.bankName || info.bank || ""} : {})}); }
+      const ids = add.map(() => newId());
+      await S.db.bulk("bankLines", add.map((r,i) => ({id:ids[i], data:{accountId:acct.id, date:r.date, desc:r.desc, ref:r.ref, dr:r.dr, cr:r.cr, balance:r.balance, hash:r.hash, seq:base+i, batchId:batch, matchKey:"", importedAt:new Date().toISOString(), source:"pdf"}})),
+        (d,t) => $("#uProg").textContent = `Saving ${d} of ${t}…`);
+      await loadAll(); const n = await autoMatch(acct.id); await loadAll();
+      S.bankSel = acct.id; $("#ovHost").innerHTML = ""; render();
+      toast(`${add.length} lines imported${n?` · ${n} matched to existing entries`:""}`);
+      openRecord(acct.id, new Set(ids));
+    } catch(x){ $("#uErr").textContent = "Upload failed: " + (x.message || "try again"); $("#uGo").disabled = false; }
+  };
+}
+
+/* ---------- owner capital: income split and Share capital tab ---------- */
+/* Each venture's profit is split between owner capital and investor capital in proportion to the capital
+   each has deployed in that venture at the end of the period. */
+function incomeSplit(from, to){
+  let own = 0, inv = 0; const rows = [];
+  const mixAt = (bizId, d) => { const f = t => t.bizId===bizId;
+    const net = Math.max(0, tsum("Investment Addition",ORIGIN,d,f) - tsum("Investment Withdrawal",ORIGIN,d,f));
+    const icap = Math.max(0, placed(ORIGIN,d,p=>p.bizId===bizId) - tsum("Investor Capital Repaid",ORIGIN,d,f));
+    const invDep = Math.min(icap, net); return {net, invDep, ownCap: net - invDep}; };
+  for (const b of S.biz){
+    let o = 0, i2 = 0, acc = 0;
+    for (const t of S.led){ if (t.type!=="Profit Accrued" || t.bizId!==b.id || t.date<from || t.date>to) continue;
+      const a = num(t.amount); acc += a;
+      if (t.ownPart!=null && t.ownPart!=="") { o += num(t.ownPart); i2 += a - num(t.ownPart); }
+      else { const m = mixAt(b.id, t.date); const sh = m.net > 0 ? m.ownCap/m.net : 1; o += a*sh; i2 += a*(1-sh); } }
+    const m = mixAt(b.id, to);
+    own += o; inv += i2; rows.push({b, acc, net:m.net, ownCap:m.ownCap, invDep:m.invDep, own:o, inv:i2, shOwn: m.net>0 ? m.ownCap/m.net : 1});
+  }
+  const hq = tsum("Profit Accrued", from, to, t => !t.bizId); own += hq;
+  return {own, inv, rows};
+}
+const OWNER_TYPES = ["Owner Capital Contribution","Owner Drawing"];
+const shName = id => S.sh.find(x=>x.id===id)?.name || "";
+function viewCapital(){
+  const {start, end} = S, pd = days(start,end)+1, an = 365/pd;
+  const B = balanceSheet(end), P = pnl(start,end), sp = incomeSplit(start,end), spAll = incomeSplit(ORIGIN,end);
+  const ownDep = sp.rows.reduce((s,r)=>s+r.ownCap,0);
+  const undeployed = B.eq - ownDep;
+  const W = S.canWrite!==false;
+  const k = (l,v,s)=>`<div class="kpi"><span class="eyebrow">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`;
+  // by shareholder
+  const own = id => S.led.filter(t => OWNER_TYPES.includes(t.type) && (t.shareholderId||"")===id && t.date<=end);
+  const shRows = [...S.sh.map(x=>({id:x.id, code:x.code, name:x.name, shares:x.shares, rec:x})), {id:"", code:"", name:"Not assigned to a shareholder"}].map(x => {
+    const L = own(x.id), c = L.filter(t=>t.type==="Owner Capital Contribution").reduce((s,t)=>s+num(t.amount),0), d = L.filter(t=>t.type==="Owner Drawing").reduce((s,t)=>s+num(t.amount),0);
+    return {...x, c, d, net:c-d};
+  }).filter(x => x.id || x.c || x.d);
+  const totNet = shRows.reduce((s,x)=>s+Math.max(0,x.net),0);
+  csvReg("shareholders",["Shareholder ID","Name","Contributed","Drawn","Net capital","% of capital","Share of net profit (period)","Share of equity"], shRows.map(x=>[x.code,x.name,r0(x.c),r0(x.d),r0(x.net),p2(div(Math.max(0,x.net),totNet)),r0(P.net*div(Math.max(0,x.net),totNet)),r0(B.eq*div(Math.max(0,x.net),totNet))]));
+  const shTable = shRows.map(x => { const w = div(Math.max(0,x.net), totNet);
+    return `<tr ${x.id?`class="click" data-edit="sh:${x.id}"`:""}><td>${x.code?`<span class="note">${h(x.code)}</span> `:""}<b style="font-weight:600">${h(x.name)}</b>${x.shares?`<div class="note">${nf.format(num(x.shares))} shares</div>`:""}</td>
+      <td class="n">${money(x.c)}</td><td class="n">${money(-x.d)}</td><td class="n">${money(x.net)}</td><td class="n">${pct(w)}</td><td class="n">${money(P.net*w)}</td><td class="n">${money(B.eq*w)}</td></tr>`; }).join("");
+  // allocation to ventures
+  const alloc = sp.rows.filter(r => r.ownCap > 0 || r.own);
+  csvReg("owner-allocation",["Venture","Own capital deployed","% of own deployed","Owner income (period)","Return p.a."], alloc.map(r=>[r.b.name,r0(r.ownCap),p2(div(r.ownCap,ownDep)),r0(r.own),p2(div(r.own,r.ownCap)*an)]));
+  const aTable = alloc.map(r => `<tr class="click" data-goledger="${r.b.id}"><td><i class="sw" style="display:inline-block;margin-right:8px;background:${vcol(r.b.id)}"></i>${h(r.b.name)}<div class="note">${h(r.b.mode||"")}</div></td>
+    <td class="n">${money(r.ownCap)}</td><td class="n">${pct(div(r.ownCap,ownDep))}</td><td class="n">${pct(r.shOwn)}</td><td class="n">${money(r.own)}</td><td class="n">${pct(div(r.own,r.ownCap)*an)}</td></tr>`).join("");
+  // movements
+  const mv = S.led.filter(t => OWNER_TYPES.includes(t.type)).sort((a,b)=>b.date.localeCompare(a.date));
+  const mTable = mv.slice(0,200).map(t => `<tr class="click" data-edit="led:${t.id}"><td class="n" style="text-align:left">${fmtDate(t.date)}</td><td>${h(shName(t.shareholderId)||"–")}</td><td><span class="pill ${t.type==="Owner Drawing"?"warn":"ok"}">${t.type==="Owner Drawing"?"Drawing":"Contribution"}</span></td><td class="note">${h(t.ref||"")}</td><td class="note">${h([t.method, bankCode(t.bankId)].filter(Boolean).join(" · "))}</td><td class="n">${money(t.type==="Owner Drawing"?-num(t.amount):num(t.amount))}</td></tr>`).join("");
+  return `<div class="head"><div><span class="eyebrow">Owner investment</span><h1>Share capital</h1><p>Capital put in by the shareholders, where it is invested, and what it earned from ${fmtDate(start)} to ${fmtDate(end)}.</p></div>
+    ${W?`<div class="row"><button class="btn" data-new="sh">Add shareholder</button><button class="btn" data-newcap="Owner Drawing">Record drawing</button><button class="btn primary" data-newcap="Owner Capital Contribution">Record contribution</button></div>`:""}</div>
+  <div class="stack">
+  <div class="kpis">
+    ${k("Share capital", money(B.owner), "contributions less drawings")}
+    ${k("Retained earnings", money(B.re), "profit kept in the business")}
+    ${k("Owner's equity", money(B.eq), `at ${fmtDate(end)}`)}
+    ${k("Invested in ventures", money(ownDep), `${pct(div(ownDep,B.eq),0)} of equity`)}
+    ${k("Not yet invested", money(undeployed), "held as cash or receivables")}
+    ${k("Owner income", money(sp.own), `${pct(div(sp.own,ownDep)*an)} p.a. on own capital invested`)}
+  </div>
+  <div class="grid2">
+    <section class="sheet"><div class="sheet-h"><div><h2>Own capital by venture</h2><p>Owner's money invested in each venture at ${fmtDate(end)}</p></div></div>
+      <div class="sheet-b">${donut(alloc.map(r=>({l:r.b.name, v:r.ownCap, c:vcol(r.b.id)})), {center:"Own capital", fmt:kfmt, aria:"Own capital by venture", empty:"Appears once own capital is invested in a venture."})}</div></section>
+    <section class="sheet"><div class="sheet-h"><div><h2>Income split</h2><p>Venture profit for the period, by whose capital earned it</p></div></div>
+      <div class="sheet-b">${donut([{l:"Owner income (own capital)", v:sp.own, c:"var(--accent)"},{l:"Income on investor capital", v:sp.inv, c:"var(--gold)"}], {center:"Venture profit", fmt:kfmt, aria:"Income split", empty:"Appears once profit is accrued in this period."})}</div></section>
+  </div>
+  <section class="sheet"><div class="sheet-h"><div><h2>Shareholders</h2><p>Share of profit and equity in proportion to net capital contributed</p></div>${csvBtn("shareholders")}</div>
+    <div class="tbl"><table><thead><tr><th>Shareholder</th><th class="n">Contributed</th><th class="n">Drawn</th><th class="n">Net capital</th><th class="n">% of capital</th><th class="n">Share of net profit</th><th class="n">Share of equity</th></tr></thead>
+    <tbody>${shTable || `<tr><td colspan="7"><div class="empty"><b>No shareholders yet</b>Add each shareholder, then record their capital contributions.</div></td></tr>`}</tbody>
+    ${shTable?`<tfoot><tr><td>Total</td><td class="n">${money(shRows.reduce((s,x)=>s+x.c,0))}</td><td class="n">${money(-shRows.reduce((s,x)=>s+x.d,0))}</td><td class="n">${money(shRows.reduce((s,x)=>s+x.net,0))}</td><td class="n">${pct(totNet?1:0)}</td><td class="n">${money(P.net)}</td><td class="n">${money(B.eq)}</td></tr></tfoot>`:""}</table></div></section>
+  <section class="sheet"><div class="sheet-h"><div><h2>Allocation of own capital to ventures</h2><p>Own capital = venture investment not funded by investor placements. Click a row for its ledger.</p></div>${csvBtn("owner-allocation")}</div>
+    <div class="tbl"><table><thead><tr><th>Venture</th><th class="n">Own capital</th><th class="n">% of own invested</th><th class="n">Own share of venture</th><th class="n">Owner income</th><th class="n">Return p.a.</th></tr></thead>
+    <tbody>${aTable || `<tr><td colspan="6" class="empty">No own capital invested in ventures yet.</td></tr>`}</tbody>
+    ${aTable?`<tfoot><tr><td>Total</td><td class="n">${money(ownDep)}</td><td class="n">${pct(ownDep?1:0)}</td><td></td><td class="n">${money(sp.rows.reduce((s,r)=>s+r.own,0))}</td><td class="n">${pct(div(sp.rows.reduce((s,r)=>s+r.own,0),ownDep)*an)}</td></tr></tfoot>`:""}</table></div></section>
+  <section class="sheet"><div class="sheet-h"><div><h2>Capital movements</h2><p>${mv.length} contribution${mv.length===1?"":"s"} and drawing${mv.length===1?"":"s"}</p></div></div>
+    <div class="tbl"><table><thead><tr><th>Date</th><th>Shareholder</th><th>Type</th><th>Reference</th><th>Paid via</th><th class="n">Amount</th></tr></thead>
+    <tbody>${mTable || `<tr><td colspan="6" class="empty">No capital contributions recorded yet.</td></tr>`}</tbody></table></div></section>
+  <p class="note">Inception to date, owner income is ${nf.format(spAll.own)} and income on investor capital is ${nf.format(spAll.inv)}.</p>
+  </div>`;
+}
+
+/* ---------- automatic profit accruals from rates ----------
+   Venture profit   = venture expected rate × net capital invested in the venture, day by day
+   Investor profit  = agreed rate × placement outstanding, day by day (from the day after placement, until maturity)
+   Future Axis keeps the difference on investor money plus the full venture profit on paid-up capital. */
+const monthEnd = ym => { const [y,m] = ym.split("-").map(Number); return iso(new Date(y, m, 0)); };
+const monthLabel = ym => { const [y,m] = ym.split("-").map(Number); return new Date(y, m-1, 1).toLocaleDateString("en-GB",{month:"short", year:"numeric"}); };
+function accrualStart(){
+  const ds = [...S.pl.map(p=>p.date), ...S.led.filter(t=>t.type==="Investment Addition").map(t=>t.date)].filter(Boolean).sort();
+  return ds[0] ? ds[0].slice(0,7) : "";
+}
+function monthsBetween(a, b){ const out = []; if (!a || !b || a > b) return out; let [y,m] = a.split("-").map(Number); const [by,bm] = b.split("-").map(Number);
+  while (y < by || (y===by && m<=bm)){ out.push(`${y}-${pad(m)}`); m++; if (m>12){ m=1; y++; } } return out; }
+function stepSeries(events){ // events: [{date, amt}] → f(d) = sum of amt with date <= d
+  const ev = events.filter(e=>e.date && e.amt).sort((a,b)=>a.date.localeCompare(b.date));
+  return d => { let s = 0; for (const e of ev){ if (e.date > d) break; s += e.amt; } return s; };
+}
+function accrueOwn(rate, venAt, invAt, from, to){
+  if (!rate) return 0; let s = 0;
+  for (let d = from; d <= to; d = addDays(d, 1)){ const prev = addDays(d, -1), v = Math.max(0, venAt(prev)); s += v - Math.min(Math.max(0, invAt(prev)), v); }
+  return s * rate / 365;
+}
+function accrueDaily(rate, balAt, from, to, stop){
+  if (!rate) return 0; let s = 0;
+  for (let d = from; d <= to; d = addDays(d, 1)){ const prev = addDays(d, -1); if (stop && prev >= stop) break; s += Math.max(0, balAt(prev)); }
+  return s * rate / 365;
+}
+function computeAccruals(through){
+  const months = monthsBetween(accrualStart(), through), out = [];
+  const isAuto = t => t.auto;
+  const venSeries = Object.fromEntries(S.biz.map(b => [b.id, stepSeries(S.led.filter(t=>t.bizId===b.id && (t.type==="Investment Addition"||t.type==="Investment Withdrawal")).map(t=>({date:t.date, amt: t.type==="Investment Addition" ? num(t.amount) : -num(t.amount)})))]));
+  const invInVen = Object.fromEntries(S.biz.map(b => [b.id, stepSeries([...S.pl.filter(p=>p.bizId===b.id).map(p=>({date:p.date, amt:num(p.amount)})), ...S.led.filter(t=>t.bizId===b.id && t.type==="Investor Capital Repaid").map(t=>({date:t.date, amt:-num(t.amount)}))])]));
+  const plSeries = Object.fromEntries(S.pl.map(p => [p.id, stepSeries([{date:p.date, amt:num(p.amount)}, ...S.led.filter(t=>t.placementId===p.id && t.type==="Investor Capital Repaid").map(t=>({date:t.date, amt:-num(t.amount)}))])]));
+  for (const ym of months){
+    const from = ym + "-01", to = monthEnd(ym);
+    for (const b of S.biz){ const a = Math.round(accrueDaily(num(b.rate), venSeries[b.id], from, to) * 100) / 100;
+      const own = Math.min(a, Math.round(accrueOwn(num(b.rate), venSeries[b.id], invInVen[b.id], from, to) * 100) / 100);
+      if (a) out.push({id:`auto-v-${b.id}-${ym}`, ym, kind:"v", data:{date:to, type:"Profit Accrued", bizId:b.id, placementId:"", amount:a, ownPart:own, method:"", bankId:"", ref:`Auto accrual ${monthLabel(ym)} at ${(num(b.rate)*100).toFixed(2)}% p.a.`, auto:true, accrualMonth:ym, example:false}}); }
+    for (const p of S.pl){ if (!p.date || p.date > to) continue;
+      const a = Math.round(accrueDaily(num(p.rate), plSeries[p.id], from, to, p.maturity || "") * 100) / 100;
+      if (a) out.push({id:`auto-p-${p.id}-${ym}`, ym, kind:"p", data:{date:to, type:"Investor Profit Accrued", bizId:p.bizId, placementId:p.id, amount:a, method:"", bankId:"", ref:`Auto accrual ${monthLabel(ym)} at ${(num(p.rate)*100).toFixed(2)}% p.a.`, auto:true, accrualMonth:ym, example:false}}); }
+  }
+  const manual = S.led.filter(t => !isAuto(t) && (t.type==="Profit Accrued"||t.type==="Investor Profit Accrued") && t.date && months.includes(t.date.slice(0,7)));
+  const stale = S.led.filter(t => isAuto(t) && months.includes(t.accrualMonth) && !out.some(o=>o.id===t.id));
+  return {months, out, manual, stale};
+}
+function openAccruals(){
+  const start = accrualStart();
+  if (!start){ toast("Add placements or venture investments first"); return; }
+  const t = D(todayIso()), lastFull = iso(new Date(t.getFullYear(), t.getMonth(), 0)).slice(0,7);
+  const opts = monthsBetween(start, todayIso().slice(0,7)).reverse();
+  const missingRate = S.biz.filter(b => !num(b.rate) && S.led.some(t=>t.bizId===b.id && t.type==="Investment Addition"));
+  $("#ovHost").innerHTML = `<div class="ov" id="ov"><div class="panel" role="dialog" aria-modal="true" aria-labelledby="aTitle" style="width:min(820px,100%)">
+    <div class="row" style="justify-content:space-between"><h2 id="aTitle">Run profit accruals</h2><button class="btn sm" id="aClose" type="button">Close</button></div>
+    <p class="note" style="margin:0"><b>Venture profit</b> = each venture's expected rate × capital invested in it. <b>Investor profit</b> = each placement's agreed rate × the placement. Both are worked out day by day for each month and posted at month end. Future Axis keeps the difference on investor money, plus the full venture profit on paid-up capital.</p>
+    ${missingRate.length?`<div class="banner">${missingRate.map(b=>h(b.name)).join(", ")} ${missingRate.length===1?"has":"have"} no expected rate, so no venture profit is calculated for ${missingRate.length===1?"it":"them"}. Set the rate in Ventures first.</div>`:""}
+    <label class="note" style="display:flex;flex-direction:column;gap:6px;max-width:280px">Accrue every month from ${monthLabel(start)} up to<select id="aThrough">${opts.map(m=>`<option value="${m}" ${m===lastFull?"selected":""}>${monthLabel(m)}${m===todayIso().slice(0,7)?" (month to date)":""}</option>`).join("")}</select></label>
+    <div id="aPrev"></div><div class="err" id="aErr"></div>
+    <div class="row"><button class="btn primary" id="aGo" type="button">Post accruals</button><span class="note" id="aProg"></span></div></div></div>`;
+  const close = () => { $("#ovHost").innerHTML = ""; render(); };
+  $("#aClose").onclick = close; $("#ov").onclick = e => { if (e.target.id==="ov") close(); };
+  let C;
+  const prev = () => {
+    C = computeAccruals($("#aThrough").value);
+    const by = {}; for (const o of C.out){ const r = by[o.ym] ||= {v:0, p:0}; r[o.kind] += o.data.amount; }
+    const tv = C.out.filter(o=>o.kind==="v").reduce((s,o)=>s+o.data.amount,0), tp = C.out.filter(o=>o.kind==="p").reduce((s,o)=>s+o.data.amount,0);
+    $("#aPrev").innerHTML = `<div class="tbl"><table><thead><tr><th>Month</th><th class="n">Venture profit</th><th class="n">Investor profit</th><th class="n">Difference to Future Axis</th></tr></thead><tbody>
+      ${C.months.map(m=>{ const r = by[m] || {v:0,p:0}; return `<tr><td>${monthLabel(m)}</td><td class="n">${money(r.v)}</td><td class="n">${money(r.p)}</td><td class="n">${money(r.v-r.p)}</td></tr>`; }).join("")}</tbody>
+      <tfoot><tr><td>Total</td><td class="n">${money(tv)}</td><td class="n">${money(tp)}</td><td class="n">${money(tv-tp)}</td></tr></tfoot></table></div>
+      ${C.manual.length?`<div class="banner" style="margin-top:10px">${C.manual.length} manually entered profit accrual${C.manual.length===1?" is":"s are"} already in these months. They stay as they are, so check them in the Ledger to avoid counting profit twice.</div>`:""}
+      <p class="note">Running this again later recalculates these months and replaces the earlier automatic entries, e.g. after you change a rate or add a placement.</p>`;
+    $("#aGo").textContent = `Post ${C.out.length} accrual entr${C.out.length===1?"y":"ies"}`; $("#aGo").disabled = !C.out.length && !C.stale.length;
+  };
+  $("#aThrough").onchange = prev; prev();
+  $("#aGo").onclick = async () => {
+    $("#aGo").disabled = true; const now = new Date().toISOString();
+    try {
+      await S.db.bulk("ledger", C.out.map(o => { const ex = S.led.find(t=>t.id===o.id); return {id:o.id, data:{...o.data, createdAt: ex?.createdAt || now, updatedAt: now}}; }), (d,t)=>$("#aProg").textContent = `Saving ${d} of ${t}…`);
+      for (const t of C.stale) await S.db.collection("ledger").doc(t.id).delete();
+      await loadAll(); $("#ovHost").innerHTML = ""; render(); toast(`Accruals posted up to ${monthLabel($("#aThrough")?.value || C.months[C.months.length-1])}`);
+    } catch(x){ $("#aErr").textContent = "Could not post: " + (x.message || "try again"); $("#aGo").disabled = false; }
+  };
+}
+
 /* ---------- render ---------- */
+function syncCur(){ const sel = $("#viewCur"); if (!sel) return; sel.innerHTML = CURS.map(c=>`<option ${c===VIEW()?"selected":""}>${c}</option>`).join(""); }
 function renderTabs(){
+  syncCur();
   const pend = (S.members||[]).filter(m=>m.status==="pending").length;
-  $("#tabs").innerHTML = TABS.filter(t => t[0]!=="users" || S.isAdmin).map(t => t[0]==="|" ? '<span class="sep" aria-hidden="true"></span>' : `<button role="tab" data-tab="${t[0]}" aria-selected="${S.tab===t[0]}">${t[1]}${t[0]==="users"&&pend?` <span class="pill warn">${pend}</span>`:""}</button>`).join("");
+  $("#tabs").innerHTML = TABS.filter(t => (t[0]!=="users" || S.isAdmin) && (t[0]!=="import" || S.canWrite)).map(t => t[0]==="|" ? '<span class="sep" aria-hidden="true"></span>' : `<button role="tab" data-tab="${t[0]}" aria-selected="${S.tab===t[0]}">${t[1]}${t[0]==="users"&&pend?` <span class="pill warn">${pend}</span>`:""}</button>`).join("");
 }
 function render(){
   $("#entityName").textContent = S.cfg.entity || "Future Axis Holdings";
@@ -686,9 +1615,9 @@ function render(){
   if (!S.db){ return; }
   if (!(S.loaded.biz && S.loaded.pl && S.loaded.led)) return;
   if (S.start > S.end){ $("#main").innerHTML = `<div class="banner">The period start is after its end. Adjust the dates at the top.</div>`; return; }
-  if (S.tab==="users" && !S.isAdmin) S.tab = "dashboard";
+  if ((S.tab==="users" && !S.isAdmin) || (S.tab==="import" && !S.canWrite)) S.tab = "dashboard";
   S.csv = {};
-  const V = {dashboard:viewDashboard, ventures:viewVentures, investors:viewInvestors, ledger:viewLedger, returns:viewReturns, monthly:viewMonthly, statements:viewStatements, users:viewUsers, settings:viewSettings}[S.tab] || viewDashboard;
+  const V = {dashboard:viewDashboard, ventures:viewVentures, investors:viewInvestors, ledger:viewLedger, returns:viewReturns, monthly:viewMonthly, statements:viewStatements, capital:viewCapital, bank:viewBank, import:viewImport, users:viewUsers, settings:viewSettings}[S.tab] || viewDashboard;
   const ro = S.canWrite===false ? `<div class="banner" style="margin-bottom:16px">You have view access. Ask the owner for edit access to record entries.</div>` : "";
   const fy = document.activeElement?.id, sel = fy && document.activeElement.selectionStart;
   $("#main").innerHTML = ro + V();
@@ -701,12 +1630,24 @@ function wireView(){
   if (lt) lt.onchange = e => { S.lf.type = e.target.value; render(); };
   if (lq) lq.oninput = e => { S.lf.q = e.target.value; clearTimeout(wireView.t); wireView.t = setTimeout(render, 200); };
   if (ys) ys.onchange = e => { S.year = +e.target.value; render(); };
+  const bs = $("#bankSel"); if (bs) bs.onchange = e => { S.bankSel = e.target.value; render(); };
+  const imf = $("#impFile");
+  if (imf) imf.onchange = async e => { const f = e.target.files[0]; if (!f) return;
+    try { const wb = await readWorkbook(f); S.imp = {...analyzeWorkbook(wb), file:f.name}; } catch(x){ S.imp = null; toast(x.message || "Could not read that file"); }
+    render(); };
   const pw = $("#pwForm");
   if (pw) pw.onsubmit = async e => { e.preventDefault(); const a=$("#pwNew").value, b=$("#pwRep").value, m=$("#pwMsg");
     if (a!==b){ m.className="err"; m.textContent="The two passwords don't match."; return; }
     const {error} = await SB.auth.updateUser({password:a}); m.className = error?"err":"ok-msg"; m.textContent = error ? error.message : "Password changed."; if (!error){ pw.reset(); SB.rpc("password_changed").then(()=>{},()=>{}); } };
   const cf = $("#cfgForm");
-  if (cf) cf.onsubmit = async e => { e.preventDefault(); try { await S.db.doc("config/settings").set({entity:$("#cfgEntity").value.trim()||"Future Axis Holdings", currency:($("#cfgCur").value.trim()||"AED").toUpperCase()}); toast("Settings saved"); } catch(x){ toast("Could not save settings"); } };
+  if (cf) cf.onsubmit = async e => { e.preventDefault(); try { await S.db.doc("config/settings").set({...S.cfg, entity:$("#cfgEntity").value.trim()||"Future Axis Holdings", base:$("#cfgBase").value, view:$("#cfgView").value, aedRate: num($("#cfgRate").value) || 3.6725}); S.cfg.view = $("#cfgView").value; toast("Settings saved"); } catch(x){ toast("Could not save settings"); } };
+  const rb = $("#resetBtn");
+  if (rb) rb.onclick = async () => {
+    if ($("#resetTxt").value.trim() !== "DELETE"){ toast("Type DELETE in the box to confirm"); return; }
+    rb.disabled = true; rb.textContent = "Deleting…";
+    try { for (const c of ["bankLines","ledger","placements","businesses","shareholders","bankAccounts"]){ const {error} = await SB.from("records").delete().eq("collection", c); if (error) throw error; }
+      await loadAll(); toast("All data deleted"); } catch(x){ toast("Could not delete: " + (x.message||"")); rb.disabled = false; rb.textContent = "Delete all data"; }
+  };
   const ce = $("#clearEx");
   if (ce) ce.onclick = async () => {
     if (!ce.classList.contains("armed")){ ce.classList.add("armed"); ce.textContent="Confirm: remove all example records"; return; }
@@ -717,6 +1658,11 @@ function wireView(){
 }
 document.addEventListener("click", e => {
   const u = e.target.closest("[data-uact]"); if (u){ userAction(u); return; }
+  const bk = e.target.closest("[data-bact]"); if (bk){ bankAction(bk); return; }
+  const bf = e.target.closest("[data-blf]"); if (bf){ S.blf = bf.dataset.blf; render(); return; }
+  const ia = e.target.closest("[data-iact]"); if (ia){ runImport(ia); return; }
+  if (e.target.closest("[data-acc]")){ openAccruals(); return; }
+  const nc = e.target.closest("[data-newcap]"); if (nc){ openForm("led", null, {prefill:{type:nc.dataset.newcap, bizId:"", shareholderId:S.sh.length===1?S.sh[0].id:""}}); return; }
   const t = e.target.closest("[data-tab],[data-go],[data-new],[data-edit],[data-csv],[data-goledger]"); if (!t) return;
   if (t.dataset.tab || t.dataset.go){ S.tab = t.dataset.tab || t.dataset.go; store.set("fa.tab", S.tab); render(); window.scrollTo(0,0); }
   else if (t.dataset.new) openForm(t.dataset.new);
@@ -729,7 +1675,7 @@ document.addEventListener("click", e => {
 const CFG = window.FA_CONFIG || {};
 const SB = (window.supabase && CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && !/YOUR-/.test(CFG.SUPABASE_URL+CFG.SUPABASE_ANON_KEY))
   ? window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY) : null;
-const MAP = {businesses:"biz", placements:"pl", ledger:"led"};
+const MAP = {businesses:"biz", placements:"pl", ledger:"led", bankAccounts:"bank", bankLines:"bl", shareholders:"sh"};
 const newId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)+Math.random().toString(36).slice(2));
 const dbErr = e => ({code: e && (e.code==="42501" || /row-level security/i.test(e.message||"")) ? "invalid_argument" : "unavailable", message: e && e.message});
 async function loadAll(){
@@ -739,26 +1685,41 @@ async function loadAll(){
     if (error) throw error;
     rows.push(...data); if (data.length < 1000) break;
   }
-  const next = {biz:[], pl:[], led:[]};
+  const next = {biz:[], pl:[], led:[], bank:[], bl:[], sh:[]};
   for (const r of rows){
     if (r.collection==="config" && r.id==="settings") S.cfg = {...S.cfg, ...r.data};
     else if (MAP[r.collection]) next[MAP[r.collection]].push({id:r.id, ...r.data});
   }
-  const byCode = (a,b)=>String(a.code).localeCompare(String(b.code),undefined,{numeric:true});
-  S.biz = next.biz.sort(byCode); S.pl = next.pl.sort(byCode); S.led = next.led;
+  S.raw = next; applyView();
   S.loaded = {biz:true, pl:true, led:true};
   if (S.preset==="itd"){ applyPreset("itd"); syncPeriodInputs(); }
   if (!$("#ov")) render();
+}
+function applyView(){
+  const next = S.raw || {biz:[], pl:[], led:[], bank:[], bl:[], sh:[]}, f = VX();
+  const byCode = (a,b)=>String(a.code).localeCompare(String(b.code),undefined,{numeric:true});
+  S.biz = [...next.biz].sort(byCode); S.pl = next.pl.map(d=>scaleDoc("placements", d, f)).sort(byCode); S.led = next.led.map(d=>scaleDoc("ledger", d, f));
+  S.bank = [...next.bank].sort(byCode); S.bl = next.bl; S.sh = [...next.sh].sort(byCode); MATCHED.cache = null;
 }
 let reloadT;
 function scheduleReload(ms=250){ clearTimeout(reloadT); reloadT = setTimeout(()=>loadAll().catch(()=>{}), ms); }
 const DB = {
   collection(col){ return { doc(id){ id = id || newId(); return {
     id,
-    async set(data){ const {error} = await SB.from("records").upsert({collection:col, id, data, updated_at:new Date().toISOString()}); if (error) throw dbErr(error); scheduleReload(50); },
+    async set(data, raw){ data = raw ? data : scaleDoc(col, data, 1/VX()); const {error} = await SB.from("records").upsert({collection:col, id, data, updated_at:new Date().toISOString()}); if (error) throw dbErr(error); scheduleReload(50); },
     async delete(){ const {error} = await SB.from("records").delete().eq("collection",col).eq("id",id); if (error) throw dbErr(error); scheduleReload(50); }
   }; } }; },
-  doc(path){ const [c,i] = path.split("/"); return this.collection(c).doc(i); }
+  doc(path){ const [c,i] = path.split("/"); return this.collection(c).doc(i); },
+  /* many documents in one go: [{id, data}] */
+  async bulk(col, docs, onProgress, raw){
+    const f = raw ? 1 : 1/VX();
+    for (let i=0; i<docs.length; i+=400){
+      const chunk = docs.slice(i, i+400).map(d => ({collection:col, id:d.id, data:scaleDoc(col, d.data, f), updated_at:new Date().toISOString()}));
+      const {error} = await SB.from("records").upsert(chunk); if (error) throw dbErr(error);
+      if (onProgress) onProgress(Math.min(i+400, docs.length), docs.length);
+    }
+    scheduleReload(50);
+  }
 };
 const fileSaver = { async save({filename, data}){
   const url = URL.createObjectURL(new Blob([data], {type:"text/csv;charset=utf-8"}));
@@ -769,7 +1730,7 @@ const fileSaver = { async save({filename, data}){
 /* ---------- sign-in ---------- */
 const ROLE_LABEL = {admin:"Admin", editor:"Editor", viewer:"Viewer"};
 function authView(mode, msg){
-  document.body.classList.add("authmode");
+  document.body.classList.add("authmode"); if ($("#curBar")) $("#curBar").hidden = true;
   $("#tabs").hidden = true; $("#periodBar").hidden = true;
   if (mode!=="newpw") $("#who").hidden = true;
   const title = {reset:"Reset your password", newpw:"Choose a new password", request:"Request access"}[mode] || "Sign in";
@@ -832,7 +1793,7 @@ async function start(session, force){
   document.body.classList.remove("authmode"); S.tab = "dashboard";
   S.role = m.role; S.isAdmin = m.role === "admin"; S.canWrite = m.role === "admin" || m.role === "editor";
   S.db = DB; S.dl = fileSaver;
-  $("#tabs").hidden = false; $("#periodBar").hidden = false;
+  $("#tabs").hidden = false; $("#periodBar").hidden = false; $("#curBar").hidden = false;
   try { await loadAll(); if (S.isAdmin) await loadMembers(); }
   catch(x){ $("#main").innerHTML = `<div class="banner">Could not load the ledger: ${h(x.message||x)}. Check that schema.sql has been run in Supabase.</div>`; return; }
   if (S.live) return; S.live = true;
@@ -952,6 +1913,8 @@ const AUTH_HASH = location.hash;
   S.tab = "dashboard";
   initPeriod(); renderTabs();
   if (!SB){ $("#main").innerHTML = `<div class="auth"><div class="sheet"><div class="empty"><b>Database not connected</b>Open <code>config.js</code> and paste your Supabase project URL and anon key, then redeploy.</div></div></div>`; return; }
+  S.view = store.get("fa.view") || "";
+  $("#viewCur").onchange = e => { S.view = e.target.value; store.set("fa.view", S.view); applyView(); render(); toast(`Showing amounts in ${S.view}`); };
   $("#signOut").onclick = async () => { await SB.auth.signOut(); location.reload(); };
   SB.auth.onAuthStateChange((ev, session) => {
     if (ev === "PASSWORD_RECOVERY") { started = true; authView("newpw"); return; }
