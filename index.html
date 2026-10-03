@@ -29,6 +29,8 @@
   --pos:#5fc58b; --neg:#f07d72; --warn:#e2a64a;
   --c1:#62bdb1; --c2:#d8a647; --c3:#86a6dc; --c4:#c78bba; --c5:#97c46d; --c6:#e48d6c; color-scheme:dark}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
+img{max-width:100%}
 body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--f-body);margin:0}
 .wrap{max-width:1280px;margin:0 auto;padding-inline:16px}
 header.top{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
@@ -157,7 +159,7 @@ svg text{fill:var(--muted);font:11px var(--f-body)}
 <div id="ovHost"></div>
 <div id="toast" class="toast" hidden></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script>
 /* ---------- constants ---------- */
@@ -175,7 +177,7 @@ const TYPES = {
 };
 const INV_TYPES = ["Investor Profit Accrued","Investor Profit Paid","Investor Capital Repaid"];
 const VEN_TYPES = ["Investment Addition","Investment Withdrawal","Profit Accrued","Profit Received"];
-const TABS = [["dashboard","Dashboard"],["|"],["ventures","Ventures"],["investors","Investors"],["|"],["ledger","Ledger"],["|"],["returns","Investor returns"],["monthly","Monthly profit"],["statements","Financial statements"],["|"],["settings","Settings"]];
+const TABS = [["dashboard","Dashboard"],["|"],["ventures","Ventures"],["investors","Investors"],["|"],["ledger","Ledger"],["|"],["returns","Investor returns"],["monthly","Monthly profit"],["statements","Financial statements"],["|"],["users","Users"],["settings","Settings"]];
 const COLS = ["var(--c1)","var(--c2)","var(--c3)","var(--c4)","var(--c5)","var(--c6)"];
 const ORIGIN = "0000-01-01";
 
@@ -540,7 +542,7 @@ function viewSettings(){
     <div class="tbl"><table><thead><tr><th>Type</th><th>Needs</th><th>Effect</th></tr></thead><tbody>
     ${[["Owner Capital Contribution","–","Cash up, owner capital up"],["Owner Drawing","–","Cash down, owner capital down"],["Investment Addition","Venture","Cash down, investment in venture up"],["Investment Withdrawal","Venture","Investment down, cash up"],["Profit Accrued","Venture","Profit receivable up, income recognised"],["Profit Received","Venture","Cash up, receivable down"],["Investor Profit Accrued","Placement","Investor payable up, investor share expense"],["Investor Profit Paid","Placement","Cash down, investor payable down"],["Investor Capital Repaid","Placement","Cash down, investor capital down"],["Operating Expense","–","Cash down, expense recognised"]].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="note">${r[2]}</td></tr>`).join("")}
     </tbody></table></div></section>
-  <section class="sheet"><div class="sheet-h"><div><h2>Your password</h2><p>Signed in as ${h(S.user?.email||"")} · ${S.canWrite?"Editor":"Viewer"}</p></div></div><div class="sheet-b">
+  <section class="sheet"><div class="sheet-h"><div><h2>Your password</h2><p>Signed in as ${h(S.user?.email||"")} · ${ROLE_LABEL[S.role]||""}</p></div></div><div class="sheet-b">
     <form id="pwForm" class="form"><label>New password<input id="pwNew" type="password" minlength="8" autocomplete="new-password" required></label><label>Repeat new password<input id="pwRep" type="password" minlength="8" autocomplete="new-password" required></label>
     <div class="full row"><button class="btn" type="submit">Change password</button><span class="ok-msg" id="pwMsg"></span></div></form></div></section>
   ${ex && S.canWrite!==false?`<section class="sheet"><div class="sheet-h"><div><h2>Example data</h2><p>${ex} records are marked Example. Remove them before entering your real figures.</p></div><button class="btn danger" id="clearEx">Remove example data</button></div></section>`:""}
@@ -622,7 +624,8 @@ function openForm(kind, id){
 
 /* ---------- render ---------- */
 function renderTabs(){
-  $("#tabs").innerHTML = TABS.map(t => t[0]==="|" ? '<span class="sep" aria-hidden="true"></span>' : `<button role="tab" data-tab="${t[0]}" aria-selected="${S.tab===t[0]}">${t[1]}</button>`).join("");
+  const pend = (S.members||[]).filter(m=>m.status==="pending").length;
+  $("#tabs").innerHTML = TABS.filter(t => t[0]!=="users" || S.isAdmin).map(t => t[0]==="|" ? '<span class="sep" aria-hidden="true"></span>' : `<button role="tab" data-tab="${t[0]}" aria-selected="${S.tab===t[0]}">${t[1]}${t[0]==="users"&&pend?` <span class="pill warn">${pend}</span>`:""}</button>`).join("");
 }
 function render(){
   $("#entityName").textContent = S.cfg.entity || "Future Axis Holdings";
@@ -630,8 +633,9 @@ function render(){
   if (!S.db){ return; }
   if (!(S.loaded.biz && S.loaded.pl && S.loaded.led)) return;
   if (S.start > S.end){ $("#main").innerHTML = `<div class="banner">The period start is after its end. Adjust the dates at the top.</div>`; return; }
+  if (S.tab==="users" && !S.isAdmin) S.tab = "dashboard";
   S.csv = {};
-  const V = {dashboard:viewDashboard, ventures:viewVentures, investors:viewInvestors, ledger:viewLedger, returns:viewReturns, monthly:viewMonthly, statements:viewStatements, settings:viewSettings}[S.tab] || viewDashboard;
+  const V = {dashboard:viewDashboard, ventures:viewVentures, investors:viewInvestors, ledger:viewLedger, returns:viewReturns, monthly:viewMonthly, statements:viewStatements, users:viewUsers, settings:viewSettings}[S.tab] || viewDashboard;
   const ro = S.canWrite===false ? `<div class="banner" style="margin-bottom:16px">You have view access. Ask the owner for edit access to record entries.</div>` : "";
   const fy = document.activeElement?.id, sel = fy && document.activeElement.selectionStart;
   $("#main").innerHTML = ro + V();
@@ -647,7 +651,7 @@ function wireView(){
   const pw = $("#pwForm");
   if (pw) pw.onsubmit = async e => { e.preventDefault(); const a=$("#pwNew").value, b=$("#pwRep").value, m=$("#pwMsg");
     if (a!==b){ m.className="err"; m.textContent="The two passwords don't match."; return; }
-    const {error} = await SB.auth.updateUser({password:a}); m.className = error?"err":"ok-msg"; m.textContent = error ? error.message : "Password changed."; if (!error) pw.reset(); };
+    const {error} = await SB.auth.updateUser({password:a}); m.className = error?"err":"ok-msg"; m.textContent = error ? error.message : "Password changed."; if (!error){ pw.reset(); SB.rpc("password_changed").then(()=>{},()=>{}); } };
   const cf = $("#cfgForm");
   if (cf) cf.onsubmit = async e => { e.preventDefault(); try { await S.db.doc("config/settings").set({entity:$("#cfgEntity").value.trim()||"Future Axis Holdings", currency:($("#cfgCur").value.trim()||"AED").toUpperCase()}); toast("Settings saved"); } catch(x){ toast("Could not save settings"); } };
   const ce = $("#clearEx");
@@ -659,6 +663,7 @@ function wireView(){
   };
 }
 document.addEventListener("click", e => {
+  const u = e.target.closest("[data-uact]"); if (u){ userAction(u); return; }
   const t = e.target.closest("[data-tab],[data-go],[data-new],[data-edit],[data-csv],[data-goledger]"); if (!t) return;
   if (t.dataset.tab || t.dataset.go){ S.tab = t.dataset.tab || t.dataset.go; store.set("fa.tab", S.tab); render(); window.scrollTo(0,0); }
   else if (t.dataset.new) openForm(t.dataset.new);
@@ -709,27 +714,51 @@ const fileSaver = { async save({filename, data}){
 } };
 
 /* ---------- sign-in ---------- */
+const ROLE_LABEL = {admin:"Admin", editor:"Editor", viewer:"Viewer"};
 function authView(mode, msg){
-  $("#tabs").hidden = true; $("#periodBar").hidden = true; $("#who").hidden = true;
-  const title = mode==="reset" ? "Reset your password" : mode==="newpw" ? "Choose a new password" : "Sign in";
+  $("#tabs").hidden = true; $("#periodBar").hidden = true;
+  if (mode!=="newpw") $("#who").hidden = true;
+  const title = {reset:"Reset your password", newpw:"Choose a new password", request:"Request access"}[mode] || "Sign in";
+  const lead = mode==="request" ? "Your request goes to the administrator. You can sign in once it is approved."
+    : mode==="newpw" ? (msg ? "" : "Use at least 8 characters.") : "Access is limited to approved members.";
   const body = mode==="reset"
     ? `<label>Email<input id="aEmail" type="email" autocomplete="email" required></label><button class="btn primary" type="submit">Email me a reset link</button><button class="linkbtn" type="button" data-auth="login">Back to sign in</button>`
     : mode==="newpw"
-    ? `<label>New password<input id="aPass" type="password" minlength="8" autocomplete="new-password" required></label><button class="btn primary" type="submit">Save password</button>`
-    : `<label>Email<input id="aEmail" type="email" autocomplete="email" required></label><label>Password<input id="aPass" type="password" autocomplete="current-password" required></label><button class="btn primary" type="submit">Sign in</button><button class="linkbtn" type="button" data-auth="reset">Forgot password?</button>`;
-  $("#main").innerHTML = `<div class="auth"><div><span class="eyebrow">${h(S.cfg.entity)}</span><h1>${title}</h1><p class="note">Access is limited to members added by the administrator.</p></div>
-    <form class="sheet" id="authForm"><div class="sheet-b">${body}<div class="err" id="aErr">${h(msg||"")}</div></div></form></div>`;
+    ? `<label>New password<input id="aPass" type="password" minlength="8" autocomplete="new-password" required></label><label>Repeat new password<input id="aPass2" type="password" minlength="8" autocomplete="new-password" required></label><button class="btn primary" type="submit">Save password</button>`
+    : mode==="request"
+    ? `<label>Full name<input id="aName" autocomplete="name" required></label><label>Email<input id="aEmail" type="email" autocomplete="email" required></label><label>Choose a password<input id="aPass" type="password" minlength="8" autocomplete="new-password" required></label><button class="btn primary" type="submit">Send request</button><button class="linkbtn" type="button" data-auth="login">Already approved? Sign in</button>`
+    : `<label>Email<input id="aEmail" type="email" autocomplete="email" required></label><label>Password<input id="aPass" type="password" autocomplete="current-password" required></label><button class="btn primary" type="submit">Sign in</button><div class="row" style="justify-content:space-between"><button class="linkbtn" type="button" data-auth="reset">Forgot password?</button><button class="linkbtn" type="button" data-auth="request">New here? Request access</button></div>`;
+  $("#main").innerHTML = `<div class="auth"><div><span class="eyebrow">${h(S.cfg.entity)}</span><h1>${title}</h1><p class="note">${lead}</p></div>
+    <form class="sheet" id="authForm"><div class="sheet-b">${body}<div class="${mode==="newpw"&&msg?"ok-msg":"err"}" id="aErr">${h(msg||"")}</div></div></form></div>`;
   document.querySelectorAll("[data-auth]").forEach(b => b.onclick = () => authView(b.dataset.auth));
   $("#authForm").onsubmit = async e => {
     e.preventDefault(); const err = $("#aErr"); err.className="err"; err.textContent = "";
     const btn = e.target.querySelector("button[type=submit]"); btn.disabled = true;
+    const back = location.origin + location.pathname;
     try {
-      if (mode==="reset"){ const {error} = await SB.auth.resetPasswordForEmail($("#aEmail").value.trim(), {redirectTo: location.origin + location.pathname}); if (error) throw error; err.className="ok-msg"; err.textContent = "If that address has an account, a reset link is on its way."; }
-      else if (mode==="newpw"){ const {error} = await SB.auth.updateUser({password:$("#aPass").value}); if (error) throw error; const {data} = await SB.auth.getSession(); if (data.session) start(data.session, true); }
+      if (mode==="reset"){ const {error} = await SB.auth.resetPasswordForEmail($("#aEmail").value.trim(), {redirectTo: back}); if (error) throw error; err.className="ok-msg"; err.textContent = "If that address has an account, a reset link is on its way."; }
+      else if (mode==="newpw"){
+        if ($("#aPass").value !== $("#aPass2").value) throw new Error("The two passwords don't match.");
+        const {error} = await SB.auth.updateUser({password:$("#aPass").value}); if (error) throw error;
+        await SB.rpc("password_changed").then(()=>{},()=>{});
+        if (location.hash) history.replaceState(null, "", location.pathname);
+        const {data} = await SB.auth.getSession(); if (data.session) start(data.session, true);
+      }
+      else if (mode==="request"){
+        const {data, error} = await SB.auth.signUp({email:$("#aEmail").value.trim(), password:$("#aPass").value, options:{data:{full_name:$("#aName").value.trim()}, emailRedirectTo: back}});
+        if (error) throw error;
+        if (data.user && data.user.identities && data.user.identities.length===0) throw new Error("An account with this email already exists. Sign in, or use Forgot password.");
+        if (!data.session){ e.target.querySelector(".sheet-b").innerHTML = `<p><b>Request sent.</b></p><p class="note">Open the confirmation email we sent to ${h($("#aEmail")?.value||"you")} and click the link. The administrator will then approve your access.</p><button class="linkbtn" type="button" data-auth="login">Back to sign in</button>`; document.querySelectorAll("[data-auth]").forEach(b => b.onclick = () => authView(b.dataset.auth)); return; }
+      }
       else { const {error} = await SB.auth.signInWithPassword({email:$("#aEmail").value.trim(), password:$("#aPass").value}); if (error) throw error; }
-    } catch(x){ err.textContent = /invalid login/i.test(x.message||"") ? "Email or password is incorrect." : (x.message || "Could not complete that. Try again."); }
+    } catch(x){ err.className="err"; err.textContent = /invalid login/i.test(x.message||"") ? "Email or password is incorrect." : /not allowed|disabled/i.test(x.message||"") && mode==="request" ? "Access requests are switched off. Ask the administrator to create your account." : (x.message || "Could not complete that. Try again."); }
     btn.disabled = false;
   };
+}
+
+function gate(title, text){
+  $("#tabs").hidden = true; $("#periodBar").hidden = true;
+  $("#main").innerHTML = `<div class="auth"><div class="sheet"><div class="empty"><b>${title}</b>${text}<div class="row" style="justify-content:center;margin-top:14px"><button class="btn" type="button" onclick="location.reload()">Check again</button></div></div></div></div>`;
 }
 
 let started = false;
@@ -737,17 +766,128 @@ async function start(session, force){
   if (started && !force) return; started = true;
   S.user = session.user;
   $("#whoEmail").textContent = session.user.email || ""; $("#who").hidden = false;
-  const {data:m, error} = await SB.from("members").select("role").eq("user_id", session.user.id).maybeSingle();
-  if (error || !m){
-    $("#main").innerHTML = `<div class="auth"><div class="sheet"><div class="empty"><b>Access not granted yet</b>${h(session.user.email)} can sign in but isn't on the members list. Ask the administrator to add you as an editor or viewer.</div></div></div>`;
-    started = false; return;
+  const {data:m, error} = await SB.from("members").select("role,status,must_reset,full_name").eq("user_id", session.user.id).maybeSingle();
+  if (error || !m){ gate("Access not set up", `${h(session.user.email)} has no access record. Ask the administrator to add you.`); return; }
+  if (m.status === "pending"){
+    gate("Waiting for approval", `Your request is with the administrator. This page opens the ledger automatically once ${h(session.user.email)} is approved.`);
+    SB.channel("me").on("postgres_changes", {event:"UPDATE", schema:"public", table:"members", filter:`user_id=eq.${session.user.id}`}, () => location.reload()).subscribe();
+    return;
   }
-  S.canWrite = m.role === "editor"; S.db = DB; S.dl = fileSaver;
+  if (m.status === "disabled"){ gate("Access disabled", `Access for ${h(session.user.email)} has been switched off. Contact the administrator if this is a mistake.`); return; }
+  if (m.must_reset){ authView("newpw", "Welcome. Replace your temporary password to continue."); return; }
+  S.role = m.role; S.isAdmin = m.role === "admin"; S.canWrite = m.role === "admin" || m.role === "editor";
+  S.db = DB; S.dl = fileSaver;
   $("#tabs").hidden = false; $("#periodBar").hidden = false;
-  try { await loadAll(); }
+  try { await loadAll(); if (S.isAdmin) await loadMembers(); }
   catch(x){ $("#main").innerHTML = `<div class="banner">Could not load the ledger: ${h(x.message||x)}. Check that schema.sql has been run in Supabase.</div>`; return; }
-  SB.channel("records-feed").on("postgres_changes", {event:"*", schema:"public", table:"records"}, () => scheduleReload()).subscribe();
-  setInterval(() => { if (document.visibilityState==="visible") scheduleReload(0); }, 60000);
+  if (S.live) return; S.live = true;
+  SB.channel("feed")
+    .on("postgres_changes", {event:"*", schema:"public", table:"records"}, () => scheduleReload())
+    .on("postgres_changes", {event:"*", schema:"public", table:"members"}, () => { if (S.isAdmin) loadMembers().catch(()=>{}); })
+    .subscribe();
+  setInterval(() => { if (document.visibilityState==="visible"){ scheduleReload(0); if (S.isAdmin) loadMembers().catch(()=>{}); } }, 60000);
+}
+
+/* ---------- user management (admins) ---------- */
+async function loadMembers(){
+  const {data, error} = await SB.from("members").select("user_id,email,full_name,role,status,requested_at,decided_at,must_reset").order("requested_at", {ascending:false});
+  if (error) throw error;
+  S.members = data || [];
+  if (!$("#ov")) render();
+}
+function tempPassword(){
+  const c = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789", a = new Uint32Array(12); crypto.getRandomValues(a);
+  let p = Array.from(a, n => c[n % c.length]).join(""); return p.slice(0,4)+"-"+p.slice(4,8)+"-"+p.slice(8);
+}
+function viewUsers(){
+  if (!S.isAdmin) return `<div class="banner">Only administrators can manage users.</div>`;
+  const M = S.members || [], pend = M.filter(m=>m.status==="pending"), rest = M.filter(m=>m.status!=="pending");
+  const who = m => `<b style="font-weight:600">${h(m.full_name||"(no name)")}</b><div class="note">${h(m.email||"")}</div>`;
+  const when = d => d ? fmtDate(d.slice(0,10)) : "";
+  const pRows = pend.map(m=>`<tr><td>${who(m)}</td><td class="n">${when(m.requested_at)}</td><td><div class="row">
+      <button class="btn sm primary" data-uact="approve" data-uid="${m.user_id}" data-role="editor">Approve as editor</button>
+      <button class="btn sm" data-uact="approve" data-uid="${m.user_id}" data-role="viewer">Approve as viewer</button>
+      <button class="btn sm danger" data-uact="reject" data-uid="${m.user_id}">Reject</button></div></td></tr>`).join("");
+  const st = m => m.status==="active" ? `<span class="pill ok">Active</span>${m.must_reset?' <span class="pill warn" title="Has not replaced the temporary password yet">Temp password</span>':""}` : `<span class="pill bad">Disabled</span>`;
+  const mRows = rest.map(m=>{ const me = m.user_id===S.user.id;
+    return `<tr><td>${who(m)}${me?' <span class="pill">You</span>':""}</td>
+      <td><select data-urole="${m.user_id}" aria-label="Role for ${h(m.email)}" ${me||m.status!=="active"?"disabled":""}>${["admin","editor","viewer"].map(r=>`<option value="${r}" ${m.role===r?"selected":""}>${ROLE_LABEL[r]}</option>`).join("")}</select></td>
+      <td>${st(m)}</td><td class="n">${when(m.decided_at||m.requested_at)}</td>
+      <td><div class="row">${me?"":(m.status==="active"?`<button class="btn sm danger" data-uact="disable" data-uid="${m.user_id}">Disable</button>`:`<button class="btn sm" data-uact="enable" data-uid="${m.user_id}">Enable</button>`)}
+      <button class="btn sm" data-uact="reset" data-email="${h(m.email||"")}">Send password reset</button></div></td></tr>`; }).join("");
+  return `<div class="head"><div><span class="eyebrow">Administration</span><h1>Users</h1><p>Approve access requests, create accounts with a temporary password, and set what each person can do.</p></div><button class="btn primary" data-uact="create">Create user</button></div>
+  <div class="stack">
+  <section class="sheet"><div class="sheet-h"><div><h2>Access requests</h2><p>People who used "Request access" on the sign-in page. They see nothing until approved.</p></div></div>
+    <div class="tbl"><table><thead><tr><th>Person</th><th class="n">Requested</th><th>Decision</th></tr></thead><tbody>${pRows || `<tr><td colspan="3"><div class="empty">No requests waiting.</div></td></tr>`}</tbody></table></div></section>
+  <section class="sheet"><div class="sheet-h"><div><h2>Members</h2><p>${rest.filter(m=>m.status==="active").length} active · ${rest.filter(m=>m.status!=="active").length} disabled</p></div></div>
+    <div class="tbl"><table><thead><tr><th>Person</th><th>Role</th><th>Status</th><th class="n">Since</th><th>Actions</th></tr></thead><tbody>${mRows || `<tr><td colspan="5" class="empty">No members yet.</td></tr>`}</tbody></table></div></section>
+  <section class="sheet"><div class="sheet-h"><h2>What each role can do</h2></div><div class="tbl"><table><thead><tr><th>Role</th><th>Reports</th><th>Add &amp; edit records</th><th>Manage users</th></tr></thead><tbody>
+    <tr><td>Admin</td><td>Yes</td><td>Yes</td><td>Yes</td></tr><tr><td>Editor</td><td>Yes</td><td>Yes</td><td>No</td></tr><tr><td>Viewer</td><td>Yes</td><td>No</td><td>No</td></tr></tbody></table></div></section>
+  </div>`;
+}
+async function memberUpdate(uid, patch, okMsg){
+  const {error} = await SB.from("members").update({...patch, decided_by:S.user.id, decided_at:new Date().toISOString()}).eq("user_id", uid);
+  if (error) toast(/active admin/i.test(error.message) ? "At least one active admin is required. Make someone else admin first." : "Could not update: " + error.message);
+  else toast(okMsg);
+  await loadMembers().catch(()=>{});
+}
+async function userAction(b){
+  const a = b.dataset.uact, uid = b.dataset.uid, m = (S.members||[]).find(x=>x.user_id===uid);
+  if (a==="approve") return memberUpdate(uid, {status:"active", role:b.dataset.role}, `${m?.email||"User"} approved as ${ROLE_LABEL[b.dataset.role].toLowerCase()}`);
+  if (a==="reject" || a==="disable"){
+    if (!b.classList.contains("armed")){ b.classList.add("armed"); b.textContent = a==="reject" ? "Confirm reject" : "Confirm disable"; return; }
+    return memberUpdate(uid, {status:"disabled"}, a==="reject" ? "Request rejected" : "Access disabled");
+  }
+  if (a==="enable") return memberUpdate(uid, {status:"active"}, "Access enabled");
+  if (a==="reset"){
+    const {error} = await SB.auth.resetPasswordForEmail(b.dataset.email, {redirectTo: location.origin + location.pathname});
+    return toast(error ? "Could not send: " + error.message : `Reset link sent to ${b.dataset.email}`);
+  }
+  if (a==="create") return openCreateUser();
+}
+document.addEventListener("change", e => {
+  const sel = e.target.closest("[data-urole]"); if (!sel) return;
+  const m = (S.members||[]).find(x=>x.user_id===sel.dataset.urole);
+  memberUpdate(sel.dataset.urole, {role: sel.value}, `${m?.email||"User"} is now ${ROLE_LABEL[sel.value].toLowerCase()}`);
+});
+function openCreateUser(){
+  $("#ovHost").innerHTML = `<div class="ov" id="ov"><div class="panel" role="dialog" aria-modal="true" aria-labelledby="cuTitle">
+    <div class="row" style="justify-content:space-between"><h2 id="cuTitle">Create user</h2><button class="btn sm" id="cuClose" type="button">Close</button></div>
+    <p class="note" style="margin:0">The person signs in with this email and temporary password, then must choose their own password.</p>
+    <form id="cuForm" class="form">
+      <label class="full">Full name<input id="cuName" required></label>
+      <label class="full">Email<input id="cuEmail" type="email" required></label>
+      <label>Role<select id="cuRole"><option value="editor">Editor</option><option value="viewer">Viewer</option><option value="admin">Admin</option></select></label>
+      <label>Temporary password<input id="cuPass" value="${tempPassword()}" minlength="8" required></label>
+      <div class="full row"><button class="linkbtn" type="button" id="cuGen">Generate another password</button></div>
+      <div class="full err" id="cuErr"></div>
+      <div class="full row"><button class="btn primary" type="submit">Create account</button></div>
+    </form><div id="cuDone" hidden></div></div></div>`;
+  const close = () => { $("#ovHost").innerHTML = ""; render(); };
+  $("#cuClose").onclick = close; $("#ov").onclick = e => { if (e.target.id==="ov") close(); };
+  $("#cuGen").onclick = () => { $("#cuPass").value = tempPassword(); };
+  $("#cuForm").onsubmit = async e => {
+    e.preventDefault(); const btn = e.target.querySelector("button[type=submit]"); btn.disabled = true; $("#cuErr").textContent = "";
+    const name = $("#cuName").value.trim(), email = $("#cuEmail").value.trim().toLowerCase(), pass = $("#cuPass").value, role = $("#cuRole").value;
+    try {
+      // a throwaway client creates the account without signing the admin out
+      const tmp = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false, storageKey:"fa-create-"+Date.now()}});
+      const {data, error} = await tmp.auth.signUp({email, password:pass, options:{data:{full_name:name}, emailRedirectTo: location.origin + location.pathname}});
+      if (error) throw error;
+      if (!data.user || (data.user.identities && data.user.identities.length===0)) throw new Error("An account with this email already exists. Find it under Access requests or Members.");
+      const {error:e2} = await SB.from("members").upsert({user_id:data.user.id, email, full_name:name, role, status:"active", must_reset:true, decided_by:S.user.id, decided_at:new Date().toISOString()});
+      if (e2) throw e2;
+      const text = `Future Axis ledger\nWebsite: ${location.origin}\nEmail: ${email}\nTemporary password: ${pass}\nYou will be asked to choose your own password at first sign-in.`;
+      $("#cuForm").hidden = true; const d = $("#cuDone"); d.hidden = false;
+      d.innerHTML = `<div class="stack" style="gap:12px"><div class="banner"><b>${h(name)}</b> can now sign in as ${ROLE_LABEL[role].toLowerCase()}.${data.session?"":" They must first click the confirmation link sent to their email."}</div>
+        <pre id="cuCred" style="margin:0;padding:12px;background:var(--sunk);border:1px solid var(--line);border-radius:6px;white-space:pre-wrap;font:12.5px/1.6 var(--f-num)">${h(text)}</pre>
+        <div class="row"><button class="btn primary" type="button" id="cuCopy">Copy login details</button><button class="btn" type="button" id="cuOk">Done</button></div>
+        <p class="note" style="margin:0">Share these privately (WhatsApp or in person). The password is not shown again.</p></div>`;
+      $("#cuCopy").onclick = async () => { try { await navigator.clipboard.writeText(text); toast("Copied"); } catch(x){ const r = document.createRange(); r.selectNodeContents($("#cuCred")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); toast("Selected. Press Ctrl+C to copy"); } };
+      $("#cuOk").onclick = close;
+      loadMembers().catch(()=>{});
+    } catch(x){ $("#cuErr").textContent = /signups? not allowed|disabled/i.test(x.message||"") ? "Sign-ups are switched off in Supabase. Turn on 'Allow new users to sign up' (see README), then try again." : (x.message || "Could not create the account."); btn.disabled = false; }
+  };
 }
 
 const AUTH_HASH = location.hash;

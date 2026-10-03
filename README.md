@@ -4,7 +4,7 @@ An online system for Future Axis Holdings: ventures and investor master data, a 
 
 - **Hosting:** Vercel (free), deployed automatically from GitHub
 - **Database and login:** Supabase (free tier), with row-level security
-- **Access:** only people you add as members can see anything. Each member is either an `editor` or a `viewer`.
+- **Access control:** nobody sees any data until an admin approves them
 
 ## Files
 
@@ -13,51 +13,68 @@ An online system for Future Axis Holdings: ventures and investor master data, a 
 | `index.html` | The whole application |
 | `config.js` | Your Supabase URL and anon key (the only file you edit) |
 | `vercel.json` | Security headers and hiding the site from search engines |
-| `supabase/schema.sql` | Creates the tables, security rules and live updates |
+| `supabase/schema.sql` | Tables, security rules, approval workflow, live updates. Safe to run again. |
 | `supabase/seed-example.sql` | Optional example data (invented figures) |
+| `supabase/make-admin.sql` | Makes the `businessfitter` account Admin |
 
-## Setup (about 20 minutes)
+## Roles
+
+| Role | See reports | Add and edit records | Approve and manage users |
+|---|---|---|---|
+| Admin | Yes | Yes | Yes |
+| Editor | Yes | Yes | No |
+| Viewer | Yes | No | No |
+
+The **first account ever created becomes Admin automatically**. Everyone after that starts as *pending* until an admin approves them.
+
+## Setup
 
 ### 1. Supabase: database and login
-1. Sign up at **supabase.com**, then choose **New project**. Pick region **Middle East (UAE)** or the nearest one, and set a strong database password.
-2. Open **SQL Editor → New query**. Paste all of `supabase/schema.sql` and click **Run**.
-3. Optional: run `supabase/seed-example.sql` the same way to load example data.
-4. Go to **Authentication → Sign In / Providers**. Turn **off** "Allow new users to sign up" so that only people you create can get in.
-5. Go to **Authentication → Users → Add user → Create new user**. Enter your email and a password, and tick **Auto Confirm User**.
-6. Make yourself an editor by running this in the SQL Editor:
-   ```sql
-   insert into public.members (user_id, role)
-   select id, 'editor' from auth.users where email = 'you@example.com';
-   ```
-7. Go to **Project Settings → API** and copy the **Project URL** and the **anon public** key.
+1. Go to **supabase.com** and choose **Continue with GitHub**. Click **New project**, pick the region nearest the UAE, and save the database password.
+2. Open **SQL Editor → New query**. Paste all of `supabase/schema.sql` and click **Run**. Optionally do the same with `seed-example.sql`.
+3. Go to **Authentication → Sign In / Providers**:
+   - Keep **Allow new users to sign up** turned **ON**. The app needs it for "Request access" and "Create user". Approval protects your data, not this switch.
+   - Turn **Confirm email** **OFF**, so the accounts you create can sign in straight away. Supabase's free email service only sends a few emails per hour.
+   - Click **Save**.
+4. Go to **Authentication → Users → Add user → Create new user**. Enter your own email and password, tick **Auto Confirm User**, and click **Create**. You are the first account, so you become Admin.
+5. Go to **Project Settings → API Keys** and copy the **Publishable key** (starts with `sb_publishable_`). On older projects you can use the **anon public** key under **Legacy API Keys** instead. Then copy the **Project URL** from **Project Settings → Data API**. Never use the *secret* or *service_role* key.
 
 ### 2. GitHub: store the code
-1. Sign in at **github.com** and choose **New repository**. Name it `future-axis-ledger` and set it to **Private**.
-2. On the new repository page, click **uploading an existing file**. Drag in all the files and the `supabase` folder from this package, then click **Commit changes**.
-3. Open `config.js` in GitHub and click the pencil icon. Paste your Project URL and anon key, then **Commit changes**.
+1. On **github.com**, click **+ → New repository**. Name it `future-axis-ledger`, choose **Private**, and click **Create repository**.
+2. Click **uploading an existing file**. Drag in everything *inside* the folder (not the folder itself), then click **Commit changes**.
+3. Open `config.js`, click the pencil icon, paste in your Project URL and anon key, and click **Commit changes**.
 
 ### 3. Vercel: put it online
-1. Go to **vercel.com** and choose **Sign up → Continue with GitHub**.
-2. Click **Add New → Project**, find `future-axis-ledger` and click **Import**.
-3. Set **Framework Preset** to **Other**. Leave Build Command and Output Directory empty, then click **Deploy**.
-4. When the deploy finishes you get a link like `future-axis-ledger.vercel.app`. Open it and sign in.
-5. Back in Supabase, go to **Authentication → URL Configuration**. Set **Site URL** to your Vercel link and add the same link under **Redirect URLs**. Password-reset emails need this to come back to your site.
+1. On **vercel.com**, click **Add New → Project**. Find `future-axis-ledger` and click **Import**.
+2. Set **Framework Preset** to **Other**, then click **Deploy**.
+3. Open the link Vercel gives you (for example `future-axis-ledger.vercel.app`) and sign in.
+4. In Supabase, go to **Authentication → URL Configuration**. Set **Site URL** to that link, add it under **Redirect URLs** as well, and click **Save**.
 
-From now on, every change you commit on GitHub redeploys to Vercel automatically within about a minute.
+Every change you commit on GitHub redeploys automatically.
 
-### Optional: your own domain
-Go to **Vercel → Project → Settings → Domains** and add, for example, `ledger.futureaxis.ae`. Then create the DNS record Vercel shows you at your domain registrar. After that, update the Site URL in Supabase to the new domain.
+## Giving people access (inside the app → Users tab, admins only)
 
-## Adding colleagues
-1. In Supabase, go to **Authentication → Users → Add user** and create the user. Alternatively, use **Send invitation**: the person gets an email link and chooses their own password.
-2. Grant access:
-   ```sql
-   insert into public.members (user_id, role)
-   select id, 'viewer' from auth.users where email = 'colleague@example.com';
-   -- use 'editor' instead of 'viewer' to let them add and change records
-   ```
-3. To remove someone, run `delete from public.members where user_id = (select id from auth.users where email = '...');`
+**Option A: they request, you approve**
+1. Send them your site link. On the sign-in page they click **New here? Request access** and enter their name, email and a password.
+2. They see "Waiting for approval".
+3. In **Users → Access requests**, click **Approve as editor**, **Approve as viewer**, or **Reject**. Their screen opens the ledger as soon as you approve.
+
+**Option B: you create the account and send the login details**
+1. In **Users**, click **Create user**. Enter their name and email, pick a role, and keep or regenerate the temporary password.
+2. Click **Create account**, then **Copy login details** and send them privately (WhatsApp or in person).
+3. At their first sign-in they must set their own password. Until they do, their row shows **Temp password**.
+
+**Managing members**
+- Change someone's **Role** with the drop-down.
+- **Disable** cuts off access immediately. **Enable** restores it.
+- **Send password reset** emails them a reset link.
+- The system won't let you remove or demote the last active admin, so you can't lock yourself out.
+
+## Already set up with the earlier version?
+1. Run the new `supabase/schema.sql` again in the SQL Editor. It upgrades in place and keeps your data, and your existing account becomes Admin.
+2. If you turned **Allow new users to sign up** OFF earlier, turn it back **ON** (step 1.3).
+3. Replace `index.html` on GitHub with the new one. Open it, click the pencil icon, paste the new contents, and commit. Vercel redeploys automatically.
 
 ## Backups and reporting
-- Supabase's free plan does not include automatic backups. Use the CSV downloads in the app regularly, or upgrade to the Pro plan for daily backups.
-- The schema creates three views, `v_ventures`, `v_placements` and `v_ledger`, so you can query the data in Supabase's Table Editor or connect it to Excel or Power BI.
+- The free Supabase plan has no automatic backups. Download the CSVs regularly, or upgrade to Pro once real investor data is in.
+- The views `v_ventures`, `v_placements` and `v_ledger` make the data easy to query in Supabase, or to connect to Excel or Power BI.
