@@ -4,5 +4,5 @@
 // row-level security rules in schema.sql and by sign-in.
 window.FA_CONFIG = {
   SUPABASE_URL: "https://gfmqhtpsrcvxhbkwtzwk.supabase.co/rest/v1/",
-  SUPABASE_ANON_KEY: "sb_publishable_xxxxxxxx"
+  SUPABASE_ANON_KEY: "sb_publishable_exy7z7LKH3MfYaWt8QpZ4g_ouY0XkM6"
 };
