@@ -201,7 +201,7 @@ const TYPES = {
 };
 const INV_TYPES = ["Investor Profit Accrued","Investor Profit Paid","Investor Capital Repaid"];
 const VEN_TYPES = ["Investment Addition","Investment Withdrawal","Profit Accrued","Profit Received"];
-const TABS = [["dashboard","Dashboard"],["|"],["capital","Share capital"],["ventures","Ventures"],["investors","Investors"],["|"],["ledger","Ledger"],["bank","Bank"],["|"],["returns","Investor returns"],["monthly","Monthly profit"],["statements","Financial statements"],["|"],["import","Import"],["users","Users"],["settings","Settings"]];
+const TABS = [["dashboard","Dashboard"],["|"],["capital","Share capital"],["ventures","Ventures"],["investors","Investors"],["|"],["ledger","Ledger"],["bank","Bank"],["|"],["returns","Investor returns"],["monthly","Monthly profit"],["statements","Financial statements"],["|"],["import","Import investors"],["users","Users"],["settings","Settings"]];
 const MODES = ["Mudarabah","Musharakah","Equity","Loan","Profit participation","Other"];
 const METHODS = ["Bank transfer","Cheque","Cash","Card","Other"];
 const isCashType = t => !!(TYPES[t]||{}).cash;
@@ -486,13 +486,13 @@ function viewVentures(){
 function viewInvestors(){
   csvReg("placements",["Placement ID","Investor","Contact","Venture","Amount","Agreed rate","Placement date","Maturity","Payout","Mode of investment","Payment method","Bank account","Status","Notes"], S.pl.map(p=>[p.code,p.investor,p.contact,bizName(p.bizId),r0(num(p.amount)),p2(num(p.rate)),p.date,p.maturity,p.frequency,p.mode,p.method,bankCode(p.bankId),p.status,p.notes]));
   const pls = [...S.pl].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
-  const rows = pls.map(p=>`<tr class="click" data-edit="pl:${p.id}"><td class="n" style="text-align:left">${h(p.code)}</td><td><b style="font-weight:600">${h(p.investor)}</b><div class="note">${h(p.contact||"")}</div></td><td>${h(bizName(p.bizId))}</td><td class="n">${money(num(p.amount))}</td><td class="n">${pct(num(p.rate))}</td><td class="n">${fmtDate(p.date)}</td><td class="n">${p.maturity?fmtDate(p.maturity):'<span class="mut">Open</span>'}</td><td>${h(p.frequency||"")}</td><td>${h(p.mode||"")}<div class="note">${h([p.method, bankCode(p.bankId)].filter(Boolean).join(" · "))}</div></td><td><span class="pill ${(p.status||"Active")==="Active"?"ok":""}">${h(p.status||"Active")}</span>${p.example?' <span class="pill warn">Example</span>':""}</td></tr>`).join("");
+  const rows = pls.map(p=>`<tr class="click" data-edit="pl:${p.id}"><td class="n" style="text-align:left">${h(p.code)}</td><td><b style="font-weight:600">${h(p.investor)}</b><div class="note">${h(p.contact||"")}</div></td><td>${h(bizName(p.bizId))}</td><td class="n">${money(num(p.amount))}</td><td class="n">${pct(num(p.rate))}</td><td class="n">${fmtDate(p.date)}</td><td class="n">${p.maturity?fmtDate(p.maturity):'<span class="mut">Open</span>'}</td><td>${h(p.frequency||"")}</td><td>${h(p.mode||"")}<div class="note">${h([p.method, bankCode(p.bankId)].filter(Boolean).join(" · "))}</div></td><td><span class="pill ${(p.status||"Active")==="Active"?"ok":""}">${h(p.status||"Active")}</span>${p.example?' <span class="pill warn">Example</span>':""}</td><td>${S.canWrite!==false?`<button class="btn sm" data-edit="pl:${p.id}" type="button">Edit</button>`:""}</td></tr>`).join("");
   const tot = S.pl.reduce((s,p)=>s+num(p.amount),0);
   const wr = div(S.pl.reduce((s,p)=>s+num(p.amount)*num(p.rate),0), tot);
   return `<div class="head"><div><span class="eyebrow">Master data</span><h1>Investors</h1><p>One row per placement: who invested, how much, in which venture, at what agreed profit rate. An investor in two ventures has two placements.</p></div>${S.canWrite!==false?`<button class="btn primary" data-new="pl" ${S.biz.length?"":"disabled title='Add a venture first'"}>Add placement</button>`:""}</div>
   <section class="sheet"><div class="sheet-h"><div><h2>Placements</h2><p>${S.pl.length} placements · ${nf.format(tot)} committed · weighted agreed rate ${pct(wr)}</p></div>${csvBtn("placements")}</div>
-   <div class="tbl"><table><thead><tr><th>ID</th><th>Investor</th><th>Allocated to</th><th class="n">Amount</th><th class="n">Agreed p.a.</th><th class="n">Placed</th><th class="n">Maturity</th><th>Payout</th><th>Mode · received via</th><th>Status</th></tr></thead>
-   <tbody>${rows || `<tr><td colspan="10"><div class="empty"><b>No placements yet</b>${S.biz.length?"Record the first investor placement.":"Add a venture first, then record placements against it."}</div></td></tr>`}</tbody>
+   <div class="tbl"><table><thead><tr><th>ID</th><th>Investor</th><th>Allocated to</th><th class="n">Amount</th><th class="n">Agreed p.a.</th><th class="n">Placed</th><th class="n">Maturity</th><th>Payout</th><th>Mode · received via</th><th>Status</th><th></th></tr></thead>
+   <tbody>${rows || `<tr><td colspan="11"><div class="empty"><b>No placements yet</b>${S.biz.length?"Record the first investor placement.":"Add a venture first, then record placements against it."}</div></td></tr>`}</tbody>
    ${rows?`<tfoot><tr><td colspan="3">Total</td><td class="n">${money(tot)}</td><td class="n">${pct(wr)}</td><td colspan="5"></td></tr></tfoot>`:""}</table></div></section>`;
 }
 
@@ -1214,6 +1214,7 @@ function analyzeWorkbook(wb){
 }
 async function runImport(btn){
   const I = S.imp; if (!I || I.E.length || !I.total) return;
+  for (const k of ["bank","sh","biz","pl","led","bl"]) I.ops[k] = I.ops[k] || [];
   btn.disabled = true; const prog = $("#impProg");
   try {
     const order = [["bank","bankAccounts"],["sh","shareholders"],["biz","businesses"],["pl","placements"],["led","ledger"],["bl","bankLines"]];
@@ -1223,46 +1224,9 @@ async function runImport(btn){
     if ($("#impAuto")?.checked) for (const acct of new Set(I.ops.bl.map(x=>x.data.accountId))) matched += await autoMatch(acct);
     const done = Object.entries(I.ops).filter(([,a])=>a.length).map(([k,a])=>`${a.length} ${IMP[k].title.toLowerCase()}`).join(", ");
     S.imp = {...I, done: `Imported ${done}.${matched?` ${matched} bank lines matched automatically.`:""}`};
-    if (I.ops.led.length || I.ops.pl.length) { S.preset = "itd"; store.set("fa.preset","itd"); applyPreset("itd"); syncPeriodInputs(); }
+    if ((I.ops.led||[]).length || (I.ops.pl||[]).length) { S.preset = "itd"; store.set("fa.preset","itd"); applyPreset("itd"); syncPeriodInputs(); }
     render(); toast("Import complete");
   } catch(x){ prog.textContent = ""; toast("Import stopped: " + (x.message || "try again")); btn.disabled = false; }
-}
-function viewImport(){
-  const ex = S.biz.filter(x=>x.example).length + S.pl.filter(x=>x.example).length + S.led.filter(x=>x.example).length;
-  const I = S.imp;
-  const sheets = [["Bank accounts","Each bank account: ID, name, bank, opening balance and date."],["Shareholders","Each owner: ID, name, number of shares."],["Ventures","Each business: ID, nature, address, contact person, expected profit rate, mode of investment."],
-    ["Placements","Each investor placement: investor, venture, amount, agreed rate, placement date, mode, bank account."],["Ledger","All movements up to now: share capital contributions (with Shareholder ID), investments in and out, profit accrued and received, investor profit accrued and paid, expenses."],
-    ["Bank statement","Statement lines for each account: date, description, money out, money in, balance."]];
-  let res = "";
-  if (I){
-    const keys = ["bank","sh","biz","pl","led","bl"];
-    res = `<section class="sheet"><div class="sheet-h"><div><h2>3 · Check and import</h2><p>${h(I.file||"")}</p></div></div>
-      <div class="tbl"><table><thead><tr><th>Sheet</th><th class="n">Rows read</th><th class="n">New</th><th class="n">Updates</th><th class="n">Already in system</th><th class="n">Errors</th></tr></thead><tbody>
-      ${keys.map(k=>{ const s = I.st[k]; return `<tr><td>${IMP[k].title}${I.found[k]?"":' <span class="note">(sheet not in file)</span>'}</td><td class="n">${s.read||"–"}</td><td class="n">${s.add||"–"}</td><td class="n">${s.upd||"–"}</td><td class="n">${s.skip||"–"}</td><td class="n">${s.err?`<span class="neg">${s.err}</span>`:"–"}</td></tr>`; }).join("")}
-      </tbody></table></div>
-      ${I.ops.biz.some(o=>o.note)?`<div class="sheet-b note" style="border-top:1px solid var(--line)">Ventures linked to existing records (their rates are kept unless the file gives one): ${I.ops.biz.filter(o=>o.note).map(o=>h(o.note)).join("; ")}</div>`:""}
-      ${I.E.length ? `<div class="sheet-b"><div class="banner" style="border-color:var(--neg)"><b>${I.E.length} row${I.E.length===1?"":"s"} need fixing.</b> Nothing has been saved. Correct these rows in Excel and upload the file again.</div>
-        <div class="tbl" style="margin-top:12px"><table><thead><tr><th>Sheet</th><th class="n">Row</th><th>Problem</th></tr></thead><tbody>${I.E.slice(0,200).map(e=>`<tr><td>${h(e.sh)}</td><td class="n">${e.row}</td><td>${h(e.msg)}</td></tr>`).join("")}</tbody></table></div></div>`
-      : I.done ? `<div class="sheet-b"><div class="banner"><b>Done.</b> ${h(I.done)} Check the Dashboard, Ledger and Bank tabs.</div></div>`
-      : `<div class="sheet-b stack" style="gap:12px">${I.total ? `<div class="banner">All rows are valid. ${I.total} record${I.total===1?"":"s"} will be added or updated. Records already in the system are skipped, so uploading the same file twice is safe.</div>
-          <label class="row" style="gap:8px;font-size:13px"><input type="checkbox" id="impAuto" checked> Auto-match bank statement lines to the ledger after import</label>
-          <div class="row"><button class="btn primary" data-iact="run">Import ${I.total} records</button><span class="note" id="impProg"></span></div>` : `<div class="banner">Nothing new to import: every row is already in the system.</div>`}</div>`}
-    </section>`;
-  }
-  return `<div class="head"><div><span class="eyebrow">Data</span><h1>Import</h1><p>Bring in historical data in one go. Fill in the Excel template (for example everything up to August or September), upload it, check the results, then import. Amounts in the template are in the base currency (${h(BASE())}); bank statement lines and bank opening balances are in each bank account's own currency.</p></div></div>
-  <div class="stack">
-  ${ex?`<div class="banner">${ex} example records are still in the system. Remove them first under <b>Settings → Remove example data</b>, so your figures aren't mixed with the samples.</div>`:""}
-  <div class="grid2">
-  <section class="sheet"><div class="sheet-h"><div><h2>1 · Download the template</h2><p>One Excel file with a sheet for each kind of data. Drop-down lists show the allowed values.</p></div></div>
-    <div class="sheet-b stack" style="gap:12px"><div><a class="btn primary" href="import-template.xlsx" download="Future-Axis-import-template.xlsx">Download Excel template</a></div>
-    <div class="tbl"><table><tbody>${sheets.map(([n,d])=>`<tr><td style="white-space:nowrap"><b style="font-weight:600">${n}</b></td><td class="note">${d}</td></tr>`).join("")}</tbody></table></div>
-    <p class="note" style="margin:0">The grey rows starting with <b>e.g.</b> are examples and are ignored. You can leave sheets empty if you have nothing for them.</p></div></section>
-  <section class="sheet"><div class="sheet-h"><div><h2>2 · Upload your completed file</h2><p>Every row is checked first. Nothing is saved until you click Import.</p></div></div>
-    <div class="sheet-b stack" style="gap:12px"><label class="note" style="display:flex;flex-direction:column;gap:6px">Completed template (.xlsx)<input type="file" id="impFile" accept=".xlsx,.xls"></label>
-    <p class="note" style="margin:0">Ventures, placements and bank accounts are matched by their ID: an existing ID is updated, a new ID is added. Ledger entries and statement lines that are already in the system are skipped.</p></div></section>
-  </div>
-  ${res}
-  </div>`;
 }
 
 /* ---------- PDF bank statements (Wio Bank layout: Date · Ref · Description · Amount · Balance) ---------- */
@@ -1602,6 +1566,148 @@ function openAccruals(){
   };
 }
 
+/* ---------- one-time investor sheet import: Sr. # · Investor · Rate · Placement date · Investment · one column per venture ---------- */
+const OWNER_HINT = /famcon|future axis/i;
+function findSimpleSheet(wb){
+  for (const name of wb.SheetNames){
+    const rows = sheetRows(wb.Sheets[name]);
+    for (let i = 0; i < Math.min(rows.length, 15); i++){
+      const H = rows[i].map(normH);
+      if (H.some(x=>x.includes("investor") && !x.includes("rate")) && H.some(x=>x.includes("date")) && H.some(x=>/investment|amount/.test(x) && !x.includes("rate")))
+        return {name, rows, hi:i, H, raw: rows[i].map(c=>String(c??"").trim())};
+    }
+  }
+  return null;
+}
+function venKey(n){ return sigWords(n).sort().join(" "); }
+function findVenByName(name){
+  const k = venKey(name), m = S.biz.filter(x => { const sx = sigWords(x.name); return normH(x.name)===normH(name) || (k && sx.length && (venKey(x.name)===k || sx.every(w=>k.split(" ").includes(w)) || k.split(" ").every(w=>sx.includes(w)))); });
+  return m.length === 1 ? m[0] : (m.find(x=>normH(x.name)===normH(name)) || null);
+}
+/* read the sheet into editable rows */
+function parseInvestorSheet(wb){
+  const sh = findSimpleSheet(wb); if (!sh) return null;
+  const {rows, hi, H, raw} = sh;
+  const iSr = H.findIndex(x=>/^(sr|s no|no|serial)\b/.test(x)), iInv = H.findIndex(x=>x.includes("investor") && !x.includes("rate"));
+  const iRate = H.findIndex(x=>x.includes("rate")), iDate = H.findIndex(x=>x.includes("date")), iAmt = H.findIndex(x=>/investment|amount/.test(x) && !x.includes("rate"));
+  const cur = /\baed\b/.test(H[iAmt]) ? "AED" : /\busd\b/.test(H[iAmt]) ? "USD" : BASE();
+  const vcols = H.map((x,i)=>({i, name: raw[i]})).filter(c => c.i > iAmt && c.name && !/total|note|remark|comment/i.test(c.name));
+  const recs = [], skipped = [];
+  rows.slice(hi+1).forEach((r, k) => {
+    const inv = String(r[iInv] ?? "").trim(); if (!inv) return;
+    const amt = parseAmt(r[iAmt]); if (!(amt > 0)){ skipped.push(`${iSr>=0 && String(r[iSr]).trim() ? "Sr. "+String(r[iSr]).trim()+" " : ""}${inv}: amount is zero`); return; }
+    const rate = r[iRate]==="" || r[iRate]==null ? 0 : parseRate(r[iRate]);
+    const alloc = {}; for (const c of vcols){ const v = parseAmt(r[c.i]); alloc[c.name] = isFinite(v) ? v : 0; }
+    recs.push({sr: iSr>=0 ? String(r[iSr]).trim() : String(recs.length+1), inv, rate: isFinite(rate) ? +(rate*100).toFixed(4) : "", date: parseDateAny(r[iDate]), amt, alloc, owner: OWNER_HINT.test(inv) || S.sh.some(s=>normH(s.name)===normH(inv))});
+  });
+  return {kind:"simple", file:"", sheet:sh.name, cur, ventures: vcols.map(c=>c.name), recs, skipped};
+}
+/* validate the (possibly edited) rows and prepare what will be saved */
+function buildInvestorImport(P){
+  const E = [], W = [...P.skipped.map(x=>`Skipped ${x}.`)], now = new Date().toISOString(), batch = "imp" + Date.now();
+  const ops = {bank:[], sh:[], biz:[], pl:[], led:[], bl:[]}; const toBase = v => conv(v, P.cur, BASE());
+  let vn = Math.max(0, ...S.biz.map(x=>parseInt(String(x.code||"").replace(/\D/g,""))||0)), sn = Math.max(0, ...S.sh.map(x=>parseInt(String(x.code||"").replace(/\D/g,""))||0));
+  const venOf = {}, shOf = {}, linked = [];
+  const firstDate = {}; for (const x of P.recs) for (const [v,a] of Object.entries(x.alloc)) if (a > 0 && x.date && (!firstDate[v] || x.date < firstDate[v])) firstDate[v] = x.date;
+  const ensureVen = name => { if (venOf[name]) return venOf[name]; const ex = findVenByName(name);
+    if (ex){ if (normH(ex.name)!==normH(name)) linked.push(`${name} → ${ex.name}`); return venOf[name] = ex; }
+    const v = {id:newId(), code:"V"+String(++vn).padStart(3,"0"), name};
+    ops.biz.push({id:v.id, data:{code:v.code, name, nature:"", address:"", contact:"", phone:"", email:"", rate:0, startDate:firstDate[name]||"", mode:"", status:"Active", notes:"", example:false, createdAt:now, updatedAt:now}});
+    W.push(`New venture “${name}” will be created. Set its expected profit rate in Ventures afterwards.`); return venOf[name] = v; };
+  const ensureSh = n => { if (shOf[n]) return shOf[n]; const ex = S.sh.find(s=>normH(s.name)===normH(n)); if (ex) return shOf[n] = ex;
+    const v = {id:newId(), code:"S"+String(++sn).padStart(3,"0"), name:n}; ops.sh.push({id:v.id, data:{code:v.code, name:n, contact:"", shares:"", notes:"", createdAt:now, updatedAt:now}}); return shOf[n] = v; };
+  const plByCode = new Map(S.pl.map(p=>[String(p.code).toLowerCase(), p]));
+  let owner = 0, investor = 0, nPl = 0;
+  P.recs.forEach((x, idx) => {
+    const lab = `${x.sr ? "Sr. "+x.sr+" · " : ""}${x.inv || "(no name)"}`; const before = E.length;
+    if (!String(x.inv||"").trim()) E.push({i:idx, msg:`${lab}: investor name is missing.`});
+    if (!x.date) E.push({i:idx, msg:`${lab}: placement date is missing.`});
+    if (!(num(x.amt) > 0)) E.push({i:idx, msg:`${lab}: amount must be more than zero.`});
+    if (!x.owner && (x.rate==="" || !isFinite(+x.rate))) E.push({i:idx, msg:`${lab}: profit rate is missing.`});
+    const parts = Object.entries(x.alloc).filter(([,a]) => num(a) > 0.004);
+    const sum = parts.reduce((s,[,a])=>s+num(a),0);
+    if (!parts.length) E.push({i:idx, msg:`${lab}: allocate the amount to at least one venture.`});
+    else if (Math.abs(sum - num(x.amt)) > 0.01) E.push({i:idx, msg:`${lab}: allocations add up to ${nf.format(sum)} but the amount is ${nf.format(num(x.amt))}.`});
+    if (E.length > before) return;
+    const key = x.sr || `R${idx+1}`;
+    if (x.owner){
+      const s = ensureSh(x.inv.trim()); owner += toBase(num(x.amt));
+      ops.led.push({id:`imp-own-${key}`, data:{date:x.date, type:"Owner Capital Contribution", bizId:"", placementId:"", shareholderId:s.id, amount:toBase(num(x.amt)), method:"Bank transfer", bankId:"", ref:`${x.inv.trim()} paid-up capital (Sr. ${key})`, example:false, createdAt:now, updatedAt:now, importBatch:batch}});
+      for (const [vname, a] of parts){ const v = ensureVen(vname);
+        ops.led.push({id:`imp-own-${key}-${v.code}`, data:{date:x.date, type:"Investment Addition", bizId:v.id, placementId:"", shareholderId:"", amount:toBase(num(a)), method:"Bank transfer", bankId:"", ref:`Allocation of ${x.inv.trim()} capital (Sr. ${key})`, example:false, createdAt:now, updatedAt:now, importBatch:batch}}); }
+      return;
+    }
+    investor += toBase(num(x.amt));
+    for (const [vname, a] of parts){
+      const v = ensureVen(vname), code = `P${/^\d+$/.test(key) ? key.padStart(3,"0") : key}` + (parts.length > 1 ? `-${v.code}` : "");
+      const ex = plByCode.get(code.toLowerCase()), {id:_x, ...exd} = ex || {}; nPl++;
+      ops.pl.push({id: ex?.id || newId(), data:{...(ex ? exd : {contact:"", maturity:"", frequency:"Quarterly", mode:"", bankId:"", createdAt:now}), code, investor:x.inv.trim(), bizId:v.id, amount:toBase(num(a)), rate: num(x.rate)/100, date:x.date,
+        method: exd.method || "Bank transfer", status: exd.status || "Active", notes: exd.notes || `Investor sheet Sr. ${key}`, example:false, updatedAt:now}});
+      ops.led.push({id:`imp-add-${code}`, data:{date:x.date, type:"Investment Addition", bizId:v.id, placementId:"", shareholderId:"", amount:toBase(num(a)), method:"Bank transfer", bankId:"", ref:`Allocation of investor funds ${code} · ${x.inv.trim()}`, example:false, createdAt:now, updatedAt:now, importBatch:batch}});
+    }
+  });
+  const total = Object.values(ops).reduce((s,a)=>s+a.length,0);
+  return {E, W, ops, total, batch, owner, investor, nPl, linked, st:{}, found:{}};
+}
+function downloadInvestorTemplate(){
+  if (!window.XLSX){ toast("The spreadsheet tool didn't load. Reload the page and try again."); return; }
+  const ven = S.biz.filter(b => (b.status||"Active") !== "Exited").map(b => b.name), cols = ven.length ? ven : ["Venture A", "Venture B"];
+  const ws = XLSX.utils.aoa_to_sheet([["", "", "", "", "", "Allocation to Investments"], ["Sr. #", "Investor", "Annual Profit rate for investor", "Placement Date", `Investment ${BASE()}`, ...cols], []]);
+  ws["!merges"] = [{s:{r:0, c:5}, e:{r:0, c:4 + cols.length}}];
+  ws["!cols"] = [{wch:7}, {wch:30}, {wch:14}, {wch:15}, {wch:16}, ...cols.map(()=>({wch:16}))];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Investors");
+  XLSX.writeFile(wb, "Future-Axis-investor-sheet.xlsx");
+}
+function viewImport(){
+  const ex = S.biz.filter(x=>x.example).length + S.pl.filter(x=>x.example).length + S.led.filter(x=>x.example).length;
+  const P = S.imp, W = S.canWrite!==false;
+  let body = "";
+  if (P && P.kind==="none") body = `<section class="sheet"><div class="sheet-b"><div class="banner" style="border-color:var(--neg)">This file isn't in the investor sheet layout. It needs the columns Sr. #, Investor, Annual Profit rate, Placement Date and Investment, then one column per venture. Download the template to see it.</div></div></section>`;
+  else if (P && P.done) body = `<section class="sheet"><div class="sheet-b"><div class="banner"><b>Imported.</b> ${h(P.done)} Every placement can be edited in the <b>Investors</b> tab. Next, check each venture's expected rate in <b>Ventures</b>, then click <b>Run profit accruals</b>.</div></div></section>`;
+  else if (P){
+    const B = buildInvestorImport(P), err = new Map(); for (const e of B.E) err.set(e.i, [...(err.get(e.i)||[]), e.msg]);
+    const inp = (i, f, v, type="text", w="") => `<input id="ir_${i}_${f}" data-ir="${i}" data-f="${h(f)}" type="${type}" ${type==="number"?'step="any" inputmode="decimal"':""} value="${h(v ?? "")}" style="${w}">`;
+    const rows = P.recs.map((x,i) => `<tr${err.has(i)?' style="background:color-mix(in srgb,var(--neg) 7%,transparent)"':""}>
+      <td class="n" style="text-align:left">${h(x.sr)}</td>
+      <td>${inp(i,"inv",x.inv,"text","min-width:150px")}</td>
+      <td style="text-align:center"><input type="checkbox" id="ir_${i}_owner" data-ir="${i}" data-f="owner" ${x.owner?"checked":""} aria-label="Paid-up capital"></td>
+      <td>${x.owner?'<span class="note">–</span>':inp(i,"rate",x.rate,"number","width:70px")}</td>
+      <td>${inp(i,"date",x.date,"date","width:140px")}</td>
+      <td>${inp(i,"amt",x.amt? +(+x.amt).toFixed(2):"","number","width:110px")}</td>
+      ${P.ventures.map(v=>`<td>${inp(i,"v:"+v, x.alloc[v]? +(+x.alloc[v]).toFixed(2):"","number","width:110px")}</td>`).join("")}
+      <td>${err.has(i)?`<span class="note" style="color:var(--neg)">${h(err.get(i).join(" ")).replace(/^[^:]*: /,"")}</span>`:'<span class="pill ok">OK</span>'}</td>
+      <td><button class="btn sm danger" data-irdel="${i}" title="Remove this row from the import" type="button">✕</button></td></tr>`).join("");
+    body = `<section class="sheet"><div class="sheet-h"><div><h2>Check, edit and import</h2><p>${h(P.file)} · ${P.recs.length} rows · amounts in ${h(P.cur)}. Edit any cell below before importing. Your Excel file isn't changed.</p></div></div>
+      <div class="kpis" style="border-left:0;border-right:0;border-radius:0">
+        <div class="kpi"><span class="eyebrow">Investor placements</span><span class="v">${B.nPl}</span><span class="s">${BASE()} ${nf.format(B.investor)}</span></div>
+        <div class="kpi"><span class="eyebrow">Paid-up capital</span><span class="v">${BASE()} ${nf.format(B.owner)}</span><span class="s">rows ticked as paid-up capital</span></div>
+        <div class="kpi"><span class="eyebrow">Rows to fix</span><span class="v">${err.size ? `<span class="neg">${err.size}</span>` : "0"}</span><span class="s">${err.size?"highlighted below":"all rows are OK"}</span></div>
+      </div>
+      ${B.linked.length || B.W.length ? `<div class="sheet-b"><div class="banner">${[...B.linked.map(l=>`Venture column ${h(l)}.`), ...B.W.map(h)].join("<br>")}</div></div>`:""}
+      <div class="tbl"><table><thead><tr><th>Sr.</th><th>Investor</th><th title="Tick for owner money (paid-up capital) such as FAMCON">Paid-up capital</th><th>Rate % p.a.</th><th>Placement date</th><th>Amount</th>${P.ventures.map(v=>`<th>${h(v)}</th>`).join("")}<th>Check</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="sheet-b row" style="justify-content:space-between">${W?`<button class="btn" data-iradd="1" type="button">Add a row</button>`:""}
+        <div class="row">${err.size?`<span class="note">Fix the highlighted rows to import.</span>`:""}${W?`<button class="btn primary" data-iact="run" ${err.size||!B.total?"disabled":""}>Import</button>`:""}<span class="note" id="impProg"></span></div></div></section>`;
+  }
+  return `<div class="head"><div><span class="eyebrow">One-time setup</span><h1>Import investors</h1><p>Upload your investor sheet once: each investor's amount, profit rate, placement date and how it's allocated to the ventures. After that, add or edit investors directly in the Investors tab.</p></div>
+    <button class="btn" id="dlInvTpl" type="button">Download template</button></div>
+  <div class="stack">
+  ${ex?`<div class="banner">${ex} example records are still in the system. Remove them first under <b>Settings → Remove example data</b>.</div>`:""}
+  <section class="sheet"><div class="sheet-b stack" style="gap:8px"><label class="note" style="display:flex;flex-direction:column;gap:6px">Investor sheet (.xlsx)<input type="file" id="impFile" accept=".xlsx,.xls"></label>
+    <p class="note" style="margin:0">Owner money such as FAMCON is ticked as paid-up capital automatically; you can change the ticks in the preview. Uploading the same sheet again updates rows by Sr. # instead of duplicating them.</p></div></section>
+  ${body}
+  </div>`;
+}
+async function runInvestorImport(btn){
+  const P = S.imp, B = buildInvestorImport(P); if (B.E.length || !B.total) return;
+  btn.disabled = true; const prog = $("#impProg");
+  try {
+    for (const [k, col] of [["sh","shareholders"],["biz","businesses"],["pl","placements"],["led","ledger"]]) if (B.ops[k].length) await S.db.bulk(col, B.ops[k], (d,t) => prog.textContent = `Saving ${d} of ${t}…`, true);
+    await loadAll();
+    S.imp = {...P, done: `${B.nPl} investor placements (${BASE()} ${nf.format(B.investor)}) and ${BASE()} ${nf.format(B.owner)} paid-up capital.`};
+    S.preset = "itd"; store.set("fa.preset","itd"); applyPreset("itd"); syncPeriodInputs(); render(); toast("Import complete");
+  } catch(x){ prog.textContent = ""; toast("Import stopped: " + (x.message || "try again")); btn.disabled = false; }
+}
+
 /* ---------- render ---------- */
 function syncCur(){ const sel = $("#viewCur"); if (!sel) return; sel.innerHTML = CURS.map(c=>`<option ${c===VIEW()?"selected":""}>${c}</option>`).join(""); }
 function renderTabs(){
@@ -1630,10 +1736,22 @@ function wireView(){
   if (lt) lt.onchange = e => { S.lf.type = e.target.value; render(); };
   if (lq) lq.oninput = e => { S.lf.q = e.target.value; clearTimeout(wireView.t); wireView.t = setTimeout(render, 200); };
   if (ys) ys.onchange = e => { S.year = +e.target.value; render(); };
+  document.querySelectorAll("[data-ir]").forEach(el => {
+    const upd = () => { const x = S.imp.recs[+el.dataset.ir], f = el.dataset.f;
+      if (f==="owner") x.owner = el.checked;
+      else if (f.startsWith("v:")) x.alloc[f.slice(2)] = el.value==="" ? 0 : num(el.value);
+      else if (f==="amt") { const old = num(x.amt), v = el.value==="" ? 0 : num(el.value); x.amt = v;
+        const vs = Object.entries(x.alloc).filter(([,a])=>a>0); if (vs.length===1 && Math.abs(vs[0][1]-old)<0.01) x.alloc[vs[0][0]] = v; }
+      else x[f] = el.value; };
+    if (el.type==="checkbox" || el.type==="date") el.onchange = () => { upd(); render(); };
+    else { el.oninput = () => { upd(); clearTimeout(wireView.ti); wireView.ti = setTimeout(render, 450); }; el.onchange = () => { upd(); render(); }; }
+  });
+  const dt = $("#dlInvTpl"); if (dt) dt.onclick = downloadInvestorTemplate;
   const bs = $("#bankSel"); if (bs) bs.onchange = e => { S.bankSel = e.target.value; render(); };
   const imf = $("#impFile");
   if (imf) imf.onchange = async e => { const f = e.target.files[0]; if (!f) return;
-    try { const wb = await readWorkbook(f); S.imp = {...analyzeWorkbook(wb), file:f.name}; } catch(x){ S.imp = null; toast(x.message || "Could not read that file"); }
+    try { const wb = await readWorkbook(f); const P = parseInvestorSheet(wb); S.imp = P ? {...P, file:f.name} : {kind:"none"}; }
+    catch(x){ S.imp = null; toast(x.message || "Could not read that file"); }
     render(); };
   const pw = $("#pwForm");
   if (pw) pw.onsubmit = async e => { e.preventDefault(); const a=$("#pwNew").value, b=$("#pwRep").value, m=$("#pwMsg");
@@ -1660,7 +1778,9 @@ document.addEventListener("click", e => {
   const u = e.target.closest("[data-uact]"); if (u){ userAction(u); return; }
   const bk = e.target.closest("[data-bact]"); if (bk){ bankAction(bk); return; }
   const bf = e.target.closest("[data-blf]"); if (bf){ S.blf = bf.dataset.blf; render(); return; }
-  const ia = e.target.closest("[data-iact]"); if (ia){ runImport(ia); return; }
+  const ia = e.target.closest("[data-iact]"); if (ia){ S.imp && S.imp.kind==="simple" ? runInvestorImport(ia) : runImport(ia); return; }
+  const ird = e.target.closest("[data-irdel]"); if (ird){ S.imp.recs.splice(+ird.dataset.irdel, 1); render(); return; }
+  if (e.target.closest("[data-iradd]")){ const n = Math.max(0, ...S.imp.recs.map(x=>parseInt(x.sr)||0)) + 1; S.imp.recs.push({sr:String(n), inv:"", rate:"", date:"", amt:0, alloc:Object.fromEntries(S.imp.ventures.map(v=>[v,0])), owner:false}); render(); return; }
   if (e.target.closest("[data-acc]")){ openAccruals(); return; }
   const nc = e.target.closest("[data-newcap]"); if (nc){ openForm("led", null, {prefill:{type:nc.dataset.newcap, bizId:"", shareholderId:S.sh.length===1?S.sh[0].id:""}}); return; }
   const t = e.target.closest("[data-tab],[data-go],[data-new],[data-edit],[data-csv],[data-goledger]"); if (!t) return;
