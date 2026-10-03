@@ -1,0 +1,772 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Future Axis Investor Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+/* Layout: ledger-book app — wordmark + period bar on top, tab rail, report sheets below */
+:root{
+  --bg:#f2f4f3; --surface:#ffffff; --sunk:#f7f9f8; --ink:#15211f; --muted:#5a6966; --line:#dbe2e0;
+  --accent:#0d5a53; --accent-ink:#ffffff; --accent-soft:#e1eeec; --gold:#a06d12; --gold-soft:#f6ecd9;
+  --pos:#1b7444; --neg:#b2261d; --warn:#9a5b00;
+  --c1:#0d5a53; --c2:#a06d12; --c3:#4c6fa8; --c4:#8a4f7d; --c5:#5f8a3a; --c6:#b65a3c;
+  --f-display:"IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --f-body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-num:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1514; --surface:#151f1e; --sunk:#111a19; --ink:#e3ebe9; --muted:#93a39f; --line:#263432;
+  --accent:#62bdb1; --accent-ink:#0b1514; --accent-soft:#18332f; --gold:#d8a647; --gold-soft:#2e2614;
+  --pos:#5fc58b; --neg:#f07d72; --warn:#e2a64a;
+  --c1:#62bdb1; --c2:#d8a647; --c3:#86a6dc; --c4:#c78bba; --c5:#97c46d; --c6:#e48d6c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1514; --surface:#151f1e; --sunk:#111a19; --ink:#e3ebe9; --muted:#93a39f; --line:#263432;
+  --accent:#62bdb1; --accent-ink:#0b1514; --accent-soft:#18332f; --gold:#d8a647; --gold-soft:#2e2614;
+  --pos:#5fc58b; --neg:#f07d72; --warn:#e2a64a;
+  --c1:#62bdb1; --c2:#d8a647; --c3:#86a6dc; --c4:#c78bba; --c5:#97c46d; --c6:#e48d6c; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--f-body);margin:0}
+.wrap{max-width:1280px;margin:0 auto;padding-inline:16px}
+header.top{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
+.topbar{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding-block:14px 10px}
+.brand{display:flex;flex-direction:column;gap:2px;min-width:0}
+.brand b{font:600 20px/1.15 var(--f-display);letter-spacing:.01em}
+.brand span{font-size:12px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.period{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.period label{font-size:12px;color:var(--muted)}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-width:0}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+nav.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+nav.tabs button{border:0;background:none;color:var(--muted);font:500 13.5px var(--f-body);padding:10px 12px;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+nav.tabs .sep{width:1px;background:var(--line);margin:10px 6px}
+main{padding-block:22px 60px}
+h1{font:600 24px/1.2 var(--f-display);margin:0;text-wrap:balance}
+h2{font:600 17px/1.3 var(--f-display);margin:0;text-wrap:balance}
+.eyebrow{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.head{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-end;margin-bottom:18px}
+.head p{margin:4px 0 0;color:var(--muted);max-width:68ch}
+.stack{display:flex;flex-direction:column;gap:22px}
+.sheet{background:var(--surface);border:1px solid var(--line);border-radius:8px;min-width:0}
+.sheet-h{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)}
+.sheet-h p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+.sheet-b{padding:16px}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:500;text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--sunk)}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+tr.click{cursor:pointer}
+tr.click:hover td{background:var(--accent-soft)}
+.n{text-align:right;font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowrap;font-size:12.5px}
+th.n{font-family:var(--f-body)}
+.neg{color:var(--neg)}.pos{color:var(--pos)}.mut{color:var(--muted)}
+tfoot td{font-weight:600;border-top:2px solid var(--ink);border-bottom:0;background:var(--sunk)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.kpi{background:var(--surface);padding:14px 16px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.kpi .v{font:500 21px/1.2 var(--f-num);font-variant-numeric:tabular-nums}
+.kpi .s{font-size:12px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:22px}
+.grid2>*{min-width:0}
+.btn{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:6px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--neg)}
+.btn.danger.armed{background:var(--neg);border-color:var(--neg);color:var(--surface)}
+.btn.sm{padding:4px 9px;font-size:12px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pill{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:99px;background:var(--sunk);border:1px solid var(--line);white-space:nowrap}
+.pill.ok{color:var(--pos);border-color:color-mix(in srgb,var(--pos) 35%,transparent)}
+.pill.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent)}
+.pill.bad{color:var(--neg);border-color:color-mix(in srgb,var(--neg) 40%,transparent)}
+.pill.inv{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 40%,transparent)}
+.split{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--sunk);min-width:90px}
+.split i{display:block;height:100%}
+.legend{display:flex;flex-direction:column;gap:6px;font-size:12.5px;min-width:0}
+.legend div{display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:center}
+.sw{width:10px;height:10px;border-radius:2px}
+.chartbox{display:flex;flex-wrap:wrap;gap:20px;align-items:center}
+.chartbox svg{max-width:100%;height:auto}
+svg text{fill:var(--muted);font:11px var(--f-body)}
+.note{font-size:12.5px;color:var(--muted)}
+.banner{padding:10px 14px;border-radius:6px;background:var(--gold-soft);color:var(--ink);font-size:13px;border:1px solid color-mix(in srgb,var(--gold) 35%,transparent)}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--ink);font:600 15px var(--f-display);margin-bottom:4px}
+.fs td:first-child{padding-left:12px}
+.fs tr.sub td{color:var(--muted);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;background:var(--sunk);font-weight:500}
+.fs tr.ind td:first-child{padding-left:28px}
+.fs tr.tot td{font-weight:600;border-top:1px solid var(--ink)}
+.fs tr.gt td{font-weight:600;border-top:2px solid var(--ink);border-bottom:3px double var(--ink)}
+.chk{font-size:12px}
+/* overlay form */
+.ov{position:fixed;inset:0;background:color-mix(in srgb,var(--ink) 45%,transparent);display:flex;justify-content:flex-end;z-index:50}
+.panel{background:var(--surface);width:min(480px,100%);height:100%;overflow-y:auto;padding:calc(18px + env(safe-area-inset-top,0px)) 20px calc(24px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:16px;border-left:1px solid var(--line)}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form .full{grid-column:1/-1}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:500;min-width:0}
+.form textarea{min-height:64px;resize:vertical}
+.err{color:var(--neg);font-size:12.5px;min-height:1em}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:6px;font-size:13px;z-index:60}
+.filters{display:flex;flex-wrap:wrap;gap:8px}
+.filters>*{flex:1 1 150px}
+@media (max-width:560px){.form{grid-template-columns:1fr}.kpi .v{font-size:18px}h1{font-size:21px}}
+@media (prefers-reduced-motion:no-preference){tr.click td{transition:background .12s}}
+
+.auth{max-width:400px;margin:8vh auto 0;display:flex;flex-direction:column;gap:16px}
+.auth .sheet-b{display:flex;flex-direction:column;gap:12px}
+.auth label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:500}
+.linkbtn{background:none;border:0;color:var(--accent);font:inherit;font-size:13px;cursor:pointer;padding:0;text-align:left}
+.who{display:flex;gap:10px;align-items:center;font-size:12.5px;color:var(--muted)}
+.ok-msg{color:var(--pos);font-size:12.5px;min-height:1em}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand"><b id="entityName">Future Axis Holdings</b><span>Investor &amp; venture ledger</span></div>
+      <div class="row" style="gap:16px">
+      <div class="period" id="periodBar" hidden>
+        <label for="pPreset">Period</label>
+        <select id="pPreset">
+          <option value="ytd">Year to date</option>
+          <option value="lq">Last full quarter</option>
+          <option value="lm">Last full month</option>
+          <option value="l12">Last 12 months</option>
+          <option value="itd">Inception to date</option>
+          <option value="custom">Custom</option>
+        </select>
+        <input type="date" id="pStart" aria-label="Period start">
+        <span class="mut">to</span>
+        <input type="date" id="pEnd" aria-label="Period end">
+      </div>
+      <div class="who" id="who" hidden><span id="whoEmail"></span><button class="btn sm" id="signOut" type="button">Sign out</button></div>
+      </div>
+    </div>
+    <nav class="tabs" id="tabs" role="tablist" hidden></nav>
+  </div>
+</header>
+<main class="wrap" id="main">
+  <div class="empty"><b>Opening the ledger</b>Connecting to the database…</div>
+</main>
+<div id="ovHost"></div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+/* ---------- constants ---------- */
+const TYPES = {
+  "Owner Capital Contribution": {cash:1, owner:1},
+  "Owner Drawing":              {cash:-1, owner:-1},
+  "Investment Addition":        {cash:-1, inv:1},
+  "Investment Withdrawal":      {cash:1, inv:-1},
+  "Profit Accrued":             {rec:1, inc:1},
+  "Profit Received":            {cash:1, rec:-1},
+  "Investor Profit Accrued":    {pay:1, share:1},
+  "Investor Profit Paid":       {cash:-1, pay:-1},
+  "Investor Capital Repaid":    {cash:-1, icap:-1},
+  "Operating Expense":          {cash:-1, opex:1}
+};
+const INV_TYPES = ["Investor Profit Accrued","Investor Profit Paid","Investor Capital Repaid"];
+const VEN_TYPES = ["Investment Addition","Investment Withdrawal","Profit Accrued","Profit Received"];
+const TABS = [["dashboard","Dashboard"],["|"],["ventures","Ventures"],["investors","Investors"],["|"],["ledger","Ledger"],["|"],["returns","Investor returns"],["monthly","Monthly profit"],["statements","Financial statements"],["|"],["settings","Settings"]];
+const COLS = ["var(--c1)","var(--c2)","var(--c3)","var(--c4)","var(--c5)","var(--c6)"];
+const ORIGIN = "0000-01-01";
+
+const S = {biz:[], pl:[], led:[], cfg:{entity:"Future Axis Holdings", currency:"AED"},
+  loaded:{biz:false,pl:false,led:false}, db:null, dl:null, canWrite:null, tab:"dashboard",
+  start:"", end:"", preset:"ytd", lf:{biz:"",type:"",q:""}, year:null, csv:{}};
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const h = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const num = v => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
+const nf = new Intl.NumberFormat("en-US",{maximumFractionDigits:0});
+function money(v){ const r = Math.round(v); if (r === 0) return '<span class="mut">–</span>'; return r < 0 ? `<span class="neg">(${nf.format(-r)})</span>` : nf.format(r); }
+function pct(v, d=1){ if (!isFinite(v) || Math.abs(v) < 1e-9) return '<span class="mut">–</span>'; const s=(Math.abs(v)*100).toFixed(d)+"%"; return v<0?`<span class="neg">(${s})</span>`:s; }
+const pad = n => String(n).padStart(2,"0");
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const todayIso = () => iso(new Date());
+const D = s => new Date(s+"T00:00:00");
+const addDays = (s,n) => { const d = D(s); d.setDate(d.getDate()+n); return iso(d); };
+const days = (a,b) => Math.round((D(b)-D(a))/864e5);
+const fmtDate = s => s ? D(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "";
+const div = (a,b) => b ? a/b : 0;
+const bizName = id => id ? (S.biz.find(b=>b.id===id)?.name || "Unknown venture") : "Future Axis (HQ)";
+const bizCode = id => id ? (S.biz.find(b=>b.id===id)?.code || "?") : "HQ";
+const plLabel = id => { const p = S.pl.find(x=>x.id===id); return p ? `${p.code||""} · ${p.investor}` : ""; };
+function toast(m){ const t=$("#toast"); t.textContent=m; t.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>t.hidden=true,2600); }
+const store = { get(k){ try{return localStorage.getItem(k)}catch(e){return null} }, set(k,v){ try{localStorage.setItem(k,v)}catch(e){} } };
+
+/* ---------- period ---------- */
+function applyPreset(p){
+  const t = D(todayIso()); let s, e;
+  if (p==="ytd"){ s = `${t.getFullYear()}-01-01`; e = todayIso(); }
+  else if (p==="lm"){ const a = new Date(t.getFullYear(), t.getMonth()-1, 1); s = iso(a); e = iso(new Date(t.getFullYear(), t.getMonth(), 0)); }
+  else if (p==="lq"){ const q = Math.floor(t.getMonth()/3); const a = new Date(t.getFullYear(), q*3-3, 1); s = iso(a); e = iso(new Date(a.getFullYear(), a.getMonth()+3, 0)); }
+  else if (p==="l12"){ e = todayIso(); s = addDays(iso(new Date(t.getFullYear()-1, t.getMonth(), t.getDate())),1); }
+  else if (p==="itd"){ const ds = [...S.led.map(x=>x.date), ...S.pl.map(x=>x.date)].filter(Boolean).sort(); s = ds[0] || `${t.getFullYear()}-01-01`; e = todayIso(); }
+  else return;
+  S.start = s; S.end = e;
+}
+function initPeriod(){
+  S.preset = store.get("fa.preset") || "ytd";
+  if (S.preset === "custom"){ S.start = store.get("fa.start") || ""; S.end = store.get("fa.end") || ""; }
+  if (!S.start || !S.end){ if (S.preset==="custom") S.preset="ytd"; applyPreset(S.preset); }
+  syncPeriodInputs();
+  $("#pPreset").onchange = e => { S.preset = e.target.value; store.set("fa.preset", S.preset); if (S.preset!=="custom") applyPreset(S.preset); syncPeriodInputs(); render(); };
+  const onDate = () => { const a=$("#pStart").value, b=$("#pEnd").value; if (!a||!b||a>b) return; S.start=a; S.end=b; S.preset="custom"; store.set("fa.preset","custom"); store.set("fa.start",a); store.set("fa.end",b); $("#pPreset").value="custom"; render(); };
+  $("#pStart").onchange = onDate; $("#pEnd").onchange = onDate;
+}
+function syncPeriodInputs(){ $("#pPreset").value = S.preset; $("#pStart").value = S.start; $("#pEnd").value = S.end; }
+
+/* ---------- accounting engine ---------- */
+const eff = (t,k) => (TYPES[t.type]||{})[k] || 0;
+function bal(k, upto, f){ let s=0; for (const t of S.led) if (t.date && t.date<=upto && (!f||f(t))) s += num(t.amount)*eff(t,k); return s; }
+function flow(k, from, to, f){ let s=0; for (const t of S.led) if (t.date>=from && t.date<=to && (!f||f(t))) s += num(t.amount)*eff(t,k); return s; }
+function tsum(type, from, to, f){ let s=0; for (const t of S.led) if (t.type===type && t.date>=from && t.date<=to && (!f||f(t))) s += num(t.amount); return s; }
+function placed(from, to, f){ let s=0; for (const p of S.pl) if (p.date && p.date>=from && p.date<=to && (!f||f(p))) s += num(p.amount); return s; }
+
+function balanceSheet(d){
+  const cash = bal("cash",d) + placed(ORIGIN,d);
+  const inv = bal("inv",d), rec = bal("rec",d);
+  const icap = placed(ORIGIN,d) + bal("icap",d), pay = bal("pay",d);
+  const owner = bal("owner",d), re = bal("inc",d) - bal("share",d) - bal("opex",d);
+  const assets = cash+inv+rec, liab = icap+pay, eq = owner+re;
+  return {cash,inv,rec,assets,icap,pay,liab,owner,re,eq,le:liab+eq,diff:assets-liab-eq};
+}
+function pnl(from,to){
+  const inc = flow("inc",from,to), share = flow("share",from,to), opex = flow("opex",from,to);
+  return {inc, share, spread:inc-share, opex, net:inc-share-opex};
+}
+function ventureAccounts(){
+  const {start, end} = S, pd = days(start,end)+1;
+  return S.biz.map(b => {
+    const f = t => t.bizId===b.id;
+    const added = tsum("Investment Addition",ORIGIN,end,f), wd = tsum("Investment Withdrawal",ORIGIN,end,f), net = added-wd;
+    const icap = placed(ORIGIN,end,p=>p.bizId===b.id) - tsum("Investor Capital Repaid",ORIGIN,end,f);
+    const own = net - icap;
+    const acc = tsum("Profit Accrued",start,end,f), recd = tsum("Profit Received",start,end,f), rec = bal("rec",end,f);
+    const share = tsum("Investor Profit Accrued",start,end,f), pay = bal("pay",end,f);
+    const yld = div(acc,net)*365/pd;
+    return {b, added, wd, net, icap, own, acc, recd, rec, share, pay, contrib:acc-share, yld, varr: yld - num(b.rate)};
+  });
+}
+function investorReturns(){
+  const {start,end} = S;
+  return S.pl.map(p => {
+    const f = t => t.placementId===p.id;
+    const active = p.date && p.date<=end;
+    const stop = p.maturity && p.maturity<end ? p.maturity : end;
+    const d = active ? Math.max(0, days(p.date, stop)) : 0;
+    const expected = num(p.amount)*num(p.rate)*d/365;
+    const accrued = tsum("Investor Profit Accrued",ORIGIN,end,f), paid = tsum("Investor Profit Paid",ORIGIN,end,f);
+    const periodAcc = tsum("Investor Profit Accrued",start,end,f);
+    const repaid = tsum("Investor Capital Repaid",ORIGIN,end,f);
+    const out = (active?num(p.amount):0) - repaid;
+    return {p, d, expected, accrued, paid, payable:accrued-paid, periodAcc, repaid, out, varr:expected-accrued, ann: d ? div(accrued,num(p.amount))*365/d : 0};
+  });
+}
+function ratios(){
+  const P = pnl(S.start,S.end), va = ventureAccounts(), pd = days(S.start,S.end)+1;
+  const T = va.reduce((s,x)=>s+x.net,0), K = va.reduce((s,x)=>s+x.icap,0), O = T-K;
+  const incOwn = div(P.inc*O, T), incInv = P.inc - incOwn;
+  const netOwn = incOwn - P.opex, netInv = incInv - P.share;
+  const an = 365/pd;
+  return {P, T, K, O, incOwn, incInv, netOwn, netInv, pd, an,
+    npr: div(P.net,P.inc), nprOwn: div(netOwn,O), nprInv: div(netInv,K), invRet: div(P.share,K), roc: div(P.net,T)};
+}
+
+/* ---------- table + csv ---------- */
+function csvReg(key, head, rows){ S.csv[key] = {head, rows}; }
+async function downloadCsv(key){
+  const t = S.csv[key]; if (!t) return;
+  if (!S.dl){ toast("Downloads are not available in this view"); return; }
+  const esc = v => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
+  const body = [t.head, ...t.rows].map(r => r.map(esc).join(",")).join("\n");
+  try { await S.dl.save({filename:`future-axis-${key}-${S.end}.csv`, data:"﻿"+body}); toast("CSV saved"); }
+  catch(e){ if (e && e.code!=="declined") toast("Download unavailable: "+(e.message||e.code)); }
+}
+const csvBtn = key => S.dl ? `<button class="btn sm" data-csv="${key}">Download CSV</button>` : "";
+const r0 = v => Math.round(v);
+const p2 = v => (v*100).toFixed(2)+"%";
+
+/* ---------- charts ---------- */
+function donut(items){
+  const tot = items.reduce((s,x)=>s+Math.max(0,x.v),0);
+  if (!tot) return `<p class="note">Allocation appears once capital is invested in a venture.</p>`;
+  let a = -Math.PI/2, paths = "";
+  const R=78, r=50, cx=90, cy=90;
+  items.forEach((x,i) => {
+    const v = Math.max(0,x.v); if (!v) return;
+    const sweep = v/tot*Math.PI*2, a2 = a+sweep - (items.length>1?0.012:0);
+    const large = sweep>Math.PI?1:0;
+    const p = (ang,rad)=>[cx+rad*Math.cos(ang), cy+rad*Math.sin(ang)].map(n=>n.toFixed(2)).join(",");
+    if (sweep >= Math.PI*2-0.001) paths += `<circle cx="${cx}" cy="${cy}" r="${(R+r)/2}" fill="none" stroke="${COLS[i%6]}" stroke-width="${R-r}"/>`;
+    else paths += `<path d="M${p(a,R)} A${R},${R} 0 ${large} 1 ${p(a2,R)} L${p(a2,r)} A${r},${r} 0 ${large} 0 ${p(a,r)} Z" fill="${COLS[i%6]}"/>`;
+    a += sweep;
+  });
+  const leg = items.map((x,i)=>`<div><i class="sw" style="background:${COLS[i%6]}"></i><span>${h(x.l)}</span><span class="n">${pct(div(x.v,tot))}</span></div>`).join("");
+  return `<div class="chartbox"><svg viewBox="0 0 180 180" width="180" height="180" role="img" aria-label="Capital allocation by venture">${paths}<text x="90" y="86" text-anchor="middle" style="font-size:10px">Deployed</text><text x="90" y="103" text-anchor="middle" style="font:500 13px var(--f-num);fill:var(--ink)">${nf.format(Math.round(tot/1000))}k</text></svg><div class="legend" style="flex:1 1 160px">${leg}</div></div>`;
+}
+function niceMax(v){ if (v<=0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); const m = v/p; return (m<=1?1:m<=2?2:m<=2.5?2.5:m<=5?5:10)*p; }
+function bars(months){
+  const W=560, H=220, L=52, B=24, T=10, Rr=8;
+  const hi = Math.max(...months.map(m=>m.net),0), lo = Math.max(...months.map(m=>-m.net),0);
+  const step = niceMax(Math.max(hi+lo,1)/4), mx = Math.max(step, Math.ceil(hi/step)*step), mn = -Math.ceil(lo/step)*step;
+  const y = v => T + (mx - v)/(mx - mn)*(H-T-B);
+  const bw = (W-L-Rr)/12;
+  let g = "";
+  for (let v=mn; v<=mx+1e-6; v+=step){ const yy=y(v).toFixed(1); g += `<line x1="${L}" x2="${W-Rr}" y1="${yy}" y2="${yy}" stroke="var(--line)" stroke-width="1"/><text x="${L-6}" y="${(+yy+4)}" text-anchor="end">${nf.format(Math.round(v/1000))}k</text>`; }
+  months.forEach((m,i)=>{ const x = L + i*bw + bw*0.18, w = bw*0.64, y0=y(0), y1=y(m.net);
+    g += `<rect x="${x.toFixed(1)}" y="${Math.min(y0,y1).toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(0.5,Math.abs(y1-y0)).toFixed(1)}" rx="2" fill="${m.net<0?"var(--neg)":"var(--accent)"}"><title>${m.label}: ${nf.format(Math.round(m.net))}</title></rect><text x="${(x+w/2).toFixed(1)}" y="${H-6}" text-anchor="middle">${m.label.slice(0,3)}</text>`; });
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" role="img" aria-label="Monthly net profit">${g}<line x1="${L}" x2="${W-Rr}" y1="${y(0).toFixed(1)}" y2="${y(0).toFixed(1)}" stroke="var(--muted)" stroke-width="1"/></svg>`;
+}
+function monthly(year){
+  const out=[]; let cum=0;
+  for (let m=1;m<=12;m++){
+    const from = `${year}-${pad(m)}-01`, to = iso(new Date(year, m, 0));
+    const P = pnl(from,to); cum += P.net;
+    out.push({m, from, to, label:new Date(year,m-1,1).toLocaleDateString("en-GB",{month:"short"}), ...P, recd:tsum("Profit Received",from,to), cum});
+  }
+  return out;
+}
+
+/* ---------- views ---------- */
+function viewDashboard(){
+  if (!S.biz.length && !S.led.length) return `<div class="head"><div><h1>Dashboard</h1><p>Nothing recorded yet.</p></div></div>
+    <div class="sheet"><div class="empty"><b>Start with your first venture</b>Add each business under Ventures, record investor placements under Investors, then post investments and profit accruals in the Ledger. The dashboard fills in from there.<div class="row" style="justify-content:center;margin-top:14px">${S.canWrite!==false?'<button class="btn primary" data-go="ventures">Add a venture</button>':''}</div></div></div>`;
+  const R = ratios(), va = ventureAccounts(), bs = balanceSheet(S.end), y = +S.end.slice(0,4), mo = monthly(y);
+  const nInv = new Set(S.pl.filter(p=>p.date<=S.end).map(p=>(p.investor||"").trim().toLowerCase())).size;
+  const active = S.biz.filter(b=>(b.status||"Active")==="Active").length;
+  const k = (l,v,s)=>`<div class="kpi"><span class="eyebrow">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`;
+  const rr = (l,v,a,d)=>`<tr><td>${l}</td><td class="n">${pct(v)}</td><td class="n">${a===null?'<span class="mut">n/a</span>':pct(a)}</td><td class="note">${d}</td></tr>`;
+  const alloc = va.filter(x=>x.net||x.icap).map((x,i)=>{
+    const ownW = Math.max(0,div(x.own,x.net))*100, invW = Math.max(0,Math.min(100,div(x.icap,x.net)*100));
+    return `<tr class="click" data-edit="biz:${x.b.id}"><td><i class="sw" style="display:inline-block;margin-right:8px;background:${COLS[i%6]}"></i>${h(x.b.name)}<div class="note">${h(x.b.nature||"")}</div></td>
+    <td class="n">${money(x.net)}</td><td class="n">${money(x.own)}</td><td class="n">${money(x.icap)}</td>
+    <td><div class="split" title="Own ${ownW.toFixed(0)}% · Investor ${invW.toFixed(0)}%"><i style="width:${ownW}%;background:var(--accent)"></i><i style="width:${invW}%;background:var(--gold)"></i></div></td>
+    <td class="n">${pct(div(x.net,R.T))}</td><td class="n">${pct(num(x.b.rate))}</td><td class="n">${pct(x.yld)}</td><td class="n">${money(x.contrib)}</td></tr>`; }).join("");
+  const warn = Math.abs(bs.diff)>0.5 ? `<div class="banner">Balance sheet is out by ${nf.format(bs.diff)}. Check the ledger for entries with a missing venture or placement.</div>`:"";
+  return `<div class="head"><div><span class="eyebrow">Position at ${fmtDate(S.end)}</span><h1>Dashboard</h1><p>Profit figures cover ${fmtDate(S.start)} to ${fmtDate(S.end)} (${R.pd} days). Capital figures are balances at period end.</p></div></div>
+  <div class="stack">${warn}
+  <div class="kpis">
+    ${k("Capital deployed",money(R.T),`${active} active venture${active===1?"":"s"}`)}
+    ${k("Own investment",money(R.O),`${pct(div(R.O,R.T),0)} of deployed`)}
+    ${k("Investor capital",money(R.K),`${nInv} investor${nInv===1?"":"s"} · ${S.pl.filter(p=>p.date<=S.end).length} placements`)}
+    ${k("Net profit",money(R.P.net),`on income of ${nf.format(R.P.inc)}`)}
+    ${k("Profit receivable",money(bs.rec),"due from ventures")}
+    ${k("Cash",money(bs.cash),`investor profit payable ${nf.format(bs.pay)}`)}
+  </div>
+  <section class="sheet"><div class="sheet-h"><div><h2>Profitability ratios</h2><p>Annualised = period ratio × 365 ÷ ${R.pd} days.</p></div></div>
+    <div class="tbl"><table><thead><tr><th>Ratio</th><th class="n">Period</th><th class="n">Annualised</th><th>How it is measured</th></tr></thead><tbody>
+    ${rr("Net profit ratio",R.npr,null,"Net profit ÷ profit income from ventures")}
+    ${rr("Net profit ratio on own investment",R.nprOwn,R.nprOwn*R.an,"(Income earned on own capital − operating expenses) ÷ own investment")}
+    ${rr("Net profit ratio on investor amount",R.nprInv,R.nprInv*R.an,"(Income earned on investor capital − investor profit share) ÷ investor capital")}
+    ${rr("Return credited to investors",R.invRet,R.invRet*R.an,"Investor profit share accrued ÷ investor capital")}
+    ${rr("Return on capital deployed",R.roc,R.roc*R.an,"Net profit ÷ total capital deployed")}
+    </tbody></table></div>
+    <div class="sheet-b note" style="border-top:1px solid var(--line)">Venture income is split between own and investor capital in proportion to capital deployed at period end: ${nf.format(R.incOwn)} on own capital, ${nf.format(R.incInv)} on investor capital. Operating expenses are borne by Future Axis's own capital.</div>
+  </section>
+  <div class="grid2">
+    <section class="sheet"><div class="sheet-h"><div><h2>Allocation by venture</h2><p>Net investment at ${fmtDate(S.end)}</p></div></div><div class="sheet-b">${donut(va.map(x=>({l:x.b.name, v:x.net})))}</div></section>
+    <section class="sheet"><div class="sheet-h"><div><h2>Monthly net profit, ${y}</h2><p>Year total ${nf.format(mo.reduce((s,m)=>s+m.net,0))}</p></div><button class="btn sm" data-go="monthly">Monthly detail</button></div><div class="sheet-b" style="overflow-x:auto">${bars(mo)}</div></section>
+  </div>
+  <section class="sheet"><div class="sheet-h"><div><h2>Venture allocations</h2><p><span class="pill">Own</span> <span class="pill inv">Investor</span> split of each venture's capital</p></div></div>
+    <div class="tbl"><table><thead><tr><th>Venture</th><th class="n">Deployed</th><th class="n">Own</th><th class="n">Investor</th><th>Split</th><th class="n">Share</th><th class="n">Expected p.a.</th><th class="n">Actual p.a.</th><th class="n">Net contribution</th></tr></thead>
+    <tbody>${alloc || `<tr><td colspan="9" class="empty">No capital invested yet.</td></tr>`}</tbody>
+    <tfoot><tr><td>Total</td><td class="n">${money(R.T)}</td><td class="n">${money(R.O)}</td><td class="n">${money(R.K)}</td><td></td><td class="n">${pct(R.T?1:0)}</td><td></td><td class="n">${pct(div(R.P.inc,R.T)*R.an)}</td><td class="n">${money(R.P.spread)}</td></tr></tfoot></table></div></section>
+  </div>`;
+}
+
+function viewVentures(){
+  const va = ventureAccounts();
+  csvReg("ventures",["ID","Name","Nature","Address","Contact person","Phone","Email","Expected rate","Start date","Status"], S.biz.map(b=>[b.code,b.name,b.nature,b.address,b.contact,b.phone,b.email,p2(num(b.rate)),b.startDate,b.status]));
+  csvReg("venture-accounts",["ID","Venture","Invested","Withdrawn","Net investment","Investor capital","Own investment","Profit accrued (period)","Profit received (period)","Receivable","Investor share (period)","Investor payable","Net contribution","Actual yield p.a.","Expected p.a."], va.map(x=>[x.b.code,x.b.name,r0(x.added),r0(x.wd),r0(x.net),r0(x.icap),r0(x.own),r0(x.acc),r0(x.recd),r0(x.rec),r0(x.share),r0(x.pay),r0(x.contrib),p2(x.yld),p2(num(x.b.rate))]));
+  const st = s => `<span class="pill ${s==="Active"?"ok":s==="Exited"?"":"warn"}">${h(s||"Active")}</span>`;
+  const rows = S.biz.map(b=>`<tr class="click" data-edit="biz:${b.id}"><td class="n" style="text-align:left">${h(b.code)}</td><td><b style="font-weight:600">${h(b.name)}</b><div class="note">${h(b.nature||"")}</div></td><td>${h(b.contact||"")}<div class="note">${h([b.phone,b.email].filter(Boolean).join(" · "))}</div></td><td class="note" style="max-width:26ch">${h(b.address||"")}</td><td class="n">${pct(num(b.rate))}</td><td class="n">${fmtDate(b.startDate)}</td><td>${st(b.status)}${b.example?' <span class="pill warn">Example</span>':""}</td></tr>`).join("");
+  const T = k => va.reduce((s,x)=>s+x[k],0);
+  const acc = va.map(x=>`<tr class="click" data-goledger="${x.b.id}"><td>${h(x.b.name)}</td><td class="n">${money(x.added)}</td><td class="n">${money(x.wd)}</td><td class="n">${money(x.net)}</td><td class="n">${money(x.icap)}</td><td class="n">${money(x.own)}</td><td class="n">${money(x.acc)}</td><td class="n">${money(x.recd)}</td><td class="n">${money(x.rec)}</td><td class="n">${money(x.share)}</td><td class="n">${money(x.pay)}</td><td class="n">${money(x.contrib)}</td><td class="n">${pct(x.yld)}</td><td class="n">${x.net?pct(x.varr):'<span class="mut">–</span>'}</td></tr>`).join("");
+  return `<div class="head"><div><span class="eyebrow">Master data</span><h1>Ventures</h1><p>Each business Future Axis places capital in. Click a row to edit it.</p></div>${S.canWrite!==false?'<button class="btn primary" data-new="biz">Add venture</button>':""}</div>
+  <div class="stack">
+  <section class="sheet"><div class="sheet-h"><div><h2>Venture register</h2><p>${S.biz.length} venture${S.biz.length===1?"":"s"}</p></div>${csvBtn("ventures")}</div>
+   <div class="tbl"><table><thead><tr><th>ID</th><th>Venture</th><th>Contact person</th><th>Address</th><th class="n">Expected p.a.</th><th class="n">Start</th><th>Status</th></tr></thead><tbody>${rows || `<tr><td colspan="7"><div class="empty"><b>No ventures yet</b>Add a venture to start allocating capital.</div></td></tr>`}</tbody></table></div></section>
+  <section class="sheet"><div class="sheet-h"><div><h2>Venture accounts</h2><p>Receivable and payable position per venture. Balances at ${fmtDate(S.end)}; profit columns for the period. Click a row to open its ledger.</p></div>${csvBtn("venture-accounts")}</div>
+   <div class="tbl"><table><thead><tr><th>Venture</th><th class="n">Invested</th><th class="n">Withdrawn</th><th class="n">Net investment</th><th class="n">Investor capital</th><th class="n">Own investment</th><th class="n">Profit accrued</th><th class="n">Profit received</th><th class="n">Receivable</th><th class="n">Investor share</th><th class="n">Investor payable</th><th class="n">Net contribution</th><th class="n">Actual p.a.</th><th class="n">vs expected</th></tr></thead>
+   <tbody>${acc || `<tr><td colspan="14" class="empty">No ventures yet.</td></tr>`}</tbody>
+   <tfoot><tr><td>Total</td>${["added","wd","net","icap","own","acc","recd","rec","share","pay","contrib"].map(k=>`<td class="n">${money(T(k))}</td>`).join("")}<td></td><td></td></tr></tfoot></table></div></section>
+  </div>`;
+}
+
+function viewInvestors(){
+  csvReg("placements",["Placement ID","Investor","Contact","Venture","Amount","Agreed rate","Placement date","Maturity","Payout","Status","Notes"], S.pl.map(p=>[p.code,p.investor,p.contact,bizName(p.bizId),r0(num(p.amount)),p2(num(p.rate)),p.date,p.maturity,p.frequency,p.status,p.notes]));
+  const pls = [...S.pl].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  const rows = pls.map(p=>`<tr class="click" data-edit="pl:${p.id}"><td class="n" style="text-align:left">${h(p.code)}</td><td><b style="font-weight:600">${h(p.investor)}</b><div class="note">${h(p.contact||"")}</div></td><td>${h(bizName(p.bizId))}</td><td class="n">${money(num(p.amount))}</td><td class="n">${pct(num(p.rate))}</td><td class="n">${fmtDate(p.date)}</td><td class="n">${p.maturity?fmtDate(p.maturity):'<span class="mut">Open</span>'}</td><td>${h(p.frequency||"")}</td><td><span class="pill ${(p.status||"Active")==="Active"?"ok":""}">${h(p.status||"Active")}</span>${p.example?' <span class="pill warn">Example</span>':""}</td></tr>`).join("");
+  const tot = S.pl.reduce((s,p)=>s+num(p.amount),0);
+  const wr = div(S.pl.reduce((s,p)=>s+num(p.amount)*num(p.rate),0), tot);
+  return `<div class="head"><div><span class="eyebrow">Master data</span><h1>Investors</h1><p>One row per placement: who invested, how much, in which venture, at what agreed profit rate. An investor in two ventures has two placements.</p></div>${S.canWrite!==false?`<button class="btn primary" data-new="pl" ${S.biz.length?"":"disabled title='Add a venture first'"}>Add placement</button>`:""}</div>
+  <section class="sheet"><div class="sheet-h"><div><h2>Placements</h2><p>${S.pl.length} placements · ${nf.format(tot)} committed · weighted agreed rate ${pct(wr)}</p></div>${csvBtn("placements")}</div>
+   <div class="tbl"><table><thead><tr><th>ID</th><th>Investor</th><th>Allocated to</th><th class="n">Amount</th><th class="n">Agreed p.a.</th><th class="n">Placed</th><th class="n">Maturity</th><th>Payout</th><th>Status</th></tr></thead>
+   <tbody>${rows || `<tr><td colspan="9"><div class="empty"><b>No placements yet</b>${S.biz.length?"Record the first investor placement.":"Add a venture first, then record placements against it."}</div></td></tr>`}</tbody>
+   ${rows?`<tfoot><tr><td colspan="3">Total</td><td class="n">${money(tot)}</td><td class="n">${pct(wr)}</td><td colspan="4"></td></tr></tfoot>`:""}</table></div></section>`;
+}
+
+function viewLedger(){
+  const lf = S.lf;
+  let rows = S.led.filter(t => (!lf.biz || (lf.biz==="HQ" ? !t.bizId : t.bizId===lf.biz)) && (!lf.type || t.type===lf.type) && (!lf.q || `${t.ref||""} ${plLabel(t.placementId)}`.toLowerCase().includes(lf.q.toLowerCase())));
+  rows.sort((a,b)=>(a.date||"").localeCompare(b.date||"") || (a.createdAt||"").localeCompare(b.createdAt||""));
+  const single = lf.biz && lf.biz!=="HQ";
+  let ri=0, rr=0, rp=0;
+  const lines = rows.map(t=>{ const a=num(t.amount); ri+=a*eff(t,"inv"); rr+=a*eff(t,"rec"); rp+=a*eff(t,"pay");
+    const cls = INV_TYPES.includes(t.type)?"inv":VEN_TYPES.includes(t.type)?"ok":"";
+    return {t, html:`<tr class="click" data-edit="led:${t.id}"><td class="n" style="text-align:left">${fmtDate(t.date)}</td><td>${h(bizCode(t.bizId))}<div class="note">${h(bizName(t.bizId))}</div></td><td><span class="pill ${cls}">${h(t.type)}</span>${t.example?' <span class="pill warn">Example</span>':""}</td><td>${h(plLabel(t.placementId))}</td><td class="note">${h(t.ref||"")}</td><td class="n">${money(a)}</td>${single?`<td class="n">${money(ri)}</td><td class="n">${money(rr)}</td><td class="n">${money(rp)}</td>`:""}</tr>`, ri, rr, rp}; });
+  csvReg("ledger",["Date","Venture ID","Venture","Type","Placement","Reference","Amount"], rows.map(t=>[t.date,bizCode(t.bizId),bizName(t.bizId),t.type,plLabel(t.placementId),t.ref,num(t.amount)]));
+  const body = lines.reverse().map(l=>l.html).join("");
+  const opt = (v,l,sel)=>`<option value="${h(v)}" ${sel===v?"selected":""}>${h(l)}</option>`;
+  return `<div class="head"><div><span class="eyebrow">Receivable &amp; payable ledger</span><h1>Ledger</h1><p>Every movement with a venture or investor: investments in and out, profit accrued and received, investor profit accrued and paid. Newest first.</p></div>${S.canWrite!==false?`<button class="btn primary" data-new="led">Add entry</button>`:""}</div>
+  <section class="sheet"><div class="sheet-h"><div class="filters" style="flex:1 1 520px">
+    <select id="lfBiz" aria-label="Venture filter">${opt("","All ventures",lf.biz)}${opt("HQ","Future Axis (HQ)",lf.biz)}${S.biz.map(b=>opt(b.id,`${b.code} · ${b.name}`,lf.biz)).join("")}</select>
+    <select id="lfType" aria-label="Type filter">${opt("","All transaction types",lf.type)}${Object.keys(TYPES).map(t=>opt(t,t,lf.type)).join("")}</select>
+    <input id="lfQ" placeholder="Search reference or investor" value="${h(lf.q)}" aria-label="Search">
+  </div>${csvBtn("ledger")}</div>
+  ${single?`<div class="sheet-b note" style="border-bottom:1px solid var(--line)">Venture statement for <b>${h(bizName(lf.biz))}</b>: running balances of investment, profit receivable and investor profit payable.</div>`:""}
+  <div class="tbl"><table><thead><tr><th>Date</th><th>Venture</th><th>Type</th><th>Placement</th><th>Reference</th><th class="n">Amount</th>${single?'<th class="n">Investment bal.</th><th class="n">Receivable bal.</th><th class="n">Payable bal.</th>':""}</tr></thead>
+  <tbody>${body || `<tr><td colspan="9"><div class="empty"><b>No entries${lf.biz||lf.type||lf.q?" match these filters":" yet"}</b>${lf.biz||lf.type||lf.q?"Clear a filter to see more.":"Post the first investment or owner capital contribution."}</div></td></tr>`}</tbody></table></div>
+  <div class="sheet-b note" style="border-top:1px solid var(--line)">${rows.length} entr${rows.length===1?"y":"ies"} shown of ${S.led.length}. Investor placements are taken from the Investors register, so they are not posted here.</div></section>`;
+}
+
+function viewReturns(){
+  const ir = investorReturns();
+  csvReg("investor-returns",["Placement","Investor","Venture","Amount","Agreed rate","Placement date","Days","Expected to date","Accrued","Paid","Payable","Capital repaid","Capital outstanding","Accrual gap","Actual p.a."], ir.map(x=>[x.p.code,x.p.investor,bizName(x.p.bizId),r0(num(x.p.amount)),p2(num(x.p.rate)),x.p.date,x.d,r0(x.expected),r0(x.accrued),r0(x.paid),r0(x.payable),r0(x.repaid),r0(x.out),r0(x.varr),p2(x.ann)]));
+  const byInv = {};
+  ir.forEach(x=>{ const k=(x.p.investor||"").trim(); const o = byInv[k] ||= {name:k, n:0, amt:0, out:0, acc:0, paid:0, pay:0, per:0, ventures:new Set()}; o.n++; o.amt+=x.p.date<=S.end?num(x.p.amount):0; o.out+=x.out; o.acc+=x.accrued; o.paid+=x.paid; o.pay+=x.payable; o.per+=x.periodAcc; o.ventures.add(bizName(x.p.bizId)); });
+  const inv = Object.values(byInv).sort((a,b)=>b.out-a.out);
+  csvReg("investor-summary",["Investor","Placements","Ventures","Capital outstanding","Profit accrued (period)","Accrued to date","Paid to date","Payable"], inv.map(o=>[o.name,o.n,[...o.ventures].join("; "),r0(o.out),r0(o.per),r0(o.acc),r0(o.paid),r0(o.pay)]));
+  const T = k => ir.reduce((s,x)=>s+x[k],0);
+  const gap = x => Math.abs(x.varr) < 1 ? '<span class="pill ok">On track</span>' : x.varr>0 ? `<span class="pill warn" title="Accrue ${nf.format(x.varr)} more to match the agreed rate">Under ${nf.format(x.varr)}</span>` : `<span class="pill bad">Over ${nf.format(-x.varr)}</span>`;
+  return `<div class="head"><div><span class="eyebrow">Report</span><h1>Investor returns</h1><p>Profit owed to each investor at the agreed rate, compared with what has been accrued and paid. Position at ${fmtDate(S.end)}, cumulative from each placement date.</p></div></div>
+  <div class="stack">
+  <section class="sheet"><div class="sheet-h"><div><h2>By investor</h2><p>${inv.length} investors</p></div>${csvBtn("investor-summary")}</div>
+   <div class="tbl"><table><thead><tr><th>Investor</th><th>Ventures</th><th class="n">Capital outstanding</th><th class="n">Profit this period</th><th class="n">Accrued to date</th><th class="n">Paid to date</th><th class="n">Payable</th><th class="n">Return p.a. (period)</th></tr></thead>
+   <tbody>${inv.map(o=>`<tr><td><b style="font-weight:600">${h(o.name)}</b><div class="note">${o.n} placement${o.n===1?"":"s"}</div></td><td class="note">${h([...o.ventures].join(", "))}</td><td class="n">${money(o.out)}</td><td class="n">${money(o.per)}</td><td class="n">${money(o.acc)}</td><td class="n">${money(o.paid)}</td><td class="n">${money(o.pay)}</td><td class="n">${pct(div(o.per,o.out)*365/(days(S.start,S.end)+1))}</td></tr>`).join("") || `<tr><td colspan="8" class="empty">No placements yet.</td></tr>`}</tbody></table></div></section>
+  <section class="sheet"><div class="sheet-h"><div><h2>By placement</h2><p>Expected = amount × agreed rate × days invested ÷ 365</p></div>${csvBtn("investor-returns")}</div>
+   <div class="tbl"><table><thead><tr><th>Placement</th><th>Venture</th><th class="n">Amount</th><th class="n">Agreed</th><th class="n">Days</th><th class="n">Expected</th><th class="n">Accrued</th><th class="n">Paid</th><th class="n">Payable</th><th class="n">Capital out.</th><th>Accrual check</th></tr></thead>
+   <tbody>${ir.map(x=>`<tr class="click" data-edit="pl:${x.p.id}"><td>${h(x.p.code)} · <b style="font-weight:600">${h(x.p.investor)}</b><div class="note">placed ${fmtDate(x.p.date)}</div></td><td>${h(bizName(x.p.bizId))}</td><td class="n">${money(num(x.p.amount))}</td><td class="n">${pct(num(x.p.rate))}</td><td class="n">${x.d}</td><td class="n">${money(x.expected)}</td><td class="n">${money(x.accrued)}</td><td class="n">${money(x.paid)}</td><td class="n">${money(x.payable)}</td><td class="n">${money(x.out)}</td><td>${x.p.date>S.end?'<span class="pill">Not yet placed</span>':gap(x)}</td></tr>`).join("") || `<tr><td colspan="11" class="empty">No placements yet.</td></tr>`}</tbody>
+   <tfoot><tr><td colspan="2">Total</td><td class="n">${money(S.pl.reduce((s,p)=>s+num(p.amount),0))}</td><td></td><td></td><td class="n">${money(T("expected"))}</td><td class="n">${money(T("accrued"))}</td><td class="n">${money(T("paid"))}</td><td class="n">${money(T("payable"))}</td><td class="n">${money(T("out"))}</td><td></td></tr></tfoot></table></div></section>
+  </div>`;
+}
+
+function viewMonthly(){
+  const yrs = [...new Set([...S.led.map(t=>+t.date?.slice(0,4)), +S.end.slice(0,4)].filter(Boolean))].sort();
+  const y = S.year && yrs.includes(S.year) ? S.year : +S.end.slice(0,4);
+  const mo = monthly(y);
+  const sum = k => mo.reduce((s,m)=>s+m[k],0);
+  csvReg("monthly-profit",["Month","Profit income","Investor share","Operating expenses","Net profit","Net margin","Profit received","Cumulative net profit"], mo.map(m=>[m.to.slice(0,7),r0(m.inc),r0(m.share),r0(m.opex),r0(m.net),p2(div(m.net,m.inc)),r0(m.recd),r0(m.cum)]));
+  const mat = S.biz.map(b=>({b, v:mo.map(m=>tsum("Profit Accrued",m.from,m.to,t=>t.bizId===b.id))}));
+  csvReg("venture-income",["Venture",...mo.map(m=>m.to.slice(0,7)),"Total"], mat.map(r=>[r.b.name,...r.v.map(r0),r0(r.v.reduce((a,b)=>a+b,0))]));
+  return `<div class="head"><div><span class="eyebrow">Report</span><h1>Monthly profit</h1><p>Month-by-month profit and income from each venture for the selected year.</p></div>
+    <label class="row"><span class="note">Year</span><select id="yearSel">${yrs.map(v=>`<option ${v===y?"selected":""}>${v}</option>`).join("")}</select></label></div>
+  <div class="stack">
+  <section class="sheet"><div class="sheet-h"><div><h2>Net profit by month, ${y}</h2></div></div><div class="sheet-b" style="overflow-x:auto">${bars(mo)}</div></section>
+  <section class="sheet"><div class="sheet-h"><div><h2>Monthly profit summary</h2></div>${csvBtn("monthly-profit")}</div>
+   <div class="tbl"><table><thead><tr><th>Month</th><th class="n">Profit income</th><th class="n">Investor share</th><th class="n">Operating exp.</th><th class="n">Net profit</th><th class="n">Net margin</th><th class="n">Cash received</th><th class="n">Cumulative</th></tr></thead>
+   <tbody>${mo.map(m=>`<tr><td>${m.label} ${y}</td><td class="n">${money(m.inc)}</td><td class="n">${money(-m.share)}</td><td class="n">${money(-m.opex)}</td><td class="n"><b style="font-weight:600">${money(m.net)}</b></td><td class="n">${pct(div(m.net,m.inc))}</td><td class="n">${money(m.recd)}</td><td class="n">${money(m.cum)}</td></tr>`).join("")}</tbody>
+   <tfoot><tr><td>${y}</td><td class="n">${money(sum("inc"))}</td><td class="n">${money(-sum("share"))}</td><td class="n">${money(-sum("opex"))}</td><td class="n">${money(sum("net"))}</td><td class="n">${pct(div(sum("net"),sum("inc")))}</td><td class="n">${money(sum("recd"))}</td><td></td></tr></tfoot></table></div></section>
+  <section class="sheet"><div class="sheet-h"><div><h2>Income from ventures</h2><p>Profit accrued per venture per month</p></div>${csvBtn("venture-income")}</div>
+   <div class="tbl"><table><thead><tr><th>Venture</th>${mo.map(m=>`<th class="n">${m.label}</th>`).join("")}<th class="n">Total</th></tr></thead>
+   <tbody>${mat.map(r=>`<tr><td style="white-space:nowrap">${h(r.b.name)}</td>${r.v.map(v=>`<td class="n">${money(v)}</td>`).join("")}<td class="n"><b style="font-weight:600">${money(r.v.reduce((a,b)=>a+b,0))}</b></td></tr>`).join("") || `<tr><td colspan="14" class="empty">No ventures yet.</td></tr>`}</tbody>
+   <tfoot><tr><td>Total</td>${mo.map(m=>`<td class="n">${money(m.inc)}</td>`).join("")}<td class="n">${money(sum("inc"))}</td></tr></tfoot></table></div></section>
+  </div>`;
+}
+
+function viewStatements(){
+  const {start,end} = S, open = addDays(start,-1);
+  const P = pnl(start,end), I = pnl(ORIGIN,end), B = balanceSheet(end), O = balanceSheet(open);
+  const cf = {
+    recd: tsum("Profit Received",start,end), ipaid: -tsum("Investor Profit Paid",start,end), opex: -tsum("Operating Expense",start,end),
+    add: -tsum("Investment Addition",start,end), wd: tsum("Investment Withdrawal",start,end),
+    own: tsum("Owner Capital Contribution",start,end), draw: -tsum("Owner Drawing",start,end), plc: placed(start,end), rep: -tsum("Investor Capital Repaid",start,end)
+  };
+  cf.op = cf.recd+cf.ipaid+cf.opex; cf.iv = cf.add+cf.wd; cf.fi = cf.own+cf.draw+cf.plc+cf.rep; cf.net = cf.op+cf.iv+cf.fi;
+  const cfChk = cf.net + O.cash - B.cash;
+  const L = (l,a,b,cls="ind")=>`<tr class="${cls}"><td>${l}</td><td class="n">${money(a)}</td><td class="n">${b===undefined?"":money(b)}</td></tr>`;
+  const sub = l=>`<tr class="sub"><td colspan="3">${l}</td></tr>`;
+  const ok = v => Math.abs(v)<0.5 ? '<span class="pill ok">Balanced</span>' : `<span class="pill bad">Difference ${nf.format(v)}</span>`;
+  const cur = h(S.cfg.currency||"AED");
+  csvReg("financial-statements",["Statement","Line","Col 1","Col 2"],[
+    ["Income statement","Profit income from ventures",r0(P.inc),r0(I.inc)],["Income statement","Investor profit share",r0(-P.share),r0(-I.share)],["Income statement","Net income from ventures",r0(P.spread),r0(I.spread)],["Income statement","Operating expenses",r0(-P.opex),r0(-I.opex)],["Income statement","Net profit",r0(P.net),r0(I.net)],
+    ["Balance sheet","Cash",r0(B.cash),r0(O.cash)],["Balance sheet","Investment in ventures",r0(B.inv),r0(O.inv)],["Balance sheet","Profit receivable",r0(B.rec),r0(O.rec)],["Balance sheet","Total assets",r0(B.assets),r0(O.assets)],["Balance sheet","Investor capital",r0(B.icap),r0(O.icap)],["Balance sheet","Investor profit payable",r0(B.pay),r0(O.pay)],["Balance sheet","Owner capital",r0(B.owner),r0(O.owner)],["Balance sheet","Retained earnings",r0(B.re),r0(O.re)],["Balance sheet","Total liabilities and equity",r0(B.le),r0(O.le)],
+    ["Cash flow","Net cash from operating",r0(cf.op),""],["Cash flow","Net cash from investing",r0(cf.iv),""],["Cash flow","Net cash from financing",r0(cf.fi),""],["Cash flow","Net change in cash",r0(cf.net),""],["Cash flow","Opening cash",r0(O.cash),""],["Cash flow","Closing cash",r0(B.cash),""]]);
+  return `<div class="head"><div><span class="eyebrow">${h(S.cfg.entity)} · ${cur}</span><h1>Financial statements</h1><p>For the period ${fmtDate(start)} to ${fmtDate(end)}. Built directly from the ledger and investor register.</p></div>${csvBtn("financial-statements")}</div>
+  <div class="stack">
+  <section class="sheet fs"><div class="sheet-h"><h2>Statement of profit or loss</h2></div><div class="tbl"><table>
+    <thead><tr><th></th><th class="n">This period</th><th class="n">Inception to ${fmtDate(end)}</th></tr></thead><tbody>
+    ${L("Profit income from ventures",P.inc,I.inc)}${L("Less: investor profit share",-P.share,-I.share)}${L("Net income from ventures",P.spread,I.spread,"tot")}
+    ${L("Less: operating expenses",-P.opex,-I.opex)}${L("Net profit",P.net,I.net,"gt")}
+    <tr class="ind"><td class="note">Net profit ratio</td><td class="n">${pct(div(P.net,P.inc))}</td><td class="n">${pct(div(I.net,I.inc))}</td></tr></tbody></table></div></section>
+  <section class="sheet fs"><div class="sheet-h"><h2>Statement of financial position</h2><span class="chk">${ok(B.diff)}</span></div><div class="tbl"><table>
+    <thead><tr><th></th><th class="n">${fmtDate(end)}</th><th class="n">${fmtDate(open)}</th></tr></thead><tbody>
+    ${sub("Assets")}${L("Cash and bank",B.cash,O.cash)}${L("Investment in ventures",B.inv,O.inv)}${L("Profit receivable from ventures",B.rec,O.rec)}${L("Total assets",B.assets,O.assets,"tot")}
+    ${sub("Liabilities")}${L("Investor capital (placements outstanding)",B.icap,O.icap)}${L("Investor profit payable",B.pay,O.pay)}${L("Total liabilities",B.liab,O.liab,"tot")}
+    ${sub("Equity")}${L("Owner capital",B.owner,O.owner)}${L("Retained earnings",B.re,O.re)}${L("Total equity",B.eq,O.eq,"tot")}
+    ${L("Total liabilities and equity",B.le,O.le,"gt")}</tbody></table></div></section>
+  <section class="sheet fs"><div class="sheet-h"><h2>Statement of cash flows</h2><span class="chk">${ok(cfChk)}</span></div><div class="tbl"><table>
+    <thead><tr><th></th><th class="n">This period</th><th></th></tr></thead><tbody>
+    ${sub("Operating activities")}${L("Profit received from ventures",cf.recd)}${L("Profit paid to investors",cf.ipaid)}${L("Operating expenses paid",cf.opex)}${L("Net cash from operating activities",cf.op,undefined,"tot")}
+    ${sub("Investing activities")}${L("Investments made in ventures",cf.add)}${L("Investments withdrawn from ventures",cf.wd)}${L("Net cash from investing activities",cf.iv,undefined,"tot")}
+    ${sub("Financing activities")}${L("Owner capital contributed",cf.own)}${L("Owner drawings",cf.draw)}${L("Investor placements received",cf.plc)}${L("Investor capital repaid",cf.rep)}${L("Net cash from financing activities",cf.fi,undefined,"tot")}
+    ${L("Net change in cash",cf.net,undefined,"tot")}${L("Opening cash",O.cash)}${L("Closing cash",B.cash,undefined,"gt")}</tbody></table></div></section>
+  <p class="note">Investor capital is shown as a liability because placements are repayable under the profit participation terms. Reclassify to equity if your final structure issues shares to investors.</p>
+  </div>`;
+}
+
+function viewSettings(){
+  const ex = S.biz.filter(x=>x.example).length + S.pl.filter(x=>x.example).length + S.led.filter(x=>x.example).length;
+  return `<div class="head"><div><h1>Settings</h1><p>Entity details shared by everyone who uses this system. The reporting period is chosen at the top and is remembered on this device only.</p></div></div>
+  <div class="stack">
+  <section class="sheet"><div class="sheet-h"><h2>Entity</h2></div><div class="sheet-b">
+    <form id="cfgForm" class="form">
+      <label>Entity name<input id="cfgEntity" value="${h(S.cfg.entity)}" ${S.canWrite===false?"disabled":""}></label>
+      <label>Reporting currency<input id="cfgCur" value="${h(S.cfg.currency)}" maxlength="5" ${S.canWrite===false?"disabled":""}></label>
+      ${S.canWrite!==false?'<div class="full row"><button class="btn primary" type="submit">Save settings</button></div>':""}
+    </form></div></section>
+  <section class="sheet"><div class="sheet-h"><h2>How entries post</h2><p>Each ledger type moves these balances. Amounts are always entered as positive numbers.</p></div>
+    <div class="tbl"><table><thead><tr><th>Type</th><th>Needs</th><th>Effect</th></tr></thead><tbody>
+    ${[["Owner Capital Contribution","–","Cash up, owner capital up"],["Owner Drawing","–","Cash down, owner capital down"],["Investment Addition","Venture","Cash down, investment in venture up"],["Investment Withdrawal","Venture","Investment down, cash up"],["Profit Accrued","Venture","Profit receivable up, income recognised"],["Profit Received","Venture","Cash up, receivable down"],["Investor Profit Accrued","Placement","Investor payable up, investor share expense"],["Investor Profit Paid","Placement","Cash down, investor payable down"],["Investor Capital Repaid","Placement","Cash down, investor capital down"],["Operating Expense","–","Cash down, expense recognised"]].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="note">${r[2]}</td></tr>`).join("")}
+    </tbody></table></div></section>
+  <section class="sheet"><div class="sheet-h"><div><h2>Your password</h2><p>Signed in as ${h(S.user?.email||"")} · ${S.canWrite?"Editor":"Viewer"}</p></div></div><div class="sheet-b">
+    <form id="pwForm" class="form"><label>New password<input id="pwNew" type="password" minlength="8" autocomplete="new-password" required></label><label>Repeat new password<input id="pwRep" type="password" minlength="8" autocomplete="new-password" required></label>
+    <div class="full row"><button class="btn" type="submit">Change password</button><span class="ok-msg" id="pwMsg"></span></div></form></div></section>
+  ${ex && S.canWrite!==false?`<section class="sheet"><div class="sheet-h"><div><h2>Example data</h2><p>${ex} records are marked Example. Remove them before entering your real figures.</p></div><button class="btn danger" id="clearEx">Remove example data</button></div></section>`:""}
+  </div>`;
+}
+
+/* ---------- forms ---------- */
+const FORMS = {
+  biz: {col:"businesses", title:"Venture", list:()=>S.biz, fields:[
+    ["code","Business ID","text",1],["name","Business name","text",1],["nature","Nature of business","text",0,"full"],["address","Address","textarea",0,"full"],
+    ["contact","Contact person","text"],["phone","Phone","text"],["email","Email","email",0,"full"],["rate","Expected profit rate (% p.a.)","pct",1],["startDate","Start date","date"],
+    ["status","Status","select",0,"",["Active","Pipeline","Exited"]],["notes","Notes","textarea",0,"full"]]},
+  pl: {col:"placements", title:"Placement", list:()=>S.pl, fields:[
+    ["code","Placement ID","text",1],["investor","Investor name","text",1],["contact","Investor contact (phone / email)","text",0,"full"],
+    ["bizId","Allocated to venture","biz",1,"full"],["amount","Amount","money",1],["rate","Agreed profit rate (% p.a.)","pct",1],["date","Placement date","date",1],["maturity","Maturity date (optional)","date"],
+    ["frequency","Profit payout","select",0,"",["Monthly","Quarterly","Semi-annual","Annual","At maturity"]],["status","Status","select",0,"",["Active","Exited"]],["notes","Notes","textarea",0,"full"]]},
+  led: {col:"ledger", title:"Ledger entry", list:()=>S.led, fields:[
+    ["date","Date","date",1],["type","Transaction type","type",1],["bizId","Venture","bizhq",0,"full"],["placementId","Investor placement","pl",0,"full"],
+    ["amount","Amount","money",1],["ref","Reference / description","text",0,"full"]]}
+};
+function nextCode(kind){ const pre = kind==="biz"?"V":"P"; const n = Math.max(0,...FORMS[kind].list().map(x=>parseInt(String(x.code||"").replace(/\D/g,""))||0))+1; return pre+String(n).padStart(3,"0"); }
+function fieldHtml(f, v){
+  const [k,l,type,req,cls,opts] = f, id="ff_"+k, r = req?"required":"";
+  let c;
+  if (type==="textarea") c = `<textarea id="${id}" ${r}>${h(v)}</textarea>`;
+  else if (type==="select") c = `<select id="${id}">${opts.map(o=>`<option ${o===v?"selected":""}>${o}</option>`).join("")}</select>`;
+  else if (type==="type") c = `<select id="${id}" ${r}>${Object.keys(TYPES).map(o=>`<option ${o===v?"selected":""}>${o}</option>`).join("")}</select>`;
+  else if (type==="biz"||type==="bizhq") c = `<select id="${id}" ${r}>${type==="bizhq"?`<option value="">Future Axis (HQ) – no venture</option>`:`<option value="">Choose a venture</option>`}${S.biz.map(b=>`<option value="${b.id}" ${b.id===v?"selected":""}>${h(b.code)} · ${h(b.name)}</option>`).join("")}</select>`;
+  else if (type==="pl") c = `<select id="${id}"><option value="">None</option>${S.pl.map(p=>`<option value="${p.id}" data-biz="${p.bizId}" ${p.id===v?"selected":""}>${h(p.code)} · ${h(p.investor)} · ${h(bizName(p.bizId))}</option>`).join("")}</select>`;
+  else if (type==="pct") c = `<input id="${id}" type="number" step="0.01" inputmode="decimal" value="${v===""||v==null?"":+(num(v)*100).toFixed(4)}" ${r}>`;
+  else if (type==="money") c = `<input id="${id}" type="number" step="0.01" min="0" inputmode="decimal" value="${h(v)}" ${r}>`;
+  else c = `<input id="${id}" type="${type==="email"?"email":type==="date"?"date":"text"}" value="${h(v)}" ${r}>`;
+  return `<label class="${cls||""}" id="fl_${k}">${l}${req?"":""}${c}</label>`;
+}
+function openForm(kind, id){
+  const F = FORMS[kind], rec = id ? F.list().find(x=>x.id===id) : null;
+  const def = rec || (kind==="led" ? {date:todayIso(), type:"Profit Accrued", bizId:S.lf.biz&&S.lf.biz!=="HQ"?S.lf.biz:""} : kind==="pl" ? {code:nextCode("pl"), date:todayIso(), status:"Active", frequency:"Quarterly"} : {code:nextCode("biz"), status:"Active", startDate:todayIso()});
+  const ro = S.canWrite===false;
+  $("#ovHost").innerHTML = `<div class="ov" id="ov"><div class="panel" role="dialog" aria-modal="true" aria-labelledby="fTitle">
+    <div class="row" style="justify-content:space-between"><h2 id="fTitle">${rec?"Edit":"New"} ${F.title.toLowerCase()}</h2><button class="btn sm" id="fClose" type="button">Close</button></div>
+    <form id="fForm" class="form">${F.fields.map(f=>fieldHtml(f, def[f[0]] ?? "")).join("")}
+      <div class="full err" id="fErr"></div>
+      <div class="full row" style="justify-content:space-between">${ro?"<span class='note'>You have view access only.</span>":`<button class="btn primary" type="submit">${rec?"Save changes":"Add "+F.title.toLowerCase()}</button>`}${rec&&!ro?`<button class="btn danger" type="button" id="fDel">Delete</button>`:""}</div>
+    </form></div></div>`;
+  if (ro) document.querySelectorAll("#fForm input,#fForm select,#fForm textarea").forEach(e=>e.disabled=true);
+  const close = ()=>{ $("#ovHost").innerHTML=""; render(); };
+  $("#fClose").onclick = close; $("#ov").onclick = e => { if (e.target.id==="ov") close(); };
+  document.addEventListener("keydown", function esc(e){ if (e.key==="Escape"){ close(); document.removeEventListener("keydown",esc);} });
+  if (kind==="led"){
+    const sync = ()=>{ const t=$("#ff_type").value; $("#fl_placementId").hidden = !INV_TYPES.includes(t); $("#fl_bizId").hidden = INV_TYPES.includes(t); };
+    $("#ff_type").onchange = sync; sync();
+  }
+  $("#fForm").onsubmit = async e => {
+    e.preventDefault(); const data = {}; let err = "";
+    for (const f of F.fields){ const el = $("#ff_"+f[0]); let v = el.value.trim();
+      if (f[2]==="pct") v = v===""?"":num(v)/100; else if (f[2]==="money") v = v===""?"":num(v);
+      if (f[3] && (v==="" || v==null)) err = err || `${f[1]} is required.`;
+      data[f[0]] = v; }
+    if (kind==="led"){
+      if (INV_TYPES.includes(data.type)){ if (!data.placementId) err = err || "Choose the investor placement for this entry."; else data.bizId = S.pl.find(p=>p.id===data.placementId)?.bizId || ""; }
+      else { data.placementId = ""; if (VEN_TYPES.includes(data.type) && !data.bizId) err = err || "Choose the venture for this entry."; }
+      if (!(data.amount>0)) err = err || "Amount must be greater than zero.";
+    }
+    if (kind!=="led"){ const dup = F.list().find(x=>x.id!==id && String(x.code).toLowerCase()===String(data.code).toLowerCase()); if (dup) err = err || `ID ${data.code} is already used.`; }
+    if (kind==="pl" && !(data.amount>0)) err = err || "Amount must be greater than zero.";
+    if (err){ $("#fErr").textContent = err; return; }
+    data.example = false; data.updatedAt = new Date().toISOString(); if (!rec) data.createdAt = data.updatedAt; else data.createdAt = rec.createdAt || data.updatedAt;
+    try { const ref = id ? S.db.collection(F.col).doc(id) : S.db.collection(F.col).doc(); await ref.set(data); close(); toast(rec?"Saved":`${F.title} added`); }
+    catch(x){ $("#fErr").textContent = x?.code==="invalid_argument" ? "You don't have permission to change this data." : x?.code==="quota_exceeded" ? "The database is full. Remove old records to add more." : "Could not save. Try again in a moment."; if (x?.code==="invalid_argument"){ S.canWrite=false; } }
+  };
+  const del = $("#fDel");
+  if (del) del.onclick = async () => {
+    if (kind==="biz"){ const n = S.pl.filter(p=>p.bizId===id).length + S.led.filter(t=>t.bizId===id).length; if (n){ $("#fErr").textContent = `This venture has ${n} placements or ledger entries. Delete or move those first.`; return; } }
+    if (kind==="pl"){ const n = S.led.filter(t=>t.placementId===id).length; if (n){ $("#fErr").textContent = `${n} ledger entries use this placement. Delete those first.`; return; } }
+    if (!del.classList.contains("armed")){ del.classList.add("armed"); del.textContent="Confirm delete"; return; }
+    try { await S.db.collection(F.col).doc(id).delete(); close(); toast("Deleted"); } catch(x){ $("#fErr").textContent = "Could not delete. Try again."; }
+  };
+}
+
+/* ---------- render ---------- */
+function renderTabs(){
+  $("#tabs").innerHTML = TABS.map(t => t[0]==="|" ? '<span class="sep" aria-hidden="true"></span>' : `<button role="tab" data-tab="${t[0]}" aria-selected="${S.tab===t[0]}">${t[1]}</button>`).join("");
+}
+function render(){
+  $("#entityName").textContent = S.cfg.entity || "Future Axis Holdings";
+  renderTabs();
+  if (!S.db){ return; }
+  if (!(S.loaded.biz && S.loaded.pl && S.loaded.led)) return;
+  if (S.start > S.end){ $("#main").innerHTML = `<div class="banner">The period start is after its end. Adjust the dates at the top.</div>`; return; }
+  S.csv = {};
+  const V = {dashboard:viewDashboard, ventures:viewVentures, investors:viewInvestors, ledger:viewLedger, returns:viewReturns, monthly:viewMonthly, statements:viewStatements, settings:viewSettings}[S.tab] || viewDashboard;
+  const ro = S.canWrite===false ? `<div class="banner" style="margin-bottom:16px">You have view access. Ask the owner for edit access to record entries.</div>` : "";
+  const fy = document.activeElement?.id, sel = fy && document.activeElement.selectionStart;
+  $("#main").innerHTML = ro + V();
+  if (fy && document.getElementById(fy)){ const el = document.getElementById(fy); el.focus(); try{ if (sel!=null) el.setSelectionRange(sel,sel); }catch(e){} }
+  wireView();
+}
+function wireView(){
+  const lb=$("#lfBiz"), lt=$("#lfType"), lq=$("#lfQ"), ys=$("#yearSel");
+  if (lb) lb.onchange = e => { S.lf.biz = e.target.value; render(); };
+  if (lt) lt.onchange = e => { S.lf.type = e.target.value; render(); };
+  if (lq) lq.oninput = e => { S.lf.q = e.target.value; clearTimeout(wireView.t); wireView.t = setTimeout(render, 200); };
+  if (ys) ys.onchange = e => { S.year = +e.target.value; render(); };
+  const pw = $("#pwForm");
+  if (pw) pw.onsubmit = async e => { e.preventDefault(); const a=$("#pwNew").value, b=$("#pwRep").value, m=$("#pwMsg");
+    if (a!==b){ m.className="err"; m.textContent="The two passwords don't match."; return; }
+    const {error} = await SB.auth.updateUser({password:a}); m.className = error?"err":"ok-msg"; m.textContent = error ? error.message : "Password changed."; if (!error) pw.reset(); };
+  const cf = $("#cfgForm");
+  if (cf) cf.onsubmit = async e => { e.preventDefault(); try { await S.db.doc("config/settings").set({entity:$("#cfgEntity").value.trim()||"Future Axis Holdings", currency:($("#cfgCur").value.trim()||"AED").toUpperCase()}); toast("Settings saved"); } catch(x){ toast("Could not save settings"); } };
+  const ce = $("#clearEx");
+  if (ce) ce.onclick = async () => {
+    if (!ce.classList.contains("armed")){ ce.classList.add("armed"); ce.textContent="Confirm: remove all example records"; return; }
+    ce.disabled = true; ce.textContent = "Removing…";
+    try { for (const [col,list] of [["ledger",S.led],["placements",S.pl],["businesses",S.biz]]) for (const r of list.filter(x=>x.example)) await S.db.collection(col).doc(r.id).delete(); toast("Example data removed"); }
+    catch(x){ toast("Some records could not be removed. Try again."); }
+  };
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-tab],[data-go],[data-new],[data-edit],[data-csv],[data-goledger]"); if (!t) return;
+  if (t.dataset.tab || t.dataset.go){ S.tab = t.dataset.tab || t.dataset.go; store.set("fa.tab", S.tab); render(); window.scrollTo(0,0); }
+  else if (t.dataset.new) openForm(t.dataset.new);
+  else if (t.dataset.edit){ const [k,id] = t.dataset.edit.split(":"); openForm(k,id); }
+  else if (t.dataset.csv) downloadCsv(t.dataset.csv);
+  else if (t.dataset.goledger){ S.lf = {biz:t.dataset.goledger, type:"", q:""}; S.tab="ledger"; render(); window.scrollTo(0,0); }
+});
+
+/* ---------- Supabase data layer ---------- */
+const CFG = window.FA_CONFIG || {};
+const SB = (window.supabase && CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && !/YOUR-/.test(CFG.SUPABASE_URL+CFG.SUPABASE_ANON_KEY))
+  ? window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY) : null;
+const MAP = {businesses:"biz", placements:"pl", ledger:"led"};
+const newId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)+Math.random().toString(36).slice(2));
+const dbErr = e => ({code: e && (e.code==="42501" || /row-level security/i.test(e.message||"")) ? "invalid_argument" : "unavailable", message: e && e.message});
+async function loadAll(){
+  const rows = [];
+  for (let from=0;;from+=1000){
+    const {data, error} = await SB.from("records").select("collection,id,data").range(from, from+999);
+    if (error) throw error;
+    rows.push(...data); if (data.length < 1000) break;
+  }
+  const next = {biz:[], pl:[], led:[]};
+  for (const r of rows){
+    if (r.collection==="config" && r.id==="settings") S.cfg = {...S.cfg, ...r.data};
+    else if (MAP[r.collection]) next[MAP[r.collection]].push({id:r.id, ...r.data});
+  }
+  const byCode = (a,b)=>String(a.code).localeCompare(String(b.code),undefined,{numeric:true});
+  S.biz = next.biz.sort(byCode); S.pl = next.pl.sort(byCode); S.led = next.led;
+  S.loaded = {biz:true, pl:true, led:true};
+  if (S.preset==="itd"){ applyPreset("itd"); syncPeriodInputs(); }
+  if (!$("#ov")) render();
+}
+let reloadT;
+function scheduleReload(ms=250){ clearTimeout(reloadT); reloadT = setTimeout(()=>loadAll().catch(()=>{}), ms); }
+const DB = {
+  collection(col){ return { doc(id){ id = id || newId(); return {
+    id,
+    async set(data){ const {error} = await SB.from("records").upsert({collection:col, id, data, updated_at:new Date().toISOString()}); if (error) throw dbErr(error); scheduleReload(50); },
+    async delete(){ const {error} = await SB.from("records").delete().eq("collection",col).eq("id",id); if (error) throw dbErr(error); scheduleReload(50); }
+  }; } }; },
+  doc(path){ const [c,i] = path.split("/"); return this.collection(c).doc(i); }
+};
+const fileSaver = { async save({filename, data}){
+  const url = URL.createObjectURL(new Blob([data], {type:"text/csv;charset=utf-8"}));
+  const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000); return {status:"saved"};
+} };
+
+/* ---------- sign-in ---------- */
+function authView(mode, msg){
+  $("#tabs").hidden = true; $("#periodBar").hidden = true; $("#who").hidden = true;
+  const title = mode==="reset" ? "Reset your password" : mode==="newpw" ? "Choose a new password" : "Sign in";
+  const body = mode==="reset"
+    ? `<label>Email<input id="aEmail" type="email" autocomplete="email" required></label><button class="btn primary" type="submit">Email me a reset link</button><button class="linkbtn" type="button" data-auth="login">Back to sign in</button>`
+    : mode==="newpw"
+    ? `<label>New password<input id="aPass" type="password" minlength="8" autocomplete="new-password" required></label><button class="btn primary" type="submit">Save password</button>`
+    : `<label>Email<input id="aEmail" type="email" autocomplete="email" required></label><label>Password<input id="aPass" type="password" autocomplete="current-password" required></label><button class="btn primary" type="submit">Sign in</button><button class="linkbtn" type="button" data-auth="reset">Forgot password?</button>`;
+  $("#main").innerHTML = `<div class="auth"><div><span class="eyebrow">${h(S.cfg.entity)}</span><h1>${title}</h1><p class="note">Access is limited to members added by the administrator.</p></div>
+    <form class="sheet" id="authForm"><div class="sheet-b">${body}<div class="err" id="aErr">${h(msg||"")}</div></div></form></div>`;
+  document.querySelectorAll("[data-auth]").forEach(b => b.onclick = () => authView(b.dataset.auth));
+  $("#authForm").onsubmit = async e => {
+    e.preventDefault(); const err = $("#aErr"); err.className="err"; err.textContent = "";
+    const btn = e.target.querySelector("button[type=submit]"); btn.disabled = true;
+    try {
+      if (mode==="reset"){ const {error} = await SB.auth.resetPasswordForEmail($("#aEmail").value.trim(), {redirectTo: location.origin + location.pathname}); if (error) throw error; err.className="ok-msg"; err.textContent = "If that address has an account, a reset link is on its way."; }
+      else if (mode==="newpw"){ const {error} = await SB.auth.updateUser({password:$("#aPass").value}); if (error) throw error; const {data} = await SB.auth.getSession(); if (data.session) start(data.session, true); }
+      else { const {error} = await SB.auth.signInWithPassword({email:$("#aEmail").value.trim(), password:$("#aPass").value}); if (error) throw error; }
+    } catch(x){ err.textContent = /invalid login/i.test(x.message||"") ? "Email or password is incorrect." : (x.message || "Could not complete that. Try again."); }
+    btn.disabled = false;
+  };
+}
+
+let started = false;
+async function start(session, force){
+  if (started && !force) return; started = true;
+  S.user = session.user;
+  $("#whoEmail").textContent = session.user.email || ""; $("#who").hidden = false;
+  const {data:m, error} = await SB.from("members").select("role").eq("user_id", session.user.id).maybeSingle();
+  if (error || !m){
+    $("#main").innerHTML = `<div class="auth"><div class="sheet"><div class="empty"><b>Access not granted yet</b>${h(session.user.email)} can sign in but isn't on the members list. Ask the administrator to add you as an editor or viewer.</div></div></div>`;
+    started = false; return;
+  }
+  S.canWrite = m.role === "editor"; S.db = DB; S.dl = fileSaver;
+  $("#tabs").hidden = false; $("#periodBar").hidden = false;
+  try { await loadAll(); }
+  catch(x){ $("#main").innerHTML = `<div class="banner">Could not load the ledger: ${h(x.message||x)}. Check that schema.sql has been run in Supabase.</div>`; return; }
+  SB.channel("records-feed").on("postgres_changes", {event:"*", schema:"public", table:"records"}, () => scheduleReload()).subscribe();
+  setInterval(() => { if (document.visibilityState==="visible") scheduleReload(0); }, 60000);
+}
+
+const AUTH_HASH = location.hash;
+(async function boot(){
+  const linkFlow = /type=(recovery|invite)/.test(AUTH_HASH);
+  if (linkFlow) started = true;
+  S.tab = store.get("fa.tab") || "dashboard";
+  initPeriod(); renderTabs();
+  if (!SB){ $("#main").innerHTML = `<div class="auth"><div class="sheet"><div class="empty"><b>Database not connected</b>Open <code>config.js</code> and paste your Supabase project URL and anon key, then redeploy.</div></div></div>`; return; }
+  $("#signOut").onclick = async () => { await SB.auth.signOut(); location.reload(); };
+  SB.auth.onAuthStateChange((ev, session) => {
+    if (ev === "PASSWORD_RECOVERY") { started = true; authView("newpw"); return; }
+    if (ev === "SIGNED_IN" && session && !started) setTimeout(() => start(session), 0);
+  });
+  const {data} = await SB.auth.getSession();
+  if (linkFlow) { if (data.session) authView("newpw"); else { started = false; authView("login", "That link has expired. Ask for a new one or use Forgot password."); } return; }
+  if (data.session) start(data.session); else if (!started) authView("login");
+})();
+</script>
+
+</body>
+</html>
