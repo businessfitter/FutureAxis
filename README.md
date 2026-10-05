@@ -135,6 +135,21 @@ Every change you commit on GitHub redeploys automatically.
 - **Mark all paid up to [month]**: settles everything outstanding for every investor in one step (for example, "up to Aug 2026").
 - FAMCON is never paid: any payments recorded against it are removed when it moves to Share capital, and its profit stays in retained earnings.
 
+## Other income (own tab)
+- Record deal / arrangement fees, advisory & management fees, bank profit / interest, exchange gains and other income: date, category, received from, description, amount and currency (converted to USD at the dated rate), bank, mode, reference and receipts.
+- Shows as its own head in the financial statements, both period and month by month, with category lines. It also appears in the share capital statement and as its own sheet in the Excel report.
+- Income recorded from bank statements as "Other Income" appears on the tab too.
+
+## Share capital (owner funds)
+**Share capital (owner funds) = everything not owed to investors = total assets − investor capital − investor profit payable.**
+
+The same figure appears on Portfolio and Share capital, split into:
+- **In ventures:** venture positions less investor capital.
+- **Outside ventures:** cash + profit receivable − investor profit payable.
+- **Made up of:** paid-up capital + retained earnings.
+
+If cash shows negative, receipts such as venture withdrawals aren't recorded yet.
+
 ## Master data
 - One place to create, edit, **deactivate** and reactivate **investors, ventures, bank accounts and suppliers**.
 - Inactive records stay on past entries but can't be chosen for new ones.
@@ -228,3 +243,17 @@ Every change you commit on GitHub redeploys automatically.
 ## Emails to finance
 - Income entries and investor-portal profit go to the email address you type, through FormSubmit. You don't need to connect Gmail. The first time, the recipient clicks an activation link once.
 - A PDF of the entry is attached. If an email arrives without it, use **Download PDF** and forward it.
+
+## Cash, venture profit and withdrawals (5 Oct 2026)
+- **Cash per books** (Dashboard, Portfolio) = recorded inflows − outflows. If money was reinvested but not recorded, it shows as cash: use **Reinvest cash in a venture** to clear it. Bank statement balances are compared when uploaded.
+- **Run profit accruals** is now on the Investors tab.
+- **Reinvested (compounds)** ventures (Empyrean): monthly profit stays as a **receivable that earns profit**. Withdrawals reduce the receivable first; any excess reduces the investment.
+- **Paid out monthly** ventures (SK Livestock): each month's profit is booked as received, so the receivable stays 0.
+- **Record withdrawals**: on Empyrean it comes pre-filled with the six withdrawals (31 May to 1 Oct 2026). If withdrawals were already entered, tick *Replace* to avoid double counting.
+- **Ventures → All ventures**: a total monthly table, charts, position by venture, and an investment/receivable split.
+- **Other income → Reinvested directly into a venture**: books the income and the investment together, with no cash.
+- **Ventures → Add investment** (on the tab header and on each venture): pick the venture, date, amount and payment currency (converted to USD), mode of payment, bank and receipt, then choose whether it is owner money or investor money:
+  - *Owner money · reinvested from cash / profit held*: no new money; clears cash per books.
+  - *Owner money · new paid-up capital*: also books a capital contribution, so paid-up capital rises.
+  - *Investor money*: pick the investor and their placement. The form shows how much of that placement isn't yet placed and warns before it is counted twice.
+- Every active venture now shows on the Ventures tab, even with nothing recorded yet.
