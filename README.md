@@ -22,6 +22,7 @@ An online system for Future Axis Holdings: ventures and investor master data, a 
 | Role | See reports | Add and edit records | Approve and manage users |
 |---|---|---|---|
 | Admin | Yes | Yes | Yes |
+| CFO | Yes | Yes (incl. Settings, Start again) | No, and can't see other users |
 | Editor | Yes | Yes | No |
 | Viewer | Yes | No | No |
 
@@ -75,6 +76,62 @@ Every change you commit on GitHub redeploys automatically.
 2. If you turned **Allow new users to sign up** OFF earlier, turn it back **ON** (step 1.3).
 3. Replace `index.html` on GitHub with the new one. Open it, click the pencil icon, paste the new contents, and commit. Vercel redeploys automatically.
 
-## Backups and reporting
-- The free Supabase plan has no automatic backups. Download the CSVs regularly, or upgrade to Pro once real investor data is in.
-- The views `v_ventures`, `v_placements` and `v_ledger` make the data easy to query in Supabase, or to connect to Excel or Power BI.
+## Activity log (Log tab, Admin and CFO)
+- Every record added, changed or deleted is logged by the database itself, with who did it, when, and the values before and after. Nobody can edit or delete the log, including admins.
+- Also logged: sign-ins (visible to Admin only), statement uploads, accrual runs, imports, emails sent, backups and restores.
+- Filter by date, area, action or person, click a row for the full before/after, and download the log as CSV.
+
+## Backups (Backups tab, Admin and CFO)
+- **Automatic:** one full copy a day, kept for 30 days. It is taken at the first sign-in each day, and also at 02:00 Dubai time if pg_cron is enabled in Supabase (Database → Extensions → pg_cron).
+- **Manual:** "Save backup in Supabase" with a label (e.g. *Before September close*). Kept until you delete it.
+- **Download backup file:** keep a copy outside Supabase (OneDrive or Google Drive) at least weekly. The app reminds you after 7 days.
+- **Restore** from a saved backup or a downloaded file. A copy of the current data is always saved first, so a restore can be undone.
+- **Start again** now saves a backup automatically before deleting.
+- Users and passwords are not part of backups.
+- The views `v_ventures`, `v_placements` and `v_ledger` make the data easy to query in Supabase, Excel or Power BI.
+
+## Monthly investor report (Reports tab)
+- Every investor and placement with amount, agreed profit rate, profit for the month, profit to date and payable, as at month end, in **Excel and PDF**.
+- Set the email addresses (several allowed, comma-separated), the day of the month, and tick **Send automatically every month**.
+- On or after that day, the first Admin or CFO to sign in sends last month's report automatically. The Dashboard shows an alert until it has gone, and if sending fails it retries at the next sign-in.
+- Only the first address needs FormSubmit's one-time activation click. The others are copied.
+
+## Dashboard
+- Hover over or tap any chart, bar or KPI to see figures and percentages. Tapping pins the tooltip; tap elsewhere to close it.
+- **Recommendations** show the 3–4 most important points from the figures: cash cover for investor payouts, collections, rate spreads, concentration, maturities, unrecorded bank lines and missing accruals.
+- Actual returns and ratios use time-weighted average capital up to the last profit posted.
+
+## Importing investors (Import investors tab), one-time setup
+1. Click **Download template**: Sr. #, Investor, Annual profit rate, Placement Date, Investment (USD), and one column per venture.
+2. Fill one row per placement and split the amount across the venture columns.
+3. Upload it. The preview lets you edit any cell, tick which rows are paid-up capital (FAMCON is ticked automatically), or remove rows. Then click **Import**.
+4. After that, add or edit investors in the **Investors** tab (Edit button on each row).
+
+## Bank statements and reconciliation (Bank tab)
+- **Upload statement** accepts Wio Bank **PDF** statements as downloaded, plus Excel/CSV exports from any bank (you map the columns).
+- Each PDF is checked: opening balance + all lines must equal the closing balance, and every running balance must agree.
+- Lines that match an existing ledger entry (same amount, within 10 days) are matched automatically.
+- You're then prompted to **record** the remaining lines: pick the type (and venture or placement where needed). Suggestions come from your ventures and from how you recorded similar lines before.
+- The reconciliation statement shows balance per statement vs balance per books, with all reconciling items. It reconciles at the period end chosen at the top.
+
+## Profit accruals (Ledger / Investor returns / Dashboard → Run profit accruals)
+- **Venture profit** = each venture's expected rate × capital invested in it, day by day, posted at each month end.
+- **Investor profit** = each placement's agreed rate × the placement, day by day from the day after placement (until maturity).
+- Future Axis keeps the difference on investor money, plus the full venture profit on paid-up capital. The Dashboard and P&L show these separately.
+- Re-running recalculates the chosen months and replaces earlier automatic entries, for example after a rate change or a new placement. Entries made by hand are left alone.
+
+## Currencies
+- **Base currency: USD.** All ventures, placements and ledger amounts are stored in USD. The Import template amounts are in USD.
+- **View in AED:** use "Show in" at the top of the screen (remembered per device), or set the default in Settings. The rate (AED per 1 USD, default 3.6725) is set in Settings.
+- **Bank accounts keep their own currency** (e.g. Wio in AED). Statements stay in AED, and reconciliation converts the books into the account's currency. Entries recorded from a bank line keep the exact AED amount, so they always match.
+- Admins can wipe all business data under **Settings → Start again** (users and settings are kept).
+
+## Expenses and suppliers (Expenses tab)
+- **Suppliers:** add your service providers (e.g. in Pakistan) with their bank details and a default expense category.
+- **Confirm from bank statements:** every payment out of an uploaded statement that isn't matched yet is listed as a template. Edit the description, supplier, category or amount, untick lines that aren't expenses (e.g. investor payouts), then click **Confirm**. AED amounts are converted to USD at the Settings rate. The original AED amount is kept, so the bank line stays matched (unless you changed the amount).
+- **Add expense:** record one by hand in AED or USD, optionally with the PKR the supplier received and the invoice number.
+- The P&L shows expenses by category.
+
+## Emails to finance
+- Income entries and investor-portal profit go to the email address you type, through FormSubmit. You don't need to connect Gmail. The first time, the recipient clicks an activation link once.
+- A PDF of the entry is attached. If an email arrives without it, use **Download PDF** and forward it.
