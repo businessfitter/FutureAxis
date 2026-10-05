@@ -76,12 +76,50 @@ Every change you commit on GitHub redeploys automatically.
 2. If you turned **Allow new users to sign up** OFF earlier, turn it back **ON** (step 1.3).
 3. Replace `index.html` on GitHub with the new one. Open it, click the pencil icon, paste the new contents, and commit. Vercel redeploys automatically.
 
-## Activity log (Log tab, Admin and CFO)
+
+## Screens
+**Dashboard · Share capital · Investors · Ventures · Statements · Master data** | Ledger · Bank · Expenses | Returns · Monthly · Reports | **Settings** (General, Users, Import, Log, Backups)
+
+## Master data
+- One place to create, edit, **deactivate** and reactivate **investors, ventures, bank accounts and suppliers**.
+- Inactive records stay on past entries but can't be chosen for new ones.
+- Investors have an ID (I001…), contact details, payout bank and IBAN, payout currency, default payout frequency and portal setting.
+- Placements choose the investor from master data. Renaming an investor updates all their placements.
+- Existing placements that only carry a name: **Master data → Investors → Create and link** (one click). Investor imports link automatically.
+
+## Investors tab
+- **Investor summary** for the chosen month: closing investment, profit for the month, paid and outstanding, by investor.
+- **Investment raised and placed, month by month**: money raised from investors, withdrawals, and money placed in ventures from investor money and from owner money, with charts and a venture filter.
+- **Monthly profit and payments**: tick placements (or select all), then:
+  - **Mark paid**: pays everything outstanding up to that month, with date, mode, bank, currency, reference and receipts
+  - **Mark unpaid**
+  - **Payout frequency**: set for all ticked placements at once
+- Payout months: monthly; quarterly (Mar, Jun, Sep, Dec); semi-annual (Jun, Dec); annual (Dec); at maturity.
+- **Add withdrawal**: partial or full capital withdrawal. It can also take the amount out of the venture. A full withdrawal closes the placement. Re-run profit accruals afterwards.
+- A new placement records the matching **investment in the venture** automatically (tick box on the form).
+
+## Payment details and receipts
+- Placements, venture investments and withdrawals, withdrawals, profit payments and other cash entries record:
+  - mode of payment: Bank transfer, Cash, Cheque, **Profit adjustment**, Card or Other
+  - the counterparty's bank name (for bank transfers)
+  - payment currency and amount in that currency (AED and USD convert automatically)
+  - payment reference
+  - **receipts** (PDF or photos, up to 10 MB each)
+- Receipts are stored privately in Supabase Storage. Only approved users can open them, and only Admin, CFO and Editor can add or remove them. A paperclip badge shows on entries that have receipts.
+- **Profit adjustment** moves no cash. Record both sides (for example, profit paid and the new placement it funds), so cash nets to zero. These entries stay out of bank reconciliation.
+- Backups contain the records and the receipt links, but not the receipt files themselves.
+
+## Statements tab
+- **Statements**: the period and inception-to-date view.
+- **Month by month**: profit or loss, financial position (month end) and cash flows, with one column per month and a total.
+- **Charts**: net profit by source, income and costs, assets, funding and cash flows by month.
+
+## Activity log (Settings → Log, Admin and CFO)
 - Every record added, changed or deleted is logged by the database itself, with who did it, when, and the values before and after. Nobody can edit or delete the log, including admins.
 - Also logged: sign-ins (visible to Admin only), statement uploads, accrual runs, imports, emails sent, backups and restores.
 - Filter by date, area, action or person, click a row for the full before/after, and download the log as CSV.
 
-## Backups (Backups tab, Admin and CFO)
+## Backups (Settings → Backups, Admin and CFO)
 - **Automatic:** one full copy a day, kept for 30 days. It is taken at the first sign-in each day, and also at 02:00 Dubai time if pg_cron is enabled in Supabase (Database → Extensions → pg_cron).
 - **Manual:** "Save backup in Supabase" with a label (e.g. *Before September close*). Kept until you delete it.
 - **Download backup file:** keep a copy outside Supabase (OneDrive or Google Drive) at least weekly. The app reminds you after 7 days.
