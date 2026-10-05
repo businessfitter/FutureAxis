@@ -907,7 +907,7 @@ function viewStatementsPeriod(){
 
 function viewSettings(){
   const ex = S.biz.filter(x=>x.example).length + S.pl.filter(x=>x.example).length + S.led.filter(x=>x.example).length;
-  return `<div class="head"><div><h1>Settings</h1><p>Entity details shared by everyone who uses this system. The reporting period is chosen at the top and is remembered on this device only.</p></div></div>
+  return `<div class="head"><div><h1>Settings</h1><p class="note" style="margin:0 0 4px">App version ${APP_VERSION}</p><p>Entity details shared by everyone who uses this system. The reporting period is chosen at the top and is remembered on this device only.</p></div></div>
   <div class="stack">
   <section class="sheet"><div class="sheet-h"><h2>Entity</h2></div><div class="sheet-b">
     <form id="cfgForm" class="form">
@@ -1917,7 +1917,8 @@ function openAccruals(){
 }
 
 /* ---------- one-time investor sheet import: Sr. # · Investor · Rate · Placement date · Investment · one column per venture ---------- */
-const OWNER_HINT = /famcon|future axis/i;
+const OWNER_HINT = {test: n => /famcon|futureaxis/i.test(String(n||"").replace(/[^a-z]/gi,""))};
+const APP_VERSION = "5 Oct 2026 · 21:25";
 function findSimpleSheet(wb){
   for (const name of wb.SheetNames){
     const rows = sheetRows(wb.Sheets[name]);
@@ -2187,7 +2188,7 @@ function portalMonths(){ const st = accrualStart() || todayIso().slice(0,7); ret
 function portalRows(ym, cur){
   const to = monthEnd(ym), from = ym + "-01", f = conv(1, VIEW(), cur), by = {};
   for (const p of S.pl){
-    if (!p.date || p.date > to) continue;
+    if (!p.date || p.date > to || isOwnName(p.investor)) continue;
     const r = by[p.investor] ||= {investor:p.investor, enabled:false, inv:0, month:0, todate:0, paid:0, rates:new Set(), n:0, ids:[]};
     const repaid = S.led.filter(t=>t.placementId===p.id && t.type==="Investor Capital Repaid" && t.date<=to).reduce((s,t)=>s+num(t.amount),0);
     r.inv += (num(p.amount) - repaid)*f; r.n++; r.ids.push(p.id); r.rates.add((num(p.rate)*100).toFixed(2).replace(/\.00$/,""));
@@ -2717,7 +2718,7 @@ const mrRecipients = () => String(S.cfg.mrTo || "").split(/[,;\s]+/).map(x=>x.tr
 function monthlyRows(ym){
   const to = monthEnd(ym), from = ym + "-01", cur = BASE(), f = conv(1, VIEW(), cur), rows = [];
   for (const p of S.pl){
-    if (!p.date || p.date > to) continue;
+    if (!p.date || p.date > to || isOwnName(p.investor)) continue;
     const L = S.led.filter(t=>t.placementId===p.id && t.date<=to);
     const repaid = L.filter(t=>t.type==="Investor Capital Repaid").reduce((s,t)=>s+num(t.amount),0)*f;
     const acc = L.filter(t=>t.type==="Investor Profit Accrued"), paid = L.filter(t=>t.type==="Investor Profit Paid").reduce((s,t)=>s+num(t.amount),0)*f;
@@ -3031,7 +3032,7 @@ const plSeriesOf = p => stepSeries([{date:p.date, amt:num(p.amount)}, ...S.led.f
 const PAY_ID = (pid, ym) => `pay-${pid}-${ym}`;
 function invMonthRows(ym){
   const from = ym+"-01", to = monthEnd(ym), sum = a => a.reduce((s,t)=>s+num(t.amount),0);
-  return S.pl.filter(p=>p.date && p.date<=to).map(p=>{
+  return S.pl.filter(p=>p.date && p.date<=to && !isOwnName(p.investor)).map(p=>{
     const L = S.led.filter(t=>t.placementId===p.id), acc = L.filter(t=>t.type==="Investor Profit Accrued");
     const closing = num(p.amount) - sum(L.filter(t=>t.type==="Investor Capital Repaid" && t.date<=to));
     const inM = acc.filter(t=>t.date>=from && t.date<=to), isPosted = inM.length > 0, posted = sum(inM);
@@ -3076,10 +3077,10 @@ function viewInvestors(){
     <td class="n">${fmt2(r.closing)}</td><td class="n">${pct(num(r.p.rate),2)}</td><td class="n"${profitCalcTip(r.p, ym, r.profit, r.isPosted)}>${fmt2(r.profit)}${r.isPosted?"":'<div class="note">calculated</div>'}</td><td class="n">${curTxt(r.profit, invCur(r.p), monthEnd(ym))}</td><td>${ivPill(r)}${r.payEntry?rcptBadge("ledger", r.payEntry):""}</td><td class="n">${fmt2(r.outstanding)}</td></tr>`).join("");
   csvReg("investor-month", ["Placement","Investor","Venture","Payout","Closing investment","Agreed rate",`Profit ${lab}`,"Posted","Status","Outstanding payable"], rows.map(r=>[r.p.code, r.p.investor, bizName(r.p.bizId), r.p.frequency||"Quarterly", r.closing.toFixed(2), num(r.p.rate), r.profit.toFixed(2), r.isPosted?"Yes":"No", IV_STATUS[r.status][0], r.outstanding.toFixed(2)]));
   const k = (l,v,s) => `<div class="kpi"><span class="eyebrow">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`;
-  return `<div class="head"><div><span class="eyebrow">Investors · ${h(C)}</span><h1>Investors</h1><p>Monthly profit, payments and withdrawals for every placement. Choose the month, tick placements, then mark profit paid or change the payout frequency.</p></div>
+  return `<div class="head"><div><span class="eyebrow">Investors · ${h(C)}</span><h1>Investors</h1><p>Investor money only: Future Axis's own capital (FAMCON) is in Share capital. Monthly profit, payments and withdrawals for every placement. Choose the month, tick placements, then mark profit paid or change the payout frequency.</p></div>
     <div class="row">${W?`<button class="btn" data-ivact="withdraw" type="button">Add withdrawal</button><button class="btn primary" data-new="pl">Add placement</button>`:""}</div></div>
   <div class="stack">
-  ${ownBanner()}
+  ${flashHtml("ownNote")}${ownBanner()}
   ${(()=>{ const m = missingRates(all.map(r=>invCur(r.p))); return m.length ? `<div class="alert bad"><span class="dot"></span><div><b>No exchange rate for ${m.join(", ")}.</b> Some investors are paid in ${m.length===1?"this currency":"these currencies"}. Add the rate to show and pay their amounts.</div><button class="btn sm" data-tab="fx" type="button">Currencies</button></div>` : ""; })()}
   <div class="row" style="gap:10px;flex-wrap:wrap"><label class="inl">Month <select id="ivYm">${months.map(m=>`<option value="${m}" ${m===ym?"selected":""}>${monthLabel(m)}</option>`).join("")}</select></label>
     ${notPosted&&W?`<span class="note">Profit for ${lab} is calculated but not posted yet.</span><button class="btn sm" data-acc="1" type="button">Run profit accruals</button>`:""}</div>
@@ -3111,13 +3112,14 @@ function viewInvestors(){
   </div>`;
 }
 function placementRegister(){
-  csvReg("placements",["Placement ID","Investor","Contact","Venture","Amount","Agreed rate","Placement date","Maturity","Payout","Mode of investment","Payment method","Bank account","Status","Notes"], S.pl.map(p=>[p.code,p.investor,p.contact,bizName(p.bizId),r0(p.amount),p2(num(p.rate)),p.date,p.maturity||"",p.frequency||"",p.mode||"",p.method||"",bankCode(p.bankId),p.status||"",p.notes||""]));
-  const pls = [...S.pl].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  const PL = S.pl.filter(p=>!isOwnName(p.investor));
+  csvReg("placements",["Placement ID","Investor","Contact","Venture","Amount","Agreed rate","Placement date","Maturity","Payout","Mode of investment","Payment method","Bank account","Status","Notes"], PL.map(p=>[p.code,p.investor,p.contact,bizName(p.bizId),r0(p.amount),p2(num(p.rate)),p.date,p.maturity||"",p.frequency||"",p.mode||"",p.method||"",bankCode(p.bankId),p.status||"",p.notes||""]));
+  const pls = [...PL].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
   const rep = id => S.led.filter(t=>t.placementId===id && t.type==="Investor Capital Repaid" && t.date<=S.end).reduce((s,t)=>s+num(t.amount),0);
   const rows = pls.map(p=>{ const w = rep(p.id); return `<tr class="click" data-edit="pl:${p.id}"><td>${h(p.code)}</td><td><b style="font-weight:600">${h(p.investor)}</b><div class="note">${h(p.contact||"")}</div></td><td>${h(bizName(p.bizId))}</td>
     <td class="n">${money(p.amount)}</td><td class="n">${w?`<span class="neg">(${nf.format(Math.round(w))})</span>`:'<span class="mut">–</span>'}</td><td class="n">${money(num(p.amount)-w)}</td><td class="n">${pct(num(p.rate),2)}</td><td class="n">${fmtDate(p.date)}</td><td class="n">${p.maturity?fmtDate(p.maturity):'<span class="mut">–</span>'}</td><td>${h(p.frequency||"")}</td><td>${h(p.mode||"")}</td><td>${p.status==="Exited"?'<span class="pill">Exited</span>':'<span class="pill ok">Active</span>'}${rcptBadge("placements", p)}</td></tr>`; }).join("");
-  const tot = S.pl.reduce((s,p)=>s+num(p.amount),0), wt = S.pl.reduce((s,p)=>s+rep(p.id),0), wr = div(S.pl.reduce((s,p)=>s+num(p.amount)*num(p.rate),0), tot);
-  return `<section class="sheet"><div class="sheet-h"><div><h2>Placements register</h2><p>One row per placement: who invested, how much, in which venture, at what agreed rate. ${S.pl.length} placements · ${nf.format(tot)} placed · ${nf.format(wt)} withdrawn by ${fmtDate(S.end)} · weighted agreed rate ${pct(wr)}</p></div>${csvBtn("placements")}</div>
+  const tot = PL.reduce((s,p)=>s+num(p.amount),0), wt = PL.reduce((s,p)=>s+rep(p.id),0), wr = div(PL.reduce((s,p)=>s+num(p.amount)*num(p.rate),0), tot);
+  return `<section class="sheet"><div class="sheet-h"><div><h2>Placements register</h2><p>One row per placement: who invested, how much, in which venture, at what agreed rate. ${PL.length} placements · ${nf.format(tot)} placed · ${nf.format(wt)} withdrawn by ${fmtDate(S.end)} · weighted agreed rate ${pct(wr)}</p></div>${csvBtn("placements")}</div>
    <div class="tbl"><table><thead><tr><th>ID</th><th>Investor</th><th>Venture</th><th class="n">Placed</th><th class="n">Withdrawn</th><th class="n">Closing</th><th class="n">Agreed p.a.</th><th class="n">Date</th><th class="n">Maturity</th><th>Payout</th><th>Mode</th><th>Status</th></tr></thead>
    <tbody>${rows || `<tr><td colspan="12"><div class="empty"><b>No placements yet</b>${S.biz.length?"Record the first investor placement.":"Add a venture first, then record placements against it."}</div></td></tr>`}</tbody>
    ${rows?`<tfoot><tr><td colspan="3">Total</td><td class="n">${money(tot)}</td><td class="n">${wt?`(${nf.format(Math.round(wt))})`:""}</td><td class="n">${money(tot-wt)}</td><td class="n">${pct(wr)}</td><td colspan="5"></td></tr></tfoot>`:""}</table></div></section>`;
@@ -3541,11 +3543,10 @@ const ownPlacements = () => S.pl.filter(p=>isOwnName(p.investor));
 function ownBanner(){
   const o = ownPlacements(); if (!o.length || S.canWrite===false) return "";
   const names = [...new Set(o.map(p=>p.investor))].join(", "), amt = o.reduce((s,p)=>s+num(p.amount),0);
-  return `<div class="alert bad"><span class="dot"></span><div><b>${h(names)} is Future Axis's own money, not an investor.</b> ${o.length} placement${o.length===1?"":"s"} (${h(VIEW())} ${fmt2(amt)}) should be paid-up share capital. Moving ${o.length===1?"it":"them"} keeps the venture investment, records a shareholder capital contribution, and removes the investor profit accrued on ${o.length===1?"it":"them"}.</div><button class="btn sm primary" data-ownfix type="button">Move to share capital</button></div>`;
+  return `<div class="alert bad"><span class="dot"></span><div><b>${h(names)} is Future Axis's own money, not an investor.</b> ${o.length} placement${o.length===1?"":"s"} (${h(VIEW())} ${fmt2(amt)}) should be paid-up share capital. Moving ${o.length===1?"it":"them"} keeps the venture investment, records a shareholder capital contribution, removes the investor profit accrued on ${o.length===1?"it":"them"}, and turns any profit already paid into owner drawings.</div><button class="btn sm primary" data-ownfix type="button">Move to share capital</button></div>`;
 }
 async function moveToCapital(pls){
-  const stop = pls.filter(p=>S.led.some(t=>t.placementId===p.id && (t.type==="Investor Profit Paid" || t.type==="Investor Capital Repaid")));
-  if (stop.length) throw new Error(`${stop.map(p=>p.code).join(", ")} ${stop.length===1?"has":"have"} investor payments or withdrawals recorded. Change those to owner drawings in the Ledger first.`);
+  let converted = 0;
   const now = new Date().toISOString(); let n = Math.max(0, ...S.sh.map(x=>parseInt(String(x.code||"").replace(/\D/g,""))||0));
   const shFor = {};
   for (const p of pls){
@@ -3555,37 +3556,52 @@ async function moveToCapital(pls){
     shFor[k] = sh;
     await S.db.collection("ledger").doc(`own-${p.id}`).set({date:p.date, type:"Owner Capital Contribution", bizId:"", placementId:"", shareholderId:sh.id, amount:num(p.amount), method:p.method||"Bank transfer", bankId:p.bankId||"",
       payBank:p.payBank||"", payCur:p.payCur||"", payAmt:p.payAmt||"", payRef:p.payRef||"", receipts:p.receipts||[], ref:`Paid-up capital from ${p.investor} (was placement ${p.code})`, createdAt:now});
-    for (const t of S.led.filter(t=>t.placementId===p.id)) await S.db.collection("ledger").doc(t.id).delete();
+    /* profit or capital already paid out on it = paid to the shareholder: keep the cash entry as an owner drawing */
+    for (const t of S.led.filter(t=>t.placementId===p.id && (t.type==="Investor Profit Paid" || t.type==="Investor Capital Repaid"))){
+      const {id, ...d} = t; converted++;
+      await S.db.collection("ledger").doc(id).set({...d, type:"Owner Drawing", placementId:"", bizId:"", shareholderId:sh.id, payMonth:"", wasType:t.type, ref:`${t.type==="Investor Profit Paid" ? "Profit" : "Capital"} paid to ${p.investor}${d.ref?` (${d.ref})`:""}`});
+      for (const w of S.led.filter(x=>x.type==="Investment Withdrawal" && x.linkedTo===id)){ const {id:wid, ...wd} = w; await S.db.collection("ledger").doc(wid).set({...wd, linkedTo:"", ownMoney:true}); } }
+    for (const t of S.led.filter(t=>t.placementId===p.id && t.type!=="Investor Profit Paid" && t.type!=="Investor Capital Repaid")) await S.db.collection("ledger").doc(t.id).delete();
     /* the venture investment made with this money is now owner money */
     for (const t of S.led.filter(t=>t.type==="Investment Addition" && (t.linkedPl===p.id || t.id===`pla-${p.id}` || t.id===`imp-add-${p.code}` || String(t.id).startsWith(`imp-add-${p.code}-`)))){
       const {id, ...d} = t; await S.db.collection("ledger").doc(id).set({...d, linkedPl:"", ownMoney:true, ref:`Placement of FAMCON paid-up capital${d.ref?` (${d.ref})`:""}`.replace("FAMCON", p.investor)}); }
     await S.db.collection("placements").doc(p.id).delete();
   }
   for (const i of S.inv.filter(i=>isOwnName(i.name) && !S.pl.some(p=>p.investorId===i.id && !pls.includes(p)))) await S.db.collection("investors").doc(i.id).delete();
-  logEvent("Moved to share capital", pls.map(p=>`${p.code} ${p.investor} ${fmt2(p.amount)}`).join("; "));
+  logEvent("Moved to share capital", pls.map(p=>`${p.code} ${p.investor} ${fmt2(p.amount)}`).join("; ") + (converted ? ` · ${converted} payment${converted===1?"":"s"} changed to owner drawings` : ""));
+  return converted;
 }
 /* runs on sign-in: own-company money recorded as investor placements moves to share capital automatically */
 async function autoOwnFix(){
-  if (S.canWrite===false || autoOwnFix.done) return;
-  const o = ownPlacements(); if (!o.length) return; autoOwnFix.done = true;
-  const ok = o.filter(p=>!S.led.some(t=>t.placementId===p.id && (t.type==="Investor Profit Paid" || t.type==="Investor Capital Repaid")));
-  if (!ok.length) return;
-  try { await SB.rpc("take_backup", {p_kind:"manual", p_label:"Automatic copy before moving FAMCON to share capital"}); } catch(e){}
-  await moveToCapital(ok); await loadAll();
-  const months = [...new Set(S.led.filter(t=>t.auto).map(t=>t.accrualMonth || String(t.date).slice(0,7)))].sort();
-  if (months.length){ const C = computeAccruals(months[months.length-1]), now = new Date().toISOString();
-    await S.db.bulk("ledger", C.out.map(o => { const ex = S.led.find(t=>t.id===o.id); return {id:o.id, data:{...o.data, createdAt: ex?.createdAt || now, updatedAt: now}}; }));
-    for (const t of C.stale) await S.db.collection("ledger").doc(t.id).delete();
-    logEvent("Profit accruals run", `automatically after moving FAMCON, up to ${monthLabel(months[months.length-1])}`); await loadAll(); }
-  const amt = ok.reduce((s,p)=>s+num(p.amount),0);
-  S.flash.ownNote = {color:"var(--pos)", html:`<b>${h([...new Set(ok.map(p=>p.investor))].join(", "))} moved to Share capital:</b> ${ok.length} placement${ok.length===1?"":"s"} (${h(VIEW())} ${fmt2(amt)}) are now paid-up capital. A backup was saved first and profit accruals were re-posted.`};
+  if (S.canWrite===false || autoOwnFix.done) return; autoOwnFix.done = true;
+  const o = ownPlacements();
+  try {
+    let conv = 0;
+    if (o.length){
+      try { await SB.rpc("take_backup", {p_kind:"manual", p_label:"Automatic copy before moving FAMCON to share capital"}); } catch(e){}
+      conv = await moveToCapital(o); await loadAll();
+      const months = [...new Set(S.led.filter(t=>t.auto).map(t=>t.accrualMonth || String(t.date).slice(0,7)))].sort();
+      if (months.length){ const C = computeAccruals(months[months.length-1]), now = new Date().toISOString();
+        await S.db.bulk("ledger", C.out.map(x => { const ex = S.led.find(t=>t.id===x.id); return {id:x.id, data:{...x.data, createdAt: ex?.createdAt || now, updatedAt: now}}; }));
+        for (const t of C.stale) await S.db.collection("ledger").doc(t.id).delete();
+        logEvent("Profit accruals run", `automatically after moving FAMCON, up to ${monthLabel(months[months.length-1])}`); }
+    }
+    const stray = S.inv.filter(i => isOwnName(i.name) && !S.pl.some(p=>p.investorId===i.id && !o.includes(p)));
+    for (const i of stray) await S.db.collection("investors").doc(i.id).delete();
+    if (!o.length && !stray.length) return;
+    await loadAll();
+    const amt = o.reduce((s,p)=>s+num(p.amount),0);
+    S.flash.ownNote = {color:"var(--pos)", html: o.length ? `<b>${h([...new Set(o.map(p=>p.investor))].join(", "))} moved to Share capital:</b> ${o.length} placement${o.length===1?"":"s"} (${h(VIEW())} ${fmt2(amt)}) are now paid-up capital${conv?`, and ${conv} payment${conv===1?"":"s"} to ${conv===1?"it":"them"} became owner drawings`:""}. A backup was saved first and profit accruals were re-posted.` : `<b>FAMCON removed from the investor list.</b> It is a shareholder, recorded in Share capital.`};
+  } catch(x){
+    S.flash.ownNote = {color:"var(--neg)", html:`<b>FAMCON couldn't be moved to Share capital automatically:</b> ${h(x.message||String(x))}. Use <b>Move to share capital</b> on the Investors tab, or send this message to support.`};
+  }
   if (!$("#ov")) render();
 }
 async function ownFix(b){
   const o = ownPlacements(); if (!o.length) return;
   if (!b.classList.contains("armed")){ b.classList.add("armed"); b.textContent = `Confirm: move ${o.length} placement${o.length===1?"":"s"}`; return; }
   b.disabled = true; b.textContent = "Moving…";
-  try { await moveToCapital(o); await loadAll(); render(); toast("Moved to share capital. Post the accruals again so the profit split is updated.");
+  try { const n = await moveToCapital(o); await loadAll(); render(); toast(`Moved to share capital${n?` · ${n} payment${n===1?"":"s"} became owner drawings`:""}. Post the accruals again so the profit split is updated.`);
     if (S.canWrite!==false) openAccruals(); }
   catch(x){ toast(x.message || "Could not move"); b.disabled = false; b.textContent = "Move to share capital"; }
 }
@@ -4019,7 +4035,7 @@ let started = false;
 async function start(session, force){
   if (started && !force) return; started = true;
   S.user = session.user;
-  $("#whoEmail").textContent = session.user.email || ""; $("#who").hidden = false;
+  $("#whoEmail").textContent = session.user.email || ""; $("#whoEmail").title = "App version " + APP_VERSION; $("#who").hidden = false;
   const {data:m, error} = await SB.from("members").select("role,status,must_reset,full_name").eq("user_id", session.user.id).maybeSingle();
   if (error || !m){ gate("Access not set up", `${h(session.user.email)} has no access record. Ask the administrator to add you.`); return; }
   if (m.status === "pending"){
@@ -4038,7 +4054,7 @@ async function start(session, force){
   try { if (!sessionStorage.getItem("fa.in")){ sessionStorage.setItem("fa.in","1"); logEvent("Signed in", ROLE_LABEL[S.role], "auth"); } } catch(e){}
   SB.rpc("take_daily_backup").then(()=>{}, ()=>{});
   setTimeout(() => autoMonthly().catch(()=>{}), 1500);
-  setTimeout(() => autoOwnFix().catch(x => toast("Couldn't move FAMCON automatically: " + (x.message||"") + " Use Move to share capital on the Investors tab.")), 600);
+  setTimeout(() => autoOwnFix(), 600);
   if (S.live) return; S.live = true;
   SB.channel("feed")
     .on("postgres_changes", {event:"*", schema:"public", table:"records"}, () => scheduleReload())
