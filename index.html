@@ -293,6 +293,9 @@ tr.dim td{opacity:.55}
 .fxcard{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--sunk)}
 .fxcard .v{font:800 16px var(--f-num)}
 .fxres{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:12px;background:var(--accent-soft);font-size:15px}
+
+.negc{color:var(--neg)!important;font-weight:700}
+tr.overpaid td{background:color-mix(in srgb,var(--neg) 9%,transparent)}
 </style>
 </head>
 <body class="authmode">
@@ -347,10 +350,11 @@ const TYPES = {
   "Investor Profit Paid":       {cash:-1, pay:-1},
   "Investor Capital Repaid":    {cash:-1, icap:-1},
   "Operating Expense":          {cash:-1, opex:1},
-  "Other Income":               {cash:1, oinc:1}
+  "Other Income":               {cash:1, oinc:1},
+  "Profit Reinvested":          {inv:1, rec:-1}
 };
 const INV_TYPES = ["Investor Profit Accrued","Investor Profit Paid","Investor Capital Repaid"];
-const VEN_TYPES = ["Investment Addition","Investment Withdrawal","Profit Accrued","Profit Received"];
+const VEN_TYPES = ["Investment Addition","Investment Withdrawal","Profit Accrued","Profit Received","Profit Reinvested"];
 const TABS = [["dashboard","Dashboard"],["portfolio","Portfolio"],["investors","Investors"],["ventures","Ventures"],["statements","Statements"],["capital","Share capital"],["master","Master data"],["|"],["ledger","Ledger"],["bank","Bank"],["expenses","Expenses"],["|"],["returns","Returns"],["monthly","Monthly"],["reports","Reports"],["|"],["settings","Settings"]];
 const MODES = ["Mudarabah","Musharakah","Equity","Loan","Profit participation","Other"];
 const METHODS = ["Bank transfer","Cash","Cheque","Profit adjustment","Card","Other"];
@@ -613,14 +617,14 @@ function ventureAccounts(){
   const {start, end} = S;
   return S.biz.map(b => {
     const f = t => t.bizId===b.id;
-    const added = tsum("Investment Addition",ORIGIN,end,f), wd = tsum("Investment Withdrawal",ORIGIN,end,f), net = added-wd;
+    const added = tsum("Investment Addition",ORIGIN,end,f), wd = tsum("Investment Withdrawal",ORIGIN,end,f), reinv = tsum("Profit Reinvested",ORIGIN,end,f), net = added - wd + reinv;
     const icap = placed(ORIGIN,end,p=>p.bizId===b.id) - tsum("Investor Capital Repaid",ORIGIN,end,f);
     const own = net - icap;
     const acc = tsum("Profit Accrued",start,end,f), recd = tsum("Profit Received",start,end,f), rec = bal("rec",end,f);
     const share = tsum("Investor Profit Accrued",start,end,f), pay = bal("pay",end,f);
-    /* annualised on time-weighted capital, up to the last profit accrual in the period */
+    /* annualised on time-weighted capital (incl. reinvested profit), up to the last profit accrual in the period */
     const yEnd = lastAccrual(start, end, f) || end;
-    const cd = capDays(S.led.filter(t=>f(t) && (t.type==="Investment Addition"||t.type==="Investment Withdrawal")).map(t=>[t.date, num(t.amount)*(t.type==="Investment Addition"?1:-1)]), start, yEnd);
+    const cd = capDays(S.led.filter(t=>f(t) && (t.type==="Investment Addition"||t.type==="Investment Withdrawal"||t.type==="Profit Reinvested")).map(t=>[t.date, num(t.amount)*(t.type==="Investment Withdrawal"?-1:1)]), start, yEnd);
     const yld = cd > 0 ? acc*365/cd : 0, avg = cd / (days(start, yEnd)+1);
     const pls = S.pl.filter(p=>p.bizId===b.id && p.date && p.date<=end), invRate = div(pls.reduce((s,p)=>s+num(p.amount)*num(p.rate),0), pls.reduce((s,p)=>s+num(p.amount),0));
     return {b, added, wd, net, icap, own, acc, recd, rec, share, pay, contrib:acc-share, yld, avg, invRate, varr: yld - num(b.rate)};
@@ -633,7 +637,7 @@ function ratios(){
   const netOwn = incOwn + P.oinc - P.opex, netInv = incInv - P.share;
   /* average capital over the earning window (period start to the last profit accrual) */
   const aEnd = lastAccrual(S.start, S.end) || S.end, ad = days(S.start, aEnd)+1;
-  const Tavg = capDays(S.led.filter(t=>t.type==="Investment Addition"||t.type==="Investment Withdrawal").map(t=>[t.date, num(t.amount)*(t.type==="Investment Addition"?1:-1)]), S.start, aEnd)/ad;
+  const Tavg = capDays(S.led.filter(t=>t.type==="Investment Addition"||t.type==="Investment Withdrawal"||t.type==="Profit Reinvested").map(t=>[t.date, num(t.amount)*(t.type==="Investment Withdrawal"?-1:1)]), S.start, aEnd)/ad;
   const Kavg = capDays([...S.pl.map(p=>[p.date, num(p.amount)]), ...S.led.filter(t=>t.type==="Investor Capital Repaid").map(t=>[t.date, -num(t.amount)])], S.start, aEnd)/ad;
   const Oavg = Tavg - Kavg, an = 365/ad;
   return {P, T, K, O, Tavg, Kavg, Oavg, aEnd, ad, incOwn, incInv, netOwn, netInv, pd, an,
@@ -781,6 +785,7 @@ function viewVentures(){
   const acc = va.map(x=>`<tr class="click" data-goledger="${x.b.id}"><td>${h(x.b.name)}</td><td class="n">${money(x.added)}</td><td class="n">${money(x.wd)}</td><td class="n">${money(x.net)}</td><td class="n">${money(x.icap)}</td><td class="n">${money(x.own)}</td><td class="n">${money(x.acc)}</td><td class="n">${money(x.recd)}</td><td class="n">${money(x.rec)}</td><td class="n">${money(x.share)}</td><td class="n">${money(x.pay)}</td><td class="n">${money(x.contrib)}</td><td class="n">${pct(x.yld)}</td><td class="n">${x.net?pct(x.varr):'<span class="mut">–</span>'}</td></tr>`).join("");
   return `<div class="head"><div><span class="eyebrow">Master data</span><h1>Ventures</h1><p>Each business Future Axis places capital in. Click a row to edit it.</p></div>${S.canWrite!==false?'<button class="btn primary" data-new="biz">Add venture</button>':""}</div>
   <div class="stack">
+  ${ventureMonthlySection()}
   <section class="sheet"><div class="sheet-h"><div><h2>Venture register</h2><p>${S.biz.length} venture${S.biz.length===1?"":"s"}</p></div>${csvBtn("ventures")}</div>
    <div class="tbl"><table><thead><tr><th>ID</th><th>Venture</th><th>Contact person</th><th>Address</th><th class="n">Expected p.a.</th><th>Mode</th><th class="n">Start</th><th>Status</th></tr></thead><tbody>${rows || `<tr><td colspan="8"><div class="empty"><b>No ventures yet</b>Add a venture to start allocating capital.</div></td></tr>`}</tbody></table></div></section>
   <section class="sheet"><div class="sheet-h"><div><h2>Venture accounts</h2><p>Receivable and payable position per venture. Balances at ${fmtDate(S.end)}; profit columns for the period. Click a row to open its ledger.</p></div>${csvBtn("venture-accounts")}</div>
@@ -936,7 +941,7 @@ function viewSettings(){
 const FORMS = {
   biz: {col:"businesses", title:"Venture", list:()=>S.biz, fields:[
     ["code","Business ID","text",1],["name","Business name","text",1],["nature","Nature of business","text",0,"full"],["address","Address","textarea",0,"full"],
-    ["contact","Contact person","text"],["phone","Phone","text"],["email","Email","email",0,"full"],["rate","Expected profit rate (% p.a.)","pct",1],["startDate","Start date","date"],
+    ["contact","Contact person","text"],["phone","Phone","text"],["email","Email","email",0,"full"],["rate","Expected profit rate (% p.a.)","pct",1],["profitMode","Profit treatment","select",0,"",["Kept as receivable","Reinvested (compounds)","Paid out monthly"]],["startDate","Start date","date"],
     ["mode","Mode of investment","select",0,"",["",...MODES]],["status","Status","select",0,"",["Active","Pipeline","Exited","Inactive"]],["notes","Notes","textarea",0,"full"]]},
   inv: {col:"investors", title:"Investor", list:()=>S.inv, fields:[
     ["code","Investor ID","text",1],["name","Investor name","text",1],["kind","Type","select",0,"",["Individual","Company"]],["contactPerson","Contact person (for companies)","text"],
@@ -1762,7 +1767,7 @@ async function pdfUpload(file){
 function incomeSplit(from, to){
   let own = 0, inv = 0; const rows = [];
   const mixAt = (bizId, d) => { const f = t => t.bizId===bizId;
-    const net = Math.max(0, tsum("Investment Addition",ORIGIN,d,f) - tsum("Investment Withdrawal",ORIGIN,d,f));
+    const net = Math.max(0, tsum("Investment Addition",ORIGIN,d,f) - tsum("Investment Withdrawal",ORIGIN,d,f) + tsum("Profit Reinvested",ORIGIN,d,f));
     const icap = Math.max(0, placed(ORIGIN,d,p=>p.bizId===bizId) - tsum("Investor Capital Repaid",ORIGIN,d,f));
     const invDep = Math.min(icap, net); return {net, invDep, ownCap: net - invDep}; };
   for (const b of S.biz){
@@ -1862,19 +1867,27 @@ function accrueDaily(rate, balAt, from, to, stop){
 function computeAccruals(through){
   const months = monthsBetween(accrualStart(), through), out = [];
   const isAuto = t => t.auto;
-  const venSeries = Object.fromEntries(S.biz.map(b => [b.id, stepSeries(S.led.filter(t=>t.bizId===b.id && (t.type==="Investment Addition"||t.type==="Investment Withdrawal")).map(t=>({date:t.date, amt: t.type==="Investment Addition" ? num(t.amount) : -num(t.amount)})))]));
+  const gen = t => t.auto && (t.type==="Profit Reinvested" || (t.type==="Profit Received" && String(t.id).startsWith("auto-c-")));
+  const venEv = Object.fromEntries(S.biz.map(b => [b.id, S.led.filter(t=>t.bizId===b.id && !gen(t) && (t.type==="Investment Addition"||t.type==="Investment Withdrawal"||t.type==="Profit Reinvested")).map(t=>({date:t.date, amt: t.type==="Investment Withdrawal" ? -num(t.amount) : num(t.amount)}))]));
+  const venSeries = {};
   const invInVen = Object.fromEntries(S.biz.map(b => [b.id, stepSeries([...S.pl.filter(p=>p.bizId===b.id).map(p=>({date:p.date, amt:num(p.amount)})), ...S.led.filter(t=>t.bizId===b.id && t.type==="Investor Capital Repaid").map(t=>({date:t.date, amt:-num(t.amount)}))])]));
   const plSeries = Object.fromEntries(S.pl.map(p => [p.id, stepSeries([{date:p.date, amt:num(p.amount)}, ...S.led.filter(t=>t.placementId===p.id && t.type==="Investor Capital Repaid").map(t=>({date:t.date, amt:-num(t.amount)}))])]));
   for (const ym of months){
     const from = ym + "-01", to = monthEnd(ym);
-    for (const b of S.biz){ const a = Math.round(accrueDaily(num(b.rate), venSeries[b.id], from, to) * 100) / 100;
+    for (const b of S.biz){ venSeries[b.id] = stepSeries(venEv[b.id]); const a = Math.round(accrueDaily(num(b.rate), venSeries[b.id], from, to) * 100) / 100;
       const own = Math.min(a, Math.round(accrueOwn(num(b.rate), venSeries[b.id], invInVen[b.id], from, to) * 100) / 100);
-      if (a) out.push({id:`auto-v-${b.id}-${ym}`, ym, kind:"v", data:{date:to, type:"Profit Accrued", bizId:b.id, placementId:"", amount:a, ownPart:own, method:"", bankId:"", ref:`Auto accrual ${monthLabel(ym)} at ${(num(b.rate)*100).toFixed(2)}% p.a.`, auto:true, accrualMonth:ym, example:false}}); }
+      if (a) out.push({id:`auto-v-${b.id}-${ym}`, ym, kind:"v", data:{date:to, type:"Profit Accrued", bizId:b.id, placementId:"", amount:a, ownPart:own, method:"", bankId:"", ref:`Auto accrual ${monthLabel(ym)} at ${(num(b.rate)*100).toFixed(2)}% p.a.`, auto:true, accrualMonth:ym, example:false}});
+      /* reinvested: the month's profit joins the investment and earns from the next day */
+      if (a && isReinvest(b)){ out.push({id:`auto-r-${b.id}-${ym}`, ym, kind:"r", data:{date:to, type:"Profit Reinvested", bizId:b.id, placementId:"", amount:a, method:"", bankId:"", ref:`Profit for ${monthLabel(ym)} reinvested in ${b.name}`, auto:true, accrualMonth:ym, example:false}}); venEv[b.id].push({date:to, amt:a}); }
+      /* paid out monthly: the month's profit is received at month end (unless a receipt was already recorded) */
+      if (a && isPaidOut(b) && !S.led.some(t=>!t.auto && t.type==="Profit Received" && t.bizId===b.id && t.date>=from && t.date<=addDays(to,20)))
+        out.push({id:`auto-c-${b.id}-${ym}`, ym, kind:"c", data:{date:to, type:"Profit Received", bizId:b.id, placementId:"", amount:a, method:"Bank transfer", bankId:"", ref:`Profit for ${monthLabel(ym)} received from ${b.name}`, auto:true, accrualMonth:ym, example:false}}); }
     for (const p of S.pl){ if (!p.date || p.date > to) continue;
       const a = Math.round(accrueDaily(num(p.rate), plSeries[p.id], from, to, p.maturity || "") * 100) / 100;
       if (a) out.push({id:`auto-p-${p.id}-${ym}`, ym, kind:"p", data:{date:to, type:"Investor Profit Accrued", bizId:p.bizId, placementId:p.id, amount:a, method:"", bankId:"", ref:`Auto accrual ${monthLabel(ym)} at ${(num(p.rate)*100).toFixed(2)}% p.a.`, auto:true, accrualMonth:ym, example:false}}); }
   }
   const manual = S.led.filter(t => !isAuto(t) && (t.type==="Profit Accrued"||t.type==="Investor Profit Accrued") && t.date && months.includes(t.date.slice(0,7)));
+  out.sort((x,y)=>({v:0,r:1,c:2,p:3}[x.kind]) - ({v:0,r:1,c:2,p:3}[y.kind]));
   const stale = S.led.filter(t => isAuto(t) && months.includes(t.accrualMonth) && !out.some(o=>o.id===t.id));
   return {months, out, manual, stale};
 }
@@ -1918,7 +1931,7 @@ function openAccruals(){
 
 /* ---------- one-time investor sheet import: Sr. # · Investor · Rate · Placement date · Investment · one column per venture ---------- */
 const OWNER_HINT = {test: n => /famcon|futureaxis/i.test(String(n||"").replace(/[^a-z]/gi,""))};
-const APP_VERSION = "5 Oct 2026 · 21:25";
+const APP_VERSION = "5 Oct 2026 · 22:05";
 function findSimpleSheet(wb){
   for (const name of wb.SheetNames){
     const rows = sheetRows(wb.Sheets[name]);
@@ -3041,8 +3054,15 @@ function invMonthRows(ym){
     const cumBefore = sum(acc.filter(t=>t.date<from)), cumThrough = cumBefore + posted, paidAll = sum(L.filter(t=>t.type==="Investor Profit Paid"));
     const paidM = isPosted ? Math.min(profit, Math.max(0, paidAll - cumBefore)) : 0;
     const outstanding = Math.max(0, cumThrough - paidAll), payEntry = S.led.find(t=>t.id===PAY_ID(p.id, ym));
+    const pays = L.filter(t=>t.type==="Investor Profit Paid"), forM = t => t.payMonth ? t.payMonth===ym : (t.date>=from && t.date<=to), before = t => t.payMonth ? t.payMonth<ym : t.date<from;
+    const bf = cumBefore - sum(pays.filter(before)), pm = pays.filter(forM), paidMonth = sum(pm), due = bf + posted, cf = due - paidMonth, paidCur = {};
+    let paidConv = 0;
+    for (const t of pm){ const c = t.payCur && t.payCur!=="Other" ? t.payCur : VIEW(), amt = c===VIEW() && !num(t.payAmt) ? num(t.amount) : num(t.payAmt) || num(t.amount);
+      paidCur[c] = (paidCur[c]||0) + amt;
+      const conv = c===VIEW() ? amt : num(t.fxRate) ? (VIEW()==="USD" ? amt/num(t.fxRate) : amt/num(t.fxRate)*rateOn(VIEW(), t.date)) : fxConv(amt, c, VIEW(), t.date);
+      paidConv += conv == null ? num(t.amount) : conv; }
     const status = !num(p.rate) && closing > 0.005 ? "norate" : profit < 0.005 ? "none" : !isPosted ? "calc" : paidM >= profit - 0.01 ? "paid" : paidM > 0.01 ? "part" : isPayMonth(p, ym) ? "due" : "accruing";
-    return {p, closing, profit, isPosted, paidM, outstanding, payEntry, status, next: status==="accruing" ? nextPayMonth(p, ym) : ""};
+    return {p, closing, profit, isPosted, paidM, outstanding, payEntry, status, next: status==="accruing" ? nextPayMonth(p, ym) : "", bf, due, posted, paidMonth, paidConv, paidCur, cf};
   }).filter(r => r.closing > 0.005 || r.profit > 0.005 || r.outstanding > 0.005);
 }
 const IV_STATUS = {norate:["No rate set","bad"], paid:["Paid","ok"], part:["Part paid","warn"], due:["Due","warn"], accruing:["Accruing",""], calc:["Not posted",""], none:["–",""]};
@@ -3065,11 +3085,22 @@ function viewInvestors(){
   for (const id of [...S.iv.sel]) if (!all.some(r=>r.p.id===id)) S.iv.sel.delete(id);
   const T = k => all.reduce((s,r)=>s+r[k],0), notPosted = all.some(r=>r.status==="calc"), C = VIEW();
   // investor summary
-  const by = {}; for (const r of all){ const x = by[r.p.investor] ||= {name:r.p.investor, cur:invCur(r.p), n:0, closing:0, profit:0, paid:0, out:0, due:0}; x.n++; x.closing += r.closing; x.profit += r.profit; x.paid += r.paidM; x.out += r.outstanding; if (r.status==="due"||r.status==="part") x.due++; }
+  const by = {}; for (const r of all){ const x = by[r.p.investor] ||= {name:r.p.investor, cur:invCur(r.p), n:0, closing:0, profit:0, paid:0, out:0, due:0, bf:0, dueM:0, paidMonth:0, paidConv:0, paidCur:{}, cf:0, posted:true};
+    x.n++; x.closing += r.closing; x.profit += r.profit; x.paid += r.paidM; x.out += r.outstanding; if (r.status==="due"||r.status==="part") x.due++;
+    x.bf += r.bf; x.dueM += r.due; x.paidMonth += r.paidMonth; x.paidConv += r.paidConv; x.cf += r.cf; if (!r.isPosted && r.profit > 0.005) x.posted = false; for (const [c,v] of Object.entries(r.paidCur)) x.paidCur[c] = (x.paidCur[c]||0) + v; }
   const inv = Object.values(by).sort((a,b)=>b.closing-a.closing);
-  const sumRows = inv.map(x=>`<tr class="click" data-ivq="${h(x.name)}" title="Show ${h(x.name)}'s placements"><td><b style="font-weight:600">${h(x.name)}</b></td><td class="n">${x.n}</td><td class="n">${fmt2(x.closing)}</td><td class="n">${fmt2(x.profit)}</td><td class="n">${fmt2(x.paid)}</td><td class="n">${fmt2(x.out)}</td><td class="n">${curTxt(x.out, x.cur, monthEnd(ym))}</td>
-    <td>${x.profit<0.005?'<span class="mut">–</span>':x.paid>=x.profit-0.01?'<span class="pill ok">Paid</span>':x.due?'<span class="pill warn">Due</span>':notPosted?'<span class="pill">Not posted</span>':'<span class="pill">Accruing</span>'}</td></tr>`).join("");
-  csvReg("investor-summary", ["Investor","Placements",`Closing investment (${C})`,`Profit ${lab}`,`Paid for ${lab}`,"Outstanding payable"], inv.map(x=>[x.name, x.n, x.closing.toFixed(2), x.profit.toFixed(2), x.paid.toFixed(2), x.out.toFixed(2)]));
+  const over = x => x.paidConv > x.dueM + 0.01 || x.cf < -0.01;
+  const sumRows = inv.map(x=>{ const ov = over(x), pc = Object.entries(x.paidCur).filter(([,v])=>Math.abs(v)>0.005);
+    const act = ov ? `<span class="pill bad">Overpaid ${fmt2(Math.max(x.paidConv - x.dueM, -x.cf))}</span>`
+      : !x.posted && x.dueM < 0.005 ? '<span class="pill">Not posted</span>'
+      : x.cf > 0.005 ? (W ? `<button class="btn sm primary" data-ivpay="${h(x.name)}" type="button">Mark paid</button>` : '<span class="pill warn">Due</span>')
+      : x.dueM > 0.005 ? '<span class="pill ok">Paid</span>' : '<span class="mut">–</span>';
+    return `<tr class="click${ov?" overpaid":""}" data-ivq="${h(x.name)}" title="Show ${h(x.name)}'s placements"><td><b style="font-weight:600">${h(x.name)}</b><div class="note">${x.n} placement${x.n===1?"":"s"} · ${fmt2(x.closing)}</div></td>
+      <td class="n${x.bf < -0.01 ? " negc" : ""}">${fmt2(x.bf)}${x.bf < -0.01 ? '<div class="note">overpaid earlier</div>' : ""}</td><td class="n">${fmt2(x.profit)}${x.posted?"":'<div class="note">calculated</div>'}</td><td class="n"><b>${fmt2(x.dueM)}</b></td>
+      <td>${h(x.cur)}</td><td class="n">${pc.length ? pc.map(([c,v])=>`${h(c)} ${fmt2(v)}`).join("<br>") : '<span class="mut">–</span>'}</td>
+      <td class="n${ov?" negc":""}">${x.paidConv ? fmt2(x.paidConv) : '<span class="mut">–</span>'}</td><td class="n${x.cf < -0.01 ? " negc" : ""}">${fmt2(x.cf)}${x.cf > 0.005 && x.paidMonth > 0.005 ? '<div class="note">short: carried to next month</div>' : ""}</td><td>${act}</td></tr>`; }).join("");
+  csvReg("investor-summary", ["Investor","Placements",`Closing investment (${C})`,"Payable b/f",`Profit ${lab}`,"Total due","Paid in","Paid (payout currency)",`Paid converted (${C})`,"Payable c/f","Overpaid"],
+    inv.map(x=>[x.name, x.n, x.closing.toFixed(2), x.bf.toFixed(2), x.profit.toFixed(2), x.dueM.toFixed(2), x.cur, Object.entries(x.paidCur).map(([c,v])=>`${c} ${v.toFixed(2)}`).join("; "), x.paidConv.toFixed(2), x.cf.toFixed(2), over(x) ? "YES" : ""]));
   // monthly profit & payments
   const allSel = rows.length && rows.every(r=>S.iv.sel.has(r.p.id)), nSel = S.iv.sel.size;
   const pRows = rows.map(r=>`<tr class="${S.iv.sel.has(r.p.id)?"selrow":""}"><td><input type="checkbox" data-ivsel="${r.p.id}" ${S.iv.sel.has(r.p.id)?"checked":""} aria-label="Select ${h(r.p.code)}"></td>
@@ -3090,13 +3121,15 @@ function viewInvestors(){
     ${k(`Paid for ${lab}`, money(T("paidM")), `${all.filter(r=>r.status==="paid").length} of ${all.filter(r=>r.profit>0.005).length} placements paid`)}
     ${k("Outstanding payable", money(T("outstanding")), `${all.filter(r=>r.status==="due"||r.status==="part").length} due this month`)}
   </div>
-  <section class="sheet"><div class="sheet-h"><div><h2>Investor summary · ${lab}</h2><p>Closing investment and profit for the month, by investor. Click an investor to show their placements below.</p></div>${csvBtn("investor-summary")}</div>
-    <div class="tbl"><table><thead><tr><th>Investor</th><th class="n">Placements</th><th class="n">Closing investment</th><th class="n">Profit ${lab}</th><th class="n">Paid</th><th class="n">Outstanding</th><th class="n">Outstanding in payout currency</th><th>Status</th></tr></thead>
-    <tbody>${sumRows || `<tr><td colspan="8" class="empty">No investors at ${lab}.</td></tr>`}</tbody>
-    ${inv.length?`<tfoot><tr><td>Total</td><td class="n">${all.length}</td><td class="n">${fmt2(T("closing"))}</td><td class="n">${fmt2(T("profit"))}</td><td class="n">${fmt2(T("paidM"))}</td><td class="n">${fmt2(T("outstanding"))}</td><td></td><td></td></tr></tfoot>`:""}</table></div></section>
+  <section class="sheet"><div class="sheet-h"><div><h2>Investor summary · ${lab}</h2><p>Payable brought forward + profit for the month = total due. Payments for the month are shown in the currency paid and converted to ${h(C)}. A shortfall carries to next month; an <b class="negc">overpayment is flagged in red</b>. Click an investor to show their placements below.</p></div>${csvBtn("investor-summary")}</div>
+    ${inv.some(over) ? `<div class="sheet-b"><div class="alert bad" style="margin:0"><span class="dot"></span><div><b>${inv.filter(over).length} investor${inv.filter(over).length===1?" was":"s were"} paid more than the profit due.</b> ${inv.filter(over).map(x=>h(x.name)).join(", ")}. Check the amount or the rate used.</div></div></div>` : ""}
+    <div class="tbl"><table><thead><tr><th>Investor</th><th class="n">Payable b/f</th><th class="n">Profit ${lab}</th><th class="n">Total due</th><th>Paid in</th><th class="n">Paid (currency)</th><th class="n">Paid in ${h(C)}</th><th class="n">Payable c/f</th><th></th></tr></thead>
+    <tbody>${sumRows || `<tr><td colspan="9" class="empty">No investors at ${lab}.</td></tr>`}</tbody>
+    ${inv.length?`<tfoot><tr><td>Total · ${all.length} placements · ${fmt2(T("closing"))}</td><td class="n">${fmt2(inv.reduce((s,x)=>s+x.bf,0))}</td><td class="n">${fmt2(T("profit"))}</td><td class="n">${fmt2(inv.reduce((s,x)=>s+x.dueM,0))}</td><td></td><td></td><td class="n">${fmt2(inv.reduce((s,x)=>s+x.paidConv,0))}</td><td class="n">${fmt2(inv.reduce((s,x)=>s+x.cf,0))}</td><td></td></tr></tfoot>`:""}</table></div></section>
   <section class="sheet" id="ivPay"><div class="sheet-h"><div><h2>Monthly profit and payments · ${lab}</h2><p>Hover or tap a profit figure to see how it is calculated. Payout months follow each placement's frequency: quarterly in Mar, Jun, Sep and Dec; semi-annual in Jun and Dec; annual in Dec.</p></div>${csvBtn("investor-month")}</div>
     <div class="sheet-b row ivbar" style="gap:8px;flex-wrap:wrap">
       <input id="ivQ" placeholder="Search investor, placement or venture" value="${h(S.iv.q)}" style="max-width:260px">${S.iv.q?`<button class="btn sm" data-ivact="clearq" type="button">Show all</button>`:""}
+      ${W?`<button class="btn sm" data-ivact="paidall" type="button" title="Pays everything outstanding up to ${lab} for every investor">Mark all paid up to ${lab}</button>`:""}
       <span class="note" style="margin-left:auto">${nSel ? `<b>${nSel} selected</b>` : "Tick placements to act on them"}</span>
       ${W?`<button class="btn sm primary" data-ivact="paid" type="button" ${nSel?"":"disabled"}>Mark paid</button>
       <button class="btn sm" data-ivact="unpaid" type="button" ${nSel?"":"disabled"}>Mark unpaid</button>
@@ -3136,6 +3169,9 @@ const bankOpts = sel => `<option value="">Not specified</option>` + S.bank.filte
 async function ivAction(b){
   const a = b.dataset.ivact, {ym} = ivMonth(), lab = monthLabel(ym), rows = invMonthRows(ym), sel = rows.filter(r=>S.iv.sel.has(r.p.id));
   if (a==="clearq"){ S.iv.q = ""; return render(); }
+  if (a==="paidall"){ const due = rows.filter(r=>r.isPosted && r.outstanding > 0.005);
+    if (!due.length){ toast(rows.some(r=>!r.isPosted && r.profit>0.005) ? `Profit for ${lab} isn't posted yet. Run profit accruals first.` : `Everything up to ${lab} is already paid`); return; }
+    S.iv.sel = new Set(due.map(r=>r.p.id)); S.iv.q = ""; render(); return ivAction({dataset:{ivact:"paid"}, classList:{contains:()=>false, add(){}}}); }
   if (a==="cur"){
     const c = $("#ivCur").value; if (!c){ toast("Choose the payout currency first"); return; }
     b.disabled = true;
@@ -3199,6 +3235,43 @@ async function ivAction(b){
   }
   if (a==="withdraw") return openWithdrawal(sel.length===1 ? sel[0].p.id : "");
 }
+function openInvestorPay(name){
+  const {ym} = ivMonth(), lab = monthLabel(ym), rows = invMonthRows(ym).filter(r=>r.p.investor===name && r.isPosted && r.cf > 0.005);
+  if (!rows.length){ toast(`Nothing due for ${name} for ${lab}${invMonthRows(ym).some(r=>r.p.investor===name && !r.isPosted)?": post the profit accruals first":""}`); return; }
+  const cur = invCur(rows[0].p), dueV = rows.reduce((s,r)=>s+r.cf,0), d0 = todayIso(), V = VIEW();
+  const toUSD = (v, d) => V==="USD" ? v : v / rateOn("AED", d), fromUSD = (u, d) => V==="USD" ? u : u * rateOn("AED", d);
+  ivDialog("ip", `Pay ${h(name)} · ${lab}`, `
+    <div class="full fxgrid">
+      <div class="fxcard"><span class="note">Payable b/f</span><span class="v">${h(V)} ${fmt2(rows.reduce((s,r)=>s+r.bf,0))}</span></div>
+      <div class="fxcard"><span class="note">Profit ${lab}</span><span class="v">${h(V)} ${fmt2(rows.reduce((s,r)=>s+r.posted,0))}</span></div>
+      <div class="fxcard"><span class="note">Due now${rows.some(r=>r.paidMonth>0.005)?" (after payments already made)":""}</span><span class="v">${h(V)} ${fmt2(dueV)}</span></div></div>
+    <label>Payment date<input id="ipD" type="date" required value="${d0}"></label>
+    ${cur!=="USD" ? `<label>Rate: 1 USD = <input id="ipR" type="number" step="any" min="0" required value="${fxRate(cur, d0)}"> ${h(cur)}</label>` : `<label>Paid in<input value="USD" disabled></label>`}
+    <label>Amount paid in ${h(cur)}<input id="ipA" type="number" step="any" min="0" required></label>
+    <label>Equals (${h(V)})<input id="ipV" disabled></label>
+    <div class="full" id="ipFlag"></div>
+    <label class="full chkl" id="ipOkL" hidden><input type="checkbox" id="ipOk"> Record the overpayment anyway</label>
+    ${payBlockHtml("pbI", {payBankLabel:`${h(name)}'s bank`, noCur:true})}`,
+    async () => { const d = $("#ipD").value, r = cur==="USD" ? 1 : num($("#ipR").value), a = num($("#ipA").value);
+      if (!(r>0)) throw new Error(`Enter the ${cur} rate`); if (!(a>0)) throw new Error("Enter the amount paid");
+      const paidV = fromUSD(a / r, d); if (paidV > dueV + 0.01 && !$("#ipOk").checked) throw new Error("The payment is more than the profit due. Tick the box to record it anyway, or correct the amount.");
+      const pd = await payBlockRead("pbI", "ledger", `ipay-${Date.now()}`), now = new Date().toISOString();
+      if (cur!=="USD" && Math.abs(rateOn(cur, d) - r) > 1e-9) await saveFx([{cur, date:d, rate:r, src:`Payment to ${name}`, by:S.user?.email||""}]);
+      await S.db.bulk("ledger", rows.map(x => { const share = paidV * x.cf / dueV, ex = x.payEntry, curAmt = toUSD(share, d) * r;
+        return {id: PAY_ID(x.p.id, ym), data:{...pd, receipts:[...(ex?.receipts||[]), ...pd.receipts], date:d, type:"Investor Profit Paid", bizId:x.p.bizId, placementId:x.p.id,
+          amount: +((ex ? num(ex.amount) : 0) + share).toFixed(2), payCur:cur, fxRate:r, payAmt: +(((ex?.payCur===cur ? num(ex.payAmt) : 0)) + curAmt).toFixed(2), ...(cur!=="USD"?{fxCur:cur, fxAmount: +(((ex?.payCur===cur ? num(ex.payAmt) : 0)) + curAmt).toFixed(2)}:{}),
+          ref:`Profit ${lab}`, payMonth:ym, createdAt: ex?.createdAt || now, updatedAt: now}}; }));
+      const diff = paidV - dueV; logEvent("Investor profit paid", `${name} ${lab}: ${cur} ${fmt2(a)} = ${V} ${fmt2(paidV)}${Math.abs(diff)>0.01 ? (diff>0 ? ` · OVERPAID ${fmt2(diff)}` : ` · ${fmt2(-diff)} carried forward`) : ""}`);
+      return `${name} paid ${cur} ${fmt2(a)} (${V} ${fmt2(paidV)})${diff < -0.01 ? ` · ${V} ${fmt2(-diff)} carried to next month` : diff > 0.01 ? ` · overpaid ${V} ${fmt2(diff)}` : ""}`; }, "Record payment");
+  payBlockWire("pbI");
+  const upd = () => { const d = $("#ipD").value || d0, r = cur==="USD" ? 1 : num($("#ipR")?.value), a = num($("#ipA").value), v = r ? fromUSD(a / r, d) : 0, diff = v - dueV;
+    $("#ipV").value = a ? fmt2(v) : "";
+    $("#ipFlag").innerHTML = !a ? "" : diff > 0.01 ? `<div class="alert bad" style="margin:0"><span class="dot"></span><div><b>Exceeds the profit due by ${h(V)} ${fmt2(diff)}</b> (${h(cur)} ${fmt2(diff/ (v||1) * a)}). Check the amount or rate.</div></div>`
+      : diff < -0.01 ? `<div class="alert warn" style="margin:0"><span class="dot"></span><div><b>${h(V)} ${fmt2(-diff)} short.</b> It stays payable and is carried to next month's payable b/f.</div></div>` : `<div class="alert ok" style="margin:0"><span class="dot"></span><div>Equal to the profit due.</div></div>`;
+    $("#ipOkL").hidden = !(diff > 0.01); };
+  $("#ipA").value = (toUSD(dueV, d0) * (cur==="USD" ? 1 : num($("#ipR").value))).toFixed(2);
+  $("#ipA").oninput = upd; if ($("#ipR")) $("#ipR").oninput = upd; $("#ipD").onchange = () => { if (cur!=="USD" && rateOn(cur, $("#ipD").value)) $("#ipR").value = fxRate(cur, $("#ipD").value); upd(); }; upd();
+}
 function openWithdrawal(pid){
   const out = p => num(p.amount) - S.led.filter(t=>t.placementId===p.id && t.type==="Investor Capital Repaid").reduce((s,t)=>s+num(t.amount),0);
   const live = S.pl.filter(p=>out(p) > 0.005).sort((a,b)=>a.investor.localeCompare(b.investor));
@@ -3240,7 +3313,7 @@ function capFlowMonths(ven){
     const add = sum(S.led.filter(t=>t.type==="Investment Addition" && fv(t) && inM(t.date,from,to))), vwd = sum(S.led.filter(t=>t.type==="Investment Withdrawal" && fv(t) && inM(t.date,from,to)));
     const placedNet = add - vwd, inv = raised - wdr, own = placedNet - inv;
     const icap = sum(S.pl.filter(p=>fv(p) && p.date && p.date<=to)) - sum(S.led.filter(t=>t.type==="Investor Capital Repaid" && fv(t) && t.date<=to));
-    const dep = sum(S.led.filter(t=>t.type==="Investment Addition" && fv(t) && t.date<=to)) - sum(S.led.filter(t=>t.type==="Investment Withdrawal" && fv(t) && t.date<=to));
+    const dep = sum(S.led.filter(t=>(t.type==="Investment Addition"||t.type==="Profit Reinvested") && fv(t) && t.date<=to)) - sum(S.led.filter(t=>t.type==="Investment Withdrawal" && fv(t) && t.date<=to));
     const byVen = {}; if (!ven) for (const b of S.biz){ const f = t => t.bizId===b.id && inM(t.date,from,to); byVen[b.id] = sum(S.led.filter(t=>t.type==="Investment Addition" && f(t))) - sum(S.led.filter(t=>t.type==="Investment Withdrawal" && f(t))); }
     return {ym, label: monthLabel(ym).slice(0,3), title: monthLabel(ym), raised, wdr, inv, own, placedNet, icap, dep, ownCap: dep - icap, byVen};
   });
@@ -3543,7 +3616,7 @@ const ownPlacements = () => S.pl.filter(p=>isOwnName(p.investor));
 function ownBanner(){
   const o = ownPlacements(); if (!o.length || S.canWrite===false) return "";
   const names = [...new Set(o.map(p=>p.investor))].join(", "), amt = o.reduce((s,p)=>s+num(p.amount),0);
-  return `<div class="alert bad"><span class="dot"></span><div><b>${h(names)} is Future Axis's own money, not an investor.</b> ${o.length} placement${o.length===1?"":"s"} (${h(VIEW())} ${fmt2(amt)}) should be paid-up share capital. Moving ${o.length===1?"it":"them"} keeps the venture investment, records a shareholder capital contribution, removes the investor profit accrued on ${o.length===1?"it":"them"}, and turns any profit already paid into owner drawings.</div><button class="btn sm primary" data-ownfix type="button">Move to share capital</button></div>`;
+  return `<div class="alert bad"><span class="dot"></span><div><b>${h(names)} is Future Axis's own money, not an investor.</b> ${o.length} placement${o.length===1?"":"s"} (${h(VIEW())} ${fmt2(amt)}) should be paid-up share capital. Moving ${o.length===1?"it":"them"} keeps the venture investment, records a shareholder capital contribution, removes the investor profit accrued on ${o.length===1?"it":"them"}, and removes any payments recorded against ${o.length===1?"it":"them"} (nothing is paid to Future Axis's own company).</div><button class="btn sm primary" data-ownfix type="button">Move to share capital</button></div>`;
 }
 async function moveToCapital(pls){
   let converted = 0;
@@ -3556,19 +3629,17 @@ async function moveToCapital(pls){
     shFor[k] = sh;
     await S.db.collection("ledger").doc(`own-${p.id}`).set({date:p.date, type:"Owner Capital Contribution", bizId:"", placementId:"", shareholderId:sh.id, amount:num(p.amount), method:p.method||"Bank transfer", bankId:p.bankId||"",
       payBank:p.payBank||"", payCur:p.payCur||"", payAmt:p.payAmt||"", payRef:p.payRef||"", receipts:p.receipts||[], ref:`Paid-up capital from ${p.investor} (was placement ${p.code})`, createdAt:now});
-    /* profit or capital already paid out on it = paid to the shareholder: keep the cash entry as an owner drawing */
+    /* nothing is ever paid to Future Axis's own company: payments recorded against it were entered in error and are removed */
     for (const t of S.led.filter(t=>t.placementId===p.id && (t.type==="Investor Profit Paid" || t.type==="Investor Capital Repaid"))){
-      const {id, ...d} = t; converted++;
-      await S.db.collection("ledger").doc(id).set({...d, type:"Owner Drawing", placementId:"", bizId:"", shareholderId:sh.id, payMonth:"", wasType:t.type, ref:`${t.type==="Investor Profit Paid" ? "Profit" : "Capital"} paid to ${p.investor}${d.ref?` (${d.ref})`:""}`});
-      for (const w of S.led.filter(x=>x.type==="Investment Withdrawal" && x.linkedTo===id)){ const {id:wid, ...wd} = w; await S.db.collection("ledger").doc(wid).set({...wd, linkedTo:"", ownMoney:true}); } }
-    for (const t of S.led.filter(t=>t.placementId===p.id && t.type!=="Investor Profit Paid" && t.type!=="Investor Capital Repaid")) await S.db.collection("ledger").doc(t.id).delete();
+      converted++; for (const w of S.led.filter(x=>x.type==="Investment Withdrawal" && x.linkedTo===t.id)) await S.db.collection("ledger").doc(w.id).delete(); }
+    for (const t of S.led.filter(t=>t.placementId===p.id)) await S.db.collection("ledger").doc(t.id).delete();
     /* the venture investment made with this money is now owner money */
     for (const t of S.led.filter(t=>t.type==="Investment Addition" && (t.linkedPl===p.id || t.id===`pla-${p.id}` || t.id===`imp-add-${p.code}` || String(t.id).startsWith(`imp-add-${p.code}-`)))){
       const {id, ...d} = t; await S.db.collection("ledger").doc(id).set({...d, linkedPl:"", ownMoney:true, ref:`Placement of FAMCON paid-up capital${d.ref?` (${d.ref})`:""}`.replace("FAMCON", p.investor)}); }
     await S.db.collection("placements").doc(p.id).delete();
   }
   for (const i of S.inv.filter(i=>isOwnName(i.name) && !S.pl.some(p=>p.investorId===i.id && !pls.includes(p)))) await S.db.collection("investors").doc(i.id).delete();
-  logEvent("Moved to share capital", pls.map(p=>`${p.code} ${p.investor} ${fmt2(p.amount)}`).join("; ") + (converted ? ` · ${converted} payment${converted===1?"":"s"} changed to owner drawings` : ""));
+  logEvent("Moved to share capital", pls.map(p=>`${p.code} ${p.investor} ${fmt2(p.amount)}`).join("; ") + (converted ? ` · ${converted} payment${converted===1?"":"s"} recorded against it removed (none were made)` : ""));
   return converted;
 }
 /* runs on sign-in: own-company money recorded as investor placements moves to share capital automatically */
@@ -3586,12 +3657,16 @@ async function autoOwnFix(){
         for (const t of C.stale) await S.db.collection("ledger").doc(t.id).delete();
         logEvent("Profit accruals run", `automatically after moving FAMCON, up to ${monthLabel(months[months.length-1])}`); }
     }
+    /* earlier version turned such payments into owner drawings: owners have taken no drawings, so remove them */
+    const wrong = S.led.filter(t => t.type==="Owner Drawing" && t.wasType), wrongWd = S.led.filter(t => t.type==="Investment Withdrawal" && t.ownMoney && /^Investor withdrawal/.test(t.ref||""));
+    for (const t of [...wrong, ...wrongWd]) await S.db.collection("ledger").doc(t.id).delete();
+    if (wrong.length) logEvent("Corrected FAMCON entries", `${wrong.length} drawings removed (no drawings were taken)`);
     const stray = S.inv.filter(i => isOwnName(i.name) && !S.pl.some(p=>p.investorId===i.id && !o.includes(p)));
     for (const i of stray) await S.db.collection("investors").doc(i.id).delete();
-    if (!o.length && !stray.length) return;
+    if (!o.length && !stray.length && !wrong.length) return;
     await loadAll();
     const amt = o.reduce((s,p)=>s+num(p.amount),0);
-    S.flash.ownNote = {color:"var(--pos)", html: o.length ? `<b>${h([...new Set(o.map(p=>p.investor))].join(", "))} moved to Share capital:</b> ${o.length} placement${o.length===1?"":"s"} (${h(VIEW())} ${fmt2(amt)}) are now paid-up capital${conv?`, and ${conv} payment${conv===1?"":"s"} to ${conv===1?"it":"them"} became owner drawings`:""}. A backup was saved first and profit accruals were re-posted.` : `<b>FAMCON removed from the investor list.</b> It is a shareholder, recorded in Share capital.`};
+    S.flash.ownNote = {color:"var(--pos)", html: o.length ? `<b>${h([...new Set(o.map(p=>p.investor))].join(", "))} moved to Share capital:</b> ${o.length} placement${o.length===1?"":"s"} (${h(VIEW())} ${fmt2(amt)}) are now paid-up capital${conv?`; ${conv} payment${conv===1?"":"s"} recorded against ${conv===1?"it":"them"} ${conv===1?"was":"were"} removed, as nothing is paid to Future Axis's own company`:""}. A backup was saved first and profit accruals were re-posted.` : wrong.length ? `<b>Corrected:</b> ${wrong.length} owner drawing${wrong.length===1?"":"s"} created from FAMCON payments were removed. No payments were made to FAMCON; its profit stays in retained earnings.` : `<b>FAMCON removed from the investor list.</b> It is a shareholder, recorded in Share capital.`};
   } catch(x){
     S.flash.ownNote = {color:"var(--neg)", html:`<b>FAMCON couldn't be moved to Share capital automatically:</b> ${h(x.message||String(x))}. Use <b>Move to share capital</b> on the Investors tab, or send this message to support.`};
   }
@@ -3601,7 +3676,7 @@ async function ownFix(b){
   const o = ownPlacements(); if (!o.length) return;
   if (!b.classList.contains("armed")){ b.classList.add("armed"); b.textContent = `Confirm: move ${o.length} placement${o.length===1?"":"s"}`; return; }
   b.disabled = true; b.textContent = "Moving…";
-  try { const n = await moveToCapital(o); await loadAll(); render(); toast(`Moved to share capital${n?` · ${n} payment${n===1?"":"s"} became owner drawings`:""}. Post the accruals again so the profit split is updated.`);
+  try { const n = await moveToCapital(o); await loadAll(); render(); toast(`Moved to share capital${n?` · ${n} payment${n===1?"":"s"} recorded against it removed`:""}. Post the accruals again so the profit split is updated.`);
     if (S.canWrite!==false) openAccruals(); }
   catch(x){ toast(x.message || "Could not move"); b.disabled = false; b.textContent = "Move to share capital"; }
 }
@@ -3747,11 +3822,12 @@ const isInvestorAdd = t => !t.ownMoney && (!!t.linkedPl || String(t.id).startsWi
 const isInvestorWd = t => !!t.linkedTo;
 function ownTrail(){
   const it = initialTo(), rows = []; let free = 0, inVen = 0; const byVen = {};
-  const ev = S.led.filter(t => t.date && t.date <= S.end && (t.type==="Owner Capital Contribution" || t.type==="Owner Drawing" || (t.type==="Investment Addition" && !isInvestorAdd(t)) || (t.type==="Investment Withdrawal" && !isInvestorWd(t))))
+  const ev = S.led.filter(t => t.date && t.date <= S.end && (t.type==="Owner Capital Contribution" || t.type==="Owner Drawing" || (t.type==="Investment Addition" && !isInvestorAdd(t)) || (t.type==="Investment Withdrawal" && t.ownMoney && !isInvestorWd(t))))
     .sort((a,b)=>a.date.localeCompare(b.date) || (a.type==="Owner Capital Contribution" ? -1 : b.type==="Owner Capital Contribution" ? 1 : 0));
   for (const t of ev){ const a = num(t.amount); let kind, inA = 0, place = 0, ret = 0, drawn = 0;
     if (t.type==="Owner Capital Contribution"){ kind = t.date <= it ? "Initial capital" : "Additional capital"; inA = a; free += a; }
     else if (t.type==="Owner Drawing"){ kind = "Drawing / capital withdrawn"; drawn = a; free -= a; }
+    else if (t.type==="Profit Reinvested"){ kind = "Profit reinvested"; place = 0; inVen += a; (byVen[t.bizId] ||= {placed:0, back:0}).placed += a; rows.push({t, kind, inA:0, place:0, reinv:a, ret:0, drawn:0, free, inVen, sh:""}); continue; }
     else if (t.type==="Investment Addition"){ kind = "Placed in venture"; place = a; free -= a; inVen += a; (byVen[t.bizId] ||= {placed:0, back:0}).placed += a; }
     else { kind = "Withdrawn from venture"; ret = a; free += a; inVen -= a; (byVen[t.bizId] ||= {placed:0, back:0}).back += a; }
     rows.push({t, kind, inA, place, ret, drawn, free, inVen, sh: shName(t.shareholderId)}); }
@@ -3760,25 +3836,101 @@ function ownTrail(){
 function trailSection(){
   const T = ownTrail(), W = S.canWrite!==false, sum = k => T.rows.reduce((s,r)=>s+r[k],0);
   const sp = incomeSplit(S.start, S.end), resid = sp.rows.reduce((s,r)=>s+r.ownCap,0), gap = T.inVen - resid;
-  const pill = k => ({"Initial capital":"ok", "Additional capital":"ok", "Placed in venture":"inv", "Withdrawn from venture":"warn", "Drawing / capital withdrawn":"bad"})[k];
+  const pill = k => ({"Profit reinvested":"ok", "Initial capital":"ok", "Additional capital":"ok", "Placed in venture":"inv", "Withdrawn from venture":"warn", "Drawing / capital withdrawn":"bad"})[k];
   const tr = T.rows.slice().reverse().map(r => `<tr class="click${r.t.date < S.start ? " dim" : ""}" data-edit="led:${r.t.id}"><td class="n" style="text-align:left">${fmtDate(r.t.date)}</td><td><span class="pill ${pill(r.kind)}">${r.kind}</span>${rcptBadge("ledger", r.t)}</td>
     <td>${r.t.bizId ? `<i class="sw" style="display:inline-block;margin-right:6px;background:${vcol(r.t.bizId)}"></i>${h(bizName(r.t.bizId))}` : h(r.sh || "")}</td><td class="note" style="max-width:210px">${h(r.t.ref || "")}${r.t.method?`<div>${h(payDetails(r.t))}</div>`:""}</td>
-    <td class="n">${r.inA ? money(r.inA) : ""}</td><td class="n">${r.place ? money(-r.place) : ""}</td><td class="n">${r.ret ? money(r.ret) : ""}</td><td class="n">${r.drawn ? money(-r.drawn) : ""}</td><td class="n">${money(r.inVen)}</td><td class="n">${money(r.free)}</td></tr>`).join("");
+    <td class="n">${r.inA ? money(r.inA) : ""}</td><td class="n">${r.place ? money(-r.place) : r.reinv ? `<span class="note">${nf.format(Math.round(r.reinv))} reinvested</span>` : ""}</td><td class="n">${r.ret ? money(r.ret) : ""}</td><td class="n">${r.drawn ? money(-r.drawn) : ""}</td><td class="n">${money(r.inVen)}</td><td class="n">${money(r.free)}</td></tr>`).join("");
   csvReg("owner-trail", ["Date","Movement","Venture / shareholder","Reference","Payment details","Capital in","Placed in venture","Returned from venture","Drawn","Own money in ventures (running)","Own money not yet placed (running)"],
     T.rows.map(r=>[r.t.date, r.kind, r.t.bizId ? bizName(r.t.bizId) : (r.sh||""), r.t.ref||"", payDetails(r.t), r0(r.inA), r0(-r.place), r0(r.ret), r0(-r.drawn), r0(r.inVen), r0(r.free)]));
   const vrows = Object.entries(T.byVen).map(([id, v]) => ({b:S.biz.find(b=>b.id===id), ...v})).filter(x=>x.b).map(x => `<tr class="click" data-goledger="${x.b.id}"><td><i class="sw" style="display:inline-block;margin-right:8px;background:${vcol(x.b.id)}"></i>${h(x.b.name)}</td><td class="n">${money(x.placed)}</td><td class="n">${money(-x.back)}</td><td class="n">${money(x.placed - x.back)}</td><td class="n">${pct(div(x.placed - x.back, T.inVen))}</td></tr>`).join("");
-  return `<section class="sheet"><div class="sheet-h"><div><h2>Trail of owner money</h2><p>Every movement of Future Axis's own money up to ${fmtDate(S.end)}: capital in, placements in ventures, withdrawals and drawings, with running balances. Faded rows are before the period. Click a row to open the entry and its receipts.</p></div>
+  return `<section class="sheet"><div class="sheet-h"><div><h2>Trail of owner money</h2><p>Every movement of Future Axis's own money up to ${fmtDate(S.end)}: capital in, placements in ventures, owner withdrawals and drawings, with running balances. Withdrawals and reinvested profit of a venture are pooled with investor money and shown in the venture's monthly table. Faded rows are before the period. Click a row to open the entry and its receipts.</p></div>
       <div class="row">${W?`<button class="btn sm" data-newcap="Owner Capital Contribution">Add capital</button><button class="btn sm" data-ownplace type="button">Place own money in a venture</button>`:""}${csvBtn("owner-trail")}</div></div>
     <div class="kpis" style="border:0;border-radius:0;padding:16px 20px 0">
       <div class="kpi"><span class="eyebrow">Capital in</span><span class="v">${money(sum("inA"))}</span><span class="s">${T.rows.filter(r=>r.inA).length} contributions</span></div>
       <div class="kpi"><span class="eyebrow">Placed in ventures</span><span class="v">${money(sum("place"))}</span><span class="s">${T.rows.filter(r=>r.place).length} placements${sum("ret")?` · ${nf.format(sum("ret"))} withdrawn back`:""}</span></div>
-      <div class="kpi"><span class="eyebrow">Own money in ventures</span><span class="v">${money(T.inVen)}</span><span class="s">${Math.abs(gap) < 0.5 ? "agrees to venture capital less investor capital" : `${nf.format(gap)} differs from venture capital less investor capital`}</span></div>
+      <div class="kpi"><span class="eyebrow">Own share of ventures now</span><span class="v">${money(resid)}</span><span class="s">venture positions less investor capital${Math.abs(gap) >= 0.5 ? `; ${gap > 0 ? `${nf.format(gap)} less than placed, as venture withdrawals are pooled (see Ventures)` : `${nf.format(-gap)} more than placed: reinvested profit`}` : ""}</span></div>
       <div class="kpi"><span class="eyebrow">Not yet placed</span><span class="v">${money(T.free)}</span><span class="s">capital in less placed${sum("drawn")?` and ${nf.format(sum("drawn"))} drawn`:""}</span></div>
     </div>
     ${vrows ? `<div class="sheet-b"><div class="tbl" style="border:1px solid var(--line);border-radius:12px"><table><thead><tr><th>Placed by venture</th><th class="n">Placed</th><th class="n">Withdrawn</th><th class="n">Net own money</th><th class="n">% of own money placed</th></tr></thead><tbody>${vrows}</tbody></table></div></div>` : ""}
     <div class="tbl"><table><thead><tr><th>Date</th><th>Movement</th><th>Venture / shareholder</th><th>Reference · payment</th><th class="n">Capital in</th><th class="n">Placed</th><th class="n">Returned</th><th class="n">Drawn</th><th class="n">In ventures</th><th class="n">Not yet placed</th></tr></thead>
     <tbody>${tr || `<tr><td colspan="10" class="empty">No owner money recorded yet.</td></tr>`}</tbody>
     ${tr ? `<tfoot><tr><td colspan="4">Total</td><td class="n">${money(sum("inA"))}</td><td class="n">${money(-sum("place"))}</td><td class="n">${money(sum("ret"))}</td><td class="n">${money(-sum("drawn"))}</td><td class="n">${money(T.inVen)}</td><td class="n">${money(T.free)}</td></tr></tfoot>` : ""}</table></div></section>`;
+}
+
+/* ---------- ventures: profit treatment, monthly position, withdrawals ---------- */
+const PROFIT_MODES = ["Kept as receivable","Reinvested (compounds)","Paid out monthly"];
+const profitMode = b => String(b?.profitMode || "Kept as receivable");
+const isReinvest = b => profitMode(b).startsWith("Reinvested");
+const isPaidOut = b => profitMode(b).startsWith("Paid out");
+function ventureMonths(bid){
+  const f = t => t.bizId===bid, T = (type, a, b) => tsum(type, a, b, f);
+  const ds = S.led.filter(f).map(t=>t.date).filter(Boolean).sort(); if (!ds.length) return [];
+  return monthsBetween(ds[0].slice(0,7), [S.end, todayIso()].sort()[1].slice(0,7)).map(ym => {
+    const from = ym+"-01", to = monthEnd(ym), o = addDays(from,-1);
+    const openInv = bal("inv", o, f), openRec = bal("rec", o, f);
+    const m = {ym, label: monthLabel(ym), openInv, openRec, open: openInv + openRec,
+      invested: T("Investment Addition", from, to), accrued: T("Profit Accrued", from, to), reinv: T("Profit Reinvested", from, to), received: T("Profit Received", from, to), withdrawn: T("Investment Withdrawal", from, to),
+      inv: bal("inv", to, f), rec: bal("rec", to, f)};
+    const cd = capDays(S.led.filter(t=>f(t) && (t.type==="Investment Addition"||t.type==="Investment Withdrawal"||t.type==="Profit Reinvested")).map(t=>[t.date, num(t.amount)*(t.type==="Investment Withdrawal"?-1:1)]), from, to);
+    m.close = m.inv + m.rec; m.ann = cd > 0 ? m.accrued * 365 / cd : 0; return m; });
+}
+S.vsel = "";
+function ventureMonthlySection(){
+  const vs = S.biz.filter(b => S.led.some(t=>t.bizId===b.id)); if (!vs.length) return "";
+  if (!vs.some(b=>b.id===S.vsel)) S.vsel = vs[0].id;
+  const b = S.biz.find(x=>x.id===S.vsel), M = ventureMonths(b.id), W = S.canWrite!==false, T = k => M.reduce((s,m)=>s+m[k],0), last = M[M.length-1] || {inv:0, rec:0, close:0};
+  const seg = `<div class="segctl" role="tablist" aria-label="Venture">${vs.map(x=>`<button role="tab" type="button" data-vsel="${x.id}" aria-selected="${x.id===b.id}"><i class="sw" style="display:inline-block;margin-right:6px;background:${vcol(x.id)}"></i>${h(x.name)}</button>`).join("")}</div>`;
+  const short = m => M.length > 12 ? m.label.slice(0,3) + " " + m.ym.slice(2,4) : m.label.slice(0,3);
+  const flows = colChart(M.map(m=>({label:short(m), title:m.label, v:{inv:m.invested, acc:m.accrued, rcv:-m.received, wd:-m.withdrawn}, tip:[["Closing position", fmtV(m.close)]]})),
+    [{k:"inv", l:"Invested", c:"var(--c1)"}, {k:"acc", l:"Profit accrued", c:"var(--pos)"}, {k:"rcv", l:"Profit received", c:"var(--gold)"}, {k:"wd", l:"Withdrawn", c:"var(--neg)"}], {aria:"Monthly flows"});
+  const pos = areaChart(M.map(m=>({label:short(m), title:`${m.label} (month end)`, v:{inv:Math.max(0,m.inv), rec:Math.max(0,m.rec)}})),
+    [{k:"inv", l:"Investment (incl. reinvested profit)", c:vcol(b.id)}, {k:"rec", l:"Profit receivable", c:"var(--gold)"}], {totalLabel:"Position", aria:"Position at month end"});
+  const rows = M.slice().reverse().map(m=>`<tr><td>${m.label}</td><td class="n">${money(m.open)}</td><td class="n">${money(m.invested)}</td><td class="n">${money(m.accrued)}</td><td class="n">${money(m.reinv)}</td><td class="n">${money(-m.received)}</td><td class="n">${money(-m.withdrawn)}</td><td class="n">${money(m.rec)}</td><td class="n">${money(m.inv)}</td><td class="n"><b>${money(m.close)}</b></td><td class="n">${pct(m.ann)}</td></tr>`).join("");
+  csvReg("venture-monthly", ["Month","Opening position","Invested","Profit accrued","Reinvested","Profit received","Withdrawn","Receivable (month end)","Investment (month end)","Closing position","Profit % p.a."],
+    M.map(m=>[m.label, r0(m.open), r0(m.invested), r0(m.accrued), r0(m.reinv), r0(-m.received), r0(-m.withdrawn), r0(m.rec), r0(m.inv), r0(m.close), p2(m.ann)]));
+  const mode = profitMode(b);
+  return `<section class="sheet" id="venMonthly"><div class="sheet-h"><div><h2>Monthly position by venture</h2><p>Invested, profit accrued, received and withdrawn each month, with the receivable and closing position. Profit treatment for ${h(b.name)}: <b>${h(mode)}</b>${isReinvest(b)?" (each month's profit is added to the investment and earns profit from the next day)":isPaidOut(b)?" (each month's profit is received in full at month end)":" (profit stays receivable until received)"}.</p></div>
+      <div class="row">${W?`<button class="btn sm" data-edit="biz:${b.id}" type="button">Change treatment</button><button class="btn sm primary" data-vwd="${b.id}" type="button">Record withdrawals</button>`:""}${csvBtn("venture-monthly")}</div></div>
+    <div class="sheet-b" style="padding-bottom:0">${seg}</div>
+    <div class="kpis" style="border:0;border-radius:0;padding:0 20px">
+      <div class="kpi"><span class="eyebrow">Invested to date</span><span class="v">${money(T("invested"))}</span><span class="s">withdrawn ${nf.format(T("withdrawn"))}</span></div>
+      <div class="kpi"><span class="eyebrow">Profit accrued to date</span><span class="v">${money(T("accrued"))}</span><span class="s">${isReinvest(b)?`${nf.format(T("reinv"))} reinvested`:`${nf.format(T("received"))} received`}</span></div>
+      <div class="kpi"><span class="eyebrow">Receivable now</span><span class="v">${money(last.rec)}</span><span class="s">profit not yet received or reinvested</span></div>
+      <div class="kpi"><span class="eyebrow">Closing position</span><span class="v">${money(last.close)}</span><span class="s">investment ${nf.format(last.inv)} + receivable ${nf.format(last.rec)}</span></div>
+    </div>
+    <div class="grid4" style="padding:16px 20px 4px"><div class="cbox"><h3>Monthly flows</h3>${flows}</div><div class="cbox"><h3>Position at month end</h3>${pos}</div></div>
+    <div class="tbl"><table><thead><tr><th>Month</th><th class="n">Opening position</th><th class="n">Invested</th><th class="n">Profit accrued</th><th class="n">Reinvested</th><th class="n">Received</th><th class="n">Withdrawn</th><th class="n">Receivable</th><th class="n">Investment</th><th class="n">Closing position</th><th class="n">Profit % p.a.</th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="11" class="empty">Nothing recorded for this venture yet.</td></tr>`}</tbody>
+    ${rows?`<tfoot><tr><td>Total</td><td></td><td class="n">${money(T("invested"))}</td><td class="n">${money(T("accrued"))}</td><td class="n">${money(T("reinv"))}</td><td class="n">${money(-T("received"))}</td><td class="n">${money(-T("withdrawn"))}</td><td class="n">${money(last.rec)}</td><td class="n">${money(last.inv)}</td><td class="n">${money(last.close)}</td><td></td></tr></tfoot>`:""}</table></div></section>`;
+}
+/* paste several withdrawals at once, e.g. "May 31, 2026 - USD 13,000" */
+function parseWdLines(txt){
+  return String(txt||"").split(/\n+/).map(l=>l.trim()).filter(Boolean).map(l => {
+    const date = parseDateAny(l.replace(/^[^A-Za-z0-9]+/,"")), clean = l.replace(/[^\d]+$/,""), m = /([\d,]+(?:\.\d+)?)$/.exec(clean);
+    const amount = m ? parseFloat(m[1].replace(/,/g,"")) : NaN; return {line:l, date, amount, ok: !!date && amount > 0};
+  });
+}
+function openVentureWithdrawals(bid){
+  const b = S.biz.find(x=>x.id===bid); if (!b) return;
+  ivDialog("vw", `Record withdrawals from ${h(b.name)}`, `
+    <div class="full banner" style="margin:0">${isReinvest(b) ? `${h(b.name)} reinvests its profit, so each withdrawal reduces the investment (and the profit it earns from that day).` : `Each withdrawal settles the profit receivable first; any excess reduces the investment.`}</div>
+    <label class="full">One withdrawal per line: date and amount (${h(VIEW())})<textarea id="vwLines" rows="7" placeholder="May 31, 2026 - USD 13,000&#10;June 3, 2026 - USD 4,000"></textarea></label>
+    <div class="full" id="vwPrev"></div>
+    ${payBlockHtml("pbV", {bankLabel:"Received into bank account", payBankLabel:"Paying bank", noCur:true})}`,
+    async () => { const L = parseWdLines($("#vwLines").value); if (!L.length) throw new Error("Add at least one line"); if (L.some(x=>!x.ok)) throw new Error("Fix the lines marked in red");
+      const pd = await payBlockRead("pbV", "ledger", `vw-${bid}-${Date.now()}`), now = new Date().toISOString(), f = t => t.bizId===bid, docs = [];
+      let usedRec = 0;
+      for (const x of L.sort((a,c)=>a.date.localeCompare(c.date))){
+        const recNow = isReinvest(b) ? 0 : Math.max(0, bal("rec", x.date, f) - usedRec), prof = Math.min(recNow, x.amount), cap = x.amount - prof; usedRec += prof;
+        if (prof > 0.005) docs.push({id:newId(), data:{...pd, date:x.date, type:"Profit Received", bizId:bid, placementId:"", amount:+prof.toFixed(2), ref:`Withdrawal from ${b.name}`, createdAt:now}});
+        if (cap > 0.005) docs.push({id:newId(), data:{...pd, date:x.date, type:"Investment Withdrawal", bizId:bid, placementId:"", amount:+cap.toFixed(2), ref:`Withdrawal from ${b.name}`, createdAt:now}});
+      }
+      await S.db.bulk("ledger", docs);
+      logEvent("Venture withdrawals recorded", `${b.name}: ${L.length} withdrawals, ${VIEW()} ${fmt2(L.reduce((s,x)=>s+x.amount,0))}`);
+      return `${L.length} withdrawal${L.length===1?"":"s"} recorded (${VIEW()} ${fmt2(L.reduce((s,x)=>s+x.amount,0))}). Post the profit accruals again so profit reflects them.`; }, "Record withdrawals");
+  payBlockWire("pbV");
+  const prev = () => { const L = parseWdLines($("#vwLines").value); $("#vwPrev").innerHTML = L.length ? `<div class="tbl"><table><thead><tr><th>Date</th><th class="n">Amount</th><th>Line</th></tr></thead><tbody>${L.map(x=>`<tr${x.ok?"":' style="color:var(--neg)"'}><td>${x.date?fmtDate(x.date):"Date not recognised"}</td><td class="n">${x.amount>0?fmt2(x.amount):"Amount not recognised"}</td><td class="note">${h(x.line)}</td></tr>`).join("")}<tr class="tot"><td>Total</td><td class="n">${fmt2(L.filter(x=>x.ok).reduce((s,x)=>s+x.amount,0))}</td><td></td></tr></tbody></table></div>` : ""; };
+  $("#vwLines").oninput = prev;
 }
 
 /* ---------- render ---------- */
@@ -3895,12 +4047,15 @@ document.addEventListener("click", e => {
   const rv = e.target.closest("[data-rview]"); if (rv){ e.preventDefault(); openReceipt(rv.dataset.rview); return; }
   const rr = e.target.closest("[data-rrm]"); if (rr){ const d = rr.closest(".rcpt"); d.classList.toggle("rm"); rr.textContent = d.classList.contains("rm") ? "Undo" : "Remove"; return; }
   const rb = e.target.closest("[data-rcpt]"); if (rb){ const [c,i] = rb.dataset.rcpt.split(":"); openReceipts(c, i); return; }
+  const vs = e.target.closest("[data-vsel]"); if (vs){ S.vsel = vs.dataset.vsel; render(); return; }
+  const vw = e.target.closest("[data-vwd]"); if (vw){ openVentureWithdrawals(vw.dataset.vwd); return; }
   const pfv = e.target.closest("[data-pfv]"); if (pfv){ S.pf.view = pfv.dataset.pfv; render(); return; }
   const ci = e.target.closest("[data-capinit]"); if (ci){ const d = $("#capInit").value; if (!d) return; S.db.doc("config/settings").set({...S.cfg, initialTo:d}).then(()=>{ S.cfg.initialTo = d; logEvent("Initial paid-up capital date changed", d); render(); toast("Saved"); }, x=>toast("Could not save: "+(x.message||""))); return; }
   const fxb = e.target.closest("[data-fx]"); if (fxb){ fxAction(fxb); return; }
   const fxd = e.target.closest("[data-fxdel]"); if (fxd){ fxDelete(fxd.dataset.fxdel); return; }
   const ofx = e.target.closest("[data-ownfix]"); if (ofx){ ownFix(ofx); return; }
   const iva = e.target.closest("[data-ivact]"); if (iva){ ivAction(iva); return; }
+  const ivp = e.target.closest("[data-ivpay]"); if (ivp){ openInvestorPay(ivp.dataset.ivpay); return; }
   const ivq = e.target.closest("[data-ivq]"); if (ivq){ S.iv.q = ivq.dataset.ivq; render(); $("#ivPay")?.scrollIntoView({behavior:"smooth", block:"start"}); return; }
   const fv = e.target.closest("[data-fsv]"); if (fv){ S.fsView = fv.dataset.fsv; render(); return; }
   const mrb = e.target.closest("[data-mr]"); if (mrb){ e.preventDefault(); monthlyAction(mrb); return; }
@@ -3916,7 +4071,7 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-acc]")){ openAccruals(); return; }
   const op = e.target.closest("[data-ownplace]"); if (op){ openForm("led", null, {prefill:{type:"Investment Addition", bizId:"", ref:"Own money placed"}, note:"Placing Future Axis's own money in a venture. Investor money is placed automatically when you add a placement."}); return; }
   const nc = e.target.closest("[data-newcap]"); if (nc){ openForm("led", null, {prefill:{type:nc.dataset.newcap, bizId:"", shareholderId:S.sh.length===1?S.sh[0].id:""}}); return; }
-  if (e.target.closest("[data-ownplace]")) return;
+  if (e.target.closest("[data-ownplace],[data-vsel],[data-vwd],[data-ivpay]")) return;
   if (e.target.closest("[data-rcpt],[data-rview],[data-rrm],[data-ivsel],[data-ivact],[data-mdtog],[data-mdpl],[data-mdk],[data-mdact],[data-fx],[data-fxdel],[data-ownfix]")) return;
   const t = e.target.closest("[data-tab],[data-go],[data-new],[data-edit],[data-csv],[data-goledger]"); if (!t) return;
   if (t.dataset.tab || t.dataset.go){ S.tab = t.dataset.tab || t.dataset.go; if (S.tab==="logs") S.lg.rows = null; if (S.tab==="backups") S.bk.rows = null; store.set("fa.tab", S.tab); render(); window.scrollTo(0,0); }

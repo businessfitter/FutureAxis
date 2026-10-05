@@ -114,6 +114,25 @@ Every change you commit on GitHub redeploys automatically.
 - Withdrawals and payments entered in PKR or AED convert to USD at the dated rate.
 - The converter on the same page converts any amount on any date.
 
+## Ventures: profit treatment and monthly position
+- Each venture has a **Profit treatment** (edit the venture):
+  - **Reinvested (compounds)**, e.g. Empyrean: each month's profit is added to the investment at month end and earns profit from the next day.
+  - **Paid out monthly**, e.g. SK Livestock: each month's profit is received in full at month end. This is skipped if you already recorded a receipt for that month.
+  - **Kept as receivable**: profit stays receivable until you record it as received.
+- **Monthly position by venture** (Ventures tab): opening position, invested, profit accrued, reinvested, received, withdrawn, receivable, investment and closing position, plus profit % p.a. for every month. Includes charts and a CSV download.
+- **Record withdrawals**: paste one line per withdrawal, e.g. `May 31, 2026 - USD 13,000`.
+  - For a reinvesting venture, the withdrawal reduces the investment.
+  - Otherwise it settles the receivable first, and any excess reduces the investment.
+  - Post the profit accruals again afterwards.
+
+## Investor payments (Investors tab → Investor summary)
+- Per investor for the chosen month: **payable b/f + profit for the month = total due**, then paid in (currency), paid (currency amount), paid converted to USD, and **payable c/f**.
+- **Mark paid** on the row: enter the amount actually paid in the investor's currency and the rate. The USD equivalent is shown as you type.
+  - Less than due: the difference stays payable and carries to next month's b/f.
+  - More than due: shown **in red**, and saved only after you confirm. The row and a banner stay red, and the credit reduces the next month's due.
+- **Mark all paid up to [month]**: settles everything outstanding for every investor in one step (for example, "up to Aug 2026").
+- FAMCON is never paid: any payments recorded against it are removed when it moves to Share capital, and its profit stays in retained earnings.
+
 ## Master data
 - One place to create, edit, **deactivate** and reactivate **investors, ventures, bank accounts and suppliers**.
 - Inactive records stay on past entries but can't be chosen for new ones.
