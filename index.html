@@ -296,6 +296,12 @@ tr.dim td{opacity:.55}
 
 .negc{color:var(--neg)!important;font-weight:700}
 tr.overpaid td{background:color-mix(in srgb,var(--neg) 9%,transparent)}
+
+.paybar{border-bottom:1px solid var(--line);background:var(--sunk)}
+.paybar label.inl input,.paybar label.inl select{padding:5px 8px}
+tr.ieditor td{background:var(--accent-soft)}
+.ie{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:4px 0}
+.ie label.inl input,.ie label.inl select{padding:5px 8px}
 </style>
 </head>
 <body class="authmode">
@@ -1931,7 +1937,7 @@ function openAccruals(){
 
 /* ---------- one-time investor sheet import: Sr. # · Investor · Rate · Placement date · Investment · one column per venture ---------- */
 const OWNER_HINT = {test: n => /famcon|futureaxis/i.test(String(n||"").replace(/[^a-z]/gi,""))};
-const APP_VERSION = "5 Oct 2026 · 22:05";
+const APP_VERSION = "5 Oct 2026 · 22:20";
 function findSimpleSheet(wb){
   for (const name of wb.SheetNames){
     const rows = sheetRows(wb.Sheets[name]);
@@ -2073,7 +2079,7 @@ async function runInvestorImport(btn){
 }
 
 /* ---------- Reports: downloads + investment income entry emailed to finance ---------- */
-const fmt2 = v => num(v).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmt2 = v => (Math.abs(num(v)) < 0.005 ? 0 : num(v)).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
 function incomeEntry(cur){
   const P = pnl(S.start, S.end), sp = incomeSplit(S.start, S.end), f = conv(1, VIEW(), cur);
   const gross = P.inc*f, share = P.share*f, own = sp.own*f, invGross = sp.inv*f;
@@ -3093,12 +3099,13 @@ function viewInvestors(){
   const sumRows = inv.map(x=>{ const ov = over(x), pc = Object.entries(x.paidCur).filter(([,v])=>Math.abs(v)>0.005);
     const act = ov ? `<span class="pill bad">Overpaid ${fmt2(Math.max(x.paidConv - x.dueM, -x.cf))}</span>`
       : !x.posted && x.dueM < 0.005 ? '<span class="pill">Not posted</span>'
-      : x.cf > 0.005 ? (W ? `<button class="btn sm primary" data-ivpay="${h(x.name)}" type="button">Mark paid</button>` : '<span class="pill warn">Due</span>')
+      : x.cf > 0.005 ? (W ? `<button class="btn sm ${S.iv.edit===x.name?"":"primary"}" data-ivedit="${h(x.name)}" type="button">${S.iv.edit===x.name?"Close":"Mark paid"}</button>` : '<span class="pill warn">Due</span>')
       : x.dueM > 0.005 ? '<span class="pill ok">Paid</span>' : '<span class="mut">–</span>';
-    return `<tr class="click${ov?" overpaid":""}" data-ivq="${h(x.name)}" title="Show ${h(x.name)}'s placements"><td><b style="font-weight:600">${h(x.name)}</b><div class="note">${x.n} placement${x.n===1?"":"s"} · ${fmt2(x.closing)}</div></td>
+    const can = W && x.cf > 0.005 && x.posted;
+    return `<tr class="click${ov?" overpaid":""}${S.iv.psel.has(x.name)?" selrow":""}" data-ivq="${h(x.name)}" title="Show ${h(x.name)}'s placements"><td>${can?`<input type="checkbox" data-ipsel="${h(x.name)}" ${S.iv.psel.has(x.name)?"checked":""} aria-label="Select ${h(x.name)}">`:""}</td><td><b style="font-weight:600">${h(x.name)}</b><div class="note">${x.n} placement${x.n===1?"":"s"} · ${fmt2(x.closing)}</div></td>
       <td class="n${x.bf < -0.01 ? " negc" : ""}">${fmt2(x.bf)}${x.bf < -0.01 ? '<div class="note">overpaid earlier</div>' : ""}</td><td class="n">${fmt2(x.profit)}${x.posted?"":'<div class="note">calculated</div>'}</td><td class="n"><b>${fmt2(x.dueM)}</b></td>
       <td>${h(x.cur)}</td><td class="n">${pc.length ? pc.map(([c,v])=>`${h(c)} ${fmt2(v)}`).join("<br>") : '<span class="mut">–</span>'}</td>
-      <td class="n${ov?" negc":""}">${x.paidConv ? fmt2(x.paidConv) : '<span class="mut">–</span>'}</td><td class="n${x.cf < -0.01 ? " negc" : ""}">${fmt2(x.cf)}${x.cf > 0.005 && x.paidMonth > 0.005 ? '<div class="note">short: carried to next month</div>' : ""}</td><td>${act}</td></tr>`; }).join("");
+      <td class="n${ov?" negc":""}">${x.paidConv ? fmt2(x.paidConv) : '<span class="mut">–</span>'}</td><td class="n${x.cf < -0.01 ? " negc" : ""}">${fmt2(x.cf)}${x.cf > 0.005 && x.paidMonth > 0.005 ? '<div class="note">short: carried to next month</div>' : ""}</td><td>${act}</td></tr>${S.iv.edit===x.name && can ? ivEditorRow(x) : ""}`; }).join("");
   csvReg("investor-summary", ["Investor","Placements",`Closing investment (${C})`,"Payable b/f",`Profit ${lab}`,"Total due","Paid in","Paid (payout currency)",`Paid converted (${C})`,"Payable c/f","Overpaid"],
     inv.map(x=>[x.name, x.n, x.closing.toFixed(2), x.bf.toFixed(2), x.profit.toFixed(2), x.dueM.toFixed(2), x.cur, Object.entries(x.paidCur).map(([c,v])=>`${c} ${v.toFixed(2)}`).join("; "), x.paidConv.toFixed(2), x.cf.toFixed(2), over(x) ? "YES" : ""]));
   // monthly profit & payments
@@ -3123,9 +3130,10 @@ function viewInvestors(){
   </div>
   <section class="sheet"><div class="sheet-h"><div><h2>Investor summary · ${lab}</h2><p>Payable brought forward + profit for the month = total due. Payments for the month are shown in the currency paid and converted to ${h(C)}. A shortfall carries to next month; an <b class="negc">overpayment is flagged in red</b>. Click an investor to show their placements below.</p></div>${csvBtn("investor-summary")}</div>
     ${inv.some(over) ? `<div class="sheet-b"><div class="alert bad" style="margin:0"><span class="dot"></span><div><b>${inv.filter(over).length} investor${inv.filter(over).length===1?" was":"s were"} paid more than the profit due.</b> ${inv.filter(over).map(x=>h(x.name)).join(", ")}. Check the amount or the rate used.</div></div></div>` : ""}
-    <div class="tbl"><table><thead><tr><th>Investor</th><th class="n">Payable b/f</th><th class="n">Profit ${lab}</th><th class="n">Total due</th><th>Paid in</th><th class="n">Paid (currency)</th><th class="n">Paid in ${h(C)}</th><th class="n">Payable c/f</th><th></th></tr></thead>
-    <tbody>${sumRows || `<tr><td colspan="9" class="empty">No investors at ${lab}.</td></tr>`}</tbody>
-    ${inv.length?`<tfoot><tr><td>Total · ${all.length} placements · ${fmt2(T("closing"))}</td><td class="n">${fmt2(inv.reduce((s,x)=>s+x.bf,0))}</td><td class="n">${fmt2(T("profit"))}</td><td class="n">${fmt2(inv.reduce((s,x)=>s+x.dueM,0))}</td><td></td><td></td><td class="n">${fmt2(inv.reduce((s,x)=>s+x.paidConv,0))}</td><td class="n">${fmt2(inv.reduce((s,x)=>s+x.cf,0))}</td><td></td></tr></tfoot>`:""}</table></div></section>
+    ${W && inv.some(x=>x.cf>0.005 && x.posted) ? ivPayBar(inv) : ""}
+    <div class="tbl"><table><thead><tr><th>${W && inv.some(x=>x.cf>0.005 && x.posted) ? `<input type="checkbox" data-ipsel="*" ${inv.filter(x=>x.cf>0.005 && x.posted).every(x=>S.iv.psel.has(x.name))?"checked":""} aria-label="Select all due">` : ""}</th><th>Investor</th><th class="n">Payable b/f</th><th class="n">Profit ${lab}</th><th class="n">Total due</th><th>Paid in</th><th class="n">Paid (currency)</th><th class="n">Paid in ${h(C)}</th><th class="n">Payable c/f</th><th></th></tr></thead>
+    <tbody>${sumRows || `<tr><td colspan="10" class="empty">No investors at ${lab}.</td></tr>`}</tbody>
+    ${inv.length?`<tfoot><tr><td></td><td>Total · ${all.length} placements · ${fmt2(T("closing"))}</td><td class="n">${fmt2(inv.reduce((s,x)=>s+x.bf,0))}</td><td class="n">${fmt2(T("profit"))}</td><td class="n">${fmt2(inv.reduce((s,x)=>s+x.dueM,0))}</td><td></td><td></td><td class="n">${fmt2(inv.reduce((s,x)=>s+x.paidConv,0))}</td><td class="n">${fmt2(inv.reduce((s,x)=>s+x.cf,0))}</td><td></td></tr></tfoot>`:""}</table></div></section>
   <section class="sheet" id="ivPay"><div class="sheet-h"><div><h2>Monthly profit and payments · ${lab}</h2><p>Hover or tap a profit figure to see how it is calculated. Payout months follow each placement's frequency: quarterly in Mar, Jun, Sep and Dec; semi-annual in Jun and Dec; annual in Dec.</p></div>${csvBtn("investor-month")}</div>
     <div class="sheet-b row ivbar" style="gap:8px;flex-wrap:wrap">
       <input id="ivQ" placeholder="Search investor, placement or venture" value="${h(S.iv.q)}" style="max-width:260px">${S.iv.q?`<button class="btn sm" data-ivact="clearq" type="button">Show all</button>`:""}
@@ -3234,6 +3242,86 @@ async function ivAction(b){
     return;
   }
   if (a==="withdraw") return openWithdrawal(sel.length===1 ? sel[0].p.id : "");
+}
+/* ---------- quick payment: inline row editor and bulk by currency ---------- */
+S.iv.psel = new Set(); S.iv.edit = null; S.iv.pd = {date:"", method:"Bank transfer", bankId:"", payBank:"", ref:""}; S.iv.brate = {};
+const ivPayDate = () => S.iv.pd.date || todayIso();
+const usdOfV = (v, d) => VIEW()==="USD" ? v : v / rateOn("AED", d), vOfUsd = (u, d) => VIEW()==="USD" ? u : u * rateOn("AED", d);
+function ivEditorRow(x){
+  const d = ivPayDate(), cur = x.cur, r = cur==="USD" ? 1 : rateOn(cur, d), amt = r ? (usdOfV(x.cf, d) * r).toFixed(2) : "";
+  return `<tr class="ieditor"><td></td><td colspan="9"><div class="ie" data-iename="${h(x.name)}" data-iedue="${x.cf}">
+    <b>Pay ${h(x.name)}</b><span class="note">due ${h(VIEW())} ${fmt2(x.cf)}</span>
+    <label class="inl">Paid in <select id="ie_cur">${PAY_CURS.filter(c=>c!=="Other").map(c=>`<option ${c===cur?"selected":""}>${c}</option>`).join("")}</select></label>
+    <label class="inl" id="ie_rl" ${cur==="USD"?"hidden":""}>1 USD = <input id="ie_rate" type="number" step="any" min="0" value="${cur==="USD"?1:fxRate(cur, d)}" style="width:100px"></label>
+    <label class="inl">Amount <input id="ie_amt" type="number" step="any" min="0" value="${amt}" style="width:140px"></label>
+    <span id="ie_eq" class="note"></span><span id="ie_flag"></span>
+    <label class="inl" id="ie_okl" hidden><input type="checkbox" id="ie_ok" style="width:auto"> record overpayment</label>
+    <button class="btn sm primary" data-iesave="${h(x.name)}" type="button">Save</button><button class="btn sm" data-ivedit="${h(x.name)}" type="button">Cancel</button>
+    <span class="note">Uses the payment details above.</span></div></td></tr>`;
+}
+function ivPayBar(inv){
+  const due = inv.filter(x=>x.cf>0.005 && x.posted), curs = [...new Set(due.map(x=>x.cur))].sort(), sel = due.filter(x=>S.iv.psel.has(x.name)), selCurs = [...new Set(sel.map(x=>x.cur))].sort(), P = S.iv.pd, d = ivPayDate();
+  return `<div class="sheet-b paybar">
+    <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><b>Payment details</b>
+      <label class="inl">Date <input type="date" id="pb_d" value="${h(d)}"></label>
+      <label class="inl">Mode <select id="pb_m">${METHODS.map(m=>`<option ${m===P.method?"selected":""}>${m}</option>`).join("")}</select></label>
+      ${P.method==="Profit adjustment" ? "" : `<label class="inl">From <select id="pb_b">${bankOpts(P.bankId || (S.bank.length===1?S.bank[0].id:""))}</select></label>`}
+      ${P.method==="Bank transfer" ? `<label class="inl">Investor's bank <input id="pb_n" value="${h(P.payBank)}" style="width:150px"></label>` : ""}
+      <label class="inl">Ref <input id="pb_r" value="${h(P.ref)}" style="width:130px"></label>
+      <label class="inl">Receipt <input type="file" id="pb_f" multiple accept="image/*,.pdf,.heic" style="max-width:190px"></label></div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px"><b>Select</b>
+      <button class="btn sm" data-ivcur="*" type="button">All due (${due.length})</button>${curs.map(c=>`<button class="btn sm" data-ivcur="${c}" type="button">All ${c} (${due.filter(x=>x.cur===c).length})</button>`).join("")}
+      ${sel.length ? `<button class="btn sm" data-ivcur="" type="button">Clear</button>
+        <span class="note" style="margin-left:6px"><b>${sel.length} selected</b> · ${h(VIEW())} ${fmt2(sel.reduce((s,x)=>s+x.cf,0))}</span>
+        ${selCurs.filter(c=>c!=="USD").map(c=>`<label class="inl">1 USD = <input type="number" step="any" min="0" data-brate="${c}" value="${S.iv.brate[c] || fxRate(c, d)}" style="width:100px"> ${c}</label>`).join("")}
+        <button class="btn sm primary" data-ivbulk type="button">Mark ${sel.length} paid in full</button>` : `<span class="note">or tick investors in the table</span>`}</div></div>`;
+}
+function ivPayDetails(){
+  const P = S.iv.pd; return {method:P.method, bankId: P.method==="Profit adjustment" ? "" : ($("#pb_b")?.value || ""), payBank: P.method==="Bank transfer" ? ($("#pb_n")?.value || "").trim() : "", payRef: ($("#pb_r")?.value || "").trim()};
+}
+async function recordInvestorPayment(name, ym, cur, rate, amt, date, pd){
+  const lab = monthLabel(ym), rows = invMonthRows(ym).filter(r=>r.p.investor===name && r.isPosted && r.cf > 0.005);
+  if (!rows.length) throw new Error(`Nothing due for ${name}`);
+  const dueV = rows.reduce((s,r)=>s+r.cf,0), paidV = vOfUsd(amt / rate, date), now = new Date().toISOString();
+  await S.db.bulk("ledger", rows.map(x => { const share = paidV * x.cf / dueV, ex = x.payEntry, curAmt = usdOfV(share, date) * rate;
+    return {id: PAY_ID(x.p.id, ym), data:{...pd, receipts:[...(ex?.receipts||[]), ...(pd.receipts||[])], date, type:"Investor Profit Paid", bizId:x.p.bizId, placementId:x.p.id,
+      amount: +((ex ? num(ex.amount) : 0) + share).toFixed(2), payCur:cur, fxRate:rate, payAmt: +(((ex?.payCur===cur ? num(ex.payAmt) : 0)) + curAmt).toFixed(2), ...(cur!=="USD"?{fxCur:cur, fxAmount: +(((ex?.payCur===cur ? num(ex.payAmt) : 0)) + curAmt).toFixed(2)}:{}),
+      ref:`Profit ${lab}`, payMonth:ym, createdAt: ex?.createdAt || now, updatedAt: now}}; }));
+  const diff = paidV - dueV;
+  logEvent("Investor profit paid", `${name} ${lab}: ${cur} ${fmt2(amt)} = ${VIEW()} ${fmt2(paidV)}${Math.abs(diff)>0.01 ? (diff>0 ? ` · OVERPAID ${fmt2(diff)}` : ` · ${fmt2(-diff)} carried forward`) : ""}`);
+  return {paidV, diff};
+}
+function ieUpdate(){
+  const box = document.querySelector(".ie"); if (!box) return;
+  const d = ivPayDate(), cur = $("#ie_cur").value, r = cur==="USD" ? 1 : num($("#ie_rate").value), a = num($("#ie_amt").value), due = num(box.dataset.iedue), v = r ? vOfUsd(a / r, d) : 0, diff = v - due;
+  $("#ie_eq").textContent = a && r ? `= ${VIEW()} ${fmt2(v)}` : cur!=="USD" && !r ? `Enter the ${cur} rate` : "";
+  $("#ie_flag").innerHTML = !a || !r ? "" : diff > 0.01 ? `<span class="pill bad">Exceeds due by ${VIEW()} ${fmt2(diff)}</span>` : diff < -0.01 ? `<span class="pill warn">${VIEW()} ${fmt2(-diff)} short: carried to next month</span>` : `<span class="pill ok">Equal to due</span>`;
+  $("#ie_okl").hidden = !(diff > 0.01);
+}
+async function ieSave(b){
+  const name = b.dataset.iesave, {ym} = ivMonth(), d = ivPayDate(), cur = $("#ie_cur").value, r = cur==="USD" ? 1 : num($("#ie_rate").value), a = num($("#ie_amt").value), due = num(document.querySelector(".ie").dataset.iedue);
+  if (!(r>0)){ toast(`Enter the ${cur} rate`); return; } if (!(a>0)){ toast("Enter the amount paid"); return; }
+  if (vOfUsd(a / r, d) > due + 0.01 && !$("#ie_ok").checked){ toast("That's more than the profit due. Tick 'record overpayment' to save it anyway."); return; }
+  b.disabled = true;
+  try { const files = [...($("#pb_f")?.files || [])], pd = {...ivPayDetails(), receipts: files.length ? await uploadReceipts("ledger", `ipay-${Date.now()}`, files) : []};
+    if (cur!=="USD" && Math.abs(rateOn(cur, d) - r) > 1e-9) await saveFx([{cur, date:d, rate:r, src:`Payment to ${name}`, by:S.user?.email||""}]);
+    const res = await recordInvestorPayment(name, ym, cur, r, a, d, pd); S.iv.edit = null; S.iv.psel.delete(name); await loadAll(); render();
+    toast(`${name} paid ${cur} ${fmt2(a)}${res.diff < -0.01 ? ` · ${VIEW()} ${fmt2(-res.diff)} carried to next month` : res.diff > 0.01 ? ` · overpaid ${VIEW()} ${fmt2(res.diff)}` : ""}`); }
+  catch(x){ toast(x.message || "Could not save"); b.disabled = false; }
+}
+async function ivBulkPay(b){
+  const {ym} = ivMonth(), d = ivPayDate(), rows = invMonthRows(ym), names = [...S.iv.psel], rates = {USD:1};
+  for (const el of document.querySelectorAll("[data-brate]")){ const v = num(el.value); if (!(v>0)){ toast(`Enter the ${el.dataset.brate} rate`); return; } rates[el.dataset.brate] = v; }
+  b.disabled = true; b.textContent = "Saving…";
+  try { const files = [...($("#pb_f")?.files || [])], pd = {...ivPayDetails(), receipts: files.length ? await uploadReceipts("ledger", `ipay-${Date.now()}`, files) : []};
+    const nr = Object.entries(rates).filter(([c,r])=>c!=="USD" && Math.abs(rateOn(c, d) - r) > 1e-9).map(([c,r])=>({cur:c, date:d, rate:r, src:`Investor payments ${monthLabel(ym)}`, by:S.user?.email||""})); if (nr.length) await saveFx(nr);
+    const tot = {}; let n = 0;
+    for (const name of names){ const rs = rows.filter(r=>r.p.investor===name && r.isPosted && r.cf > 0.005); if (!rs.length) continue;
+      const cur = invCur(rs[0].p), r = rates[cur] || rateOn(cur, d), dueV = rs.reduce((s,x)=>s+x.cf,0), a = +(usdOfV(dueV, d) * r).toFixed(2);
+      await recordInvestorPayment(name, ym, cur, r, a, d, pd); tot[cur] = (tot[cur]||0) + a; n++; }
+    S.iv.psel.clear(); await loadAll(); render();
+    toast(`${n} investor${n===1?"":"s"} marked paid · ${Object.entries(tot).map(([c,v])=>`${c} ${fmt2(v)}`).join(" · ")}`); }
+  catch(x){ toast(x.message || "Could not save"); b.disabled = false; }
 }
 function openInvestorPay(name){
   const {ym} = ivMonth(), lab = monthLabel(ym), rows = invMonthRows(ym).filter(r=>r.p.investor===name && r.isPosted && r.cf > 0.005);
@@ -3969,7 +4057,20 @@ function wireView(){
     else cb.checked ? S.iv.sel.add(k) : S.iv.sel.delete(k); render(); });
   const mq = $("#mdQ"); if (mq) mq.oninput = e => { S.md.q = e.target.value; clearTimeout(wireView.mq); wireView.mq = setTimeout(render, 250); };
   const ms = $("#mdSt"); if (ms) ms.onchange = e => { S.md.st = e.target.value; render(); };
-  const ivy = $("#ivYm"); if (ivy) ivy.onchange = e => { S.iv.ym = e.target.value; render(); };
+  const ivy = $("#ivYm"); if (ivy) ivy.onchange = e => { S.iv.ym = e.target.value; S.iv.edit = null; S.iv.psel.clear(); render(); };
+  document.querySelectorAll("[data-ipsel]").forEach(cb => cb.onchange = () => { const k = cb.dataset.ipsel, {ym} = ivMonth();
+    if (k==="*"){ const due = [...new Set(invMonthRows(ym).filter(r=>r.isPosted && r.cf > 0.005).map(r=>r.p.investor))]; S.iv.psel = new Set(cb.checked ? due : []); }
+    else cb.checked ? S.iv.psel.add(k) : S.iv.psel.delete(k); render(); });
+  const pbd = $("#pb_d"); if (pbd) pbd.onchange = e => { S.iv.pd.date = e.target.value; render(); };
+  const pbm = $("#pb_m"); if (pbm) pbm.onchange = e => { S.iv.pd.method = e.target.value; render(); };
+  const pbb = $("#pb_b"); if (pbb) pbb.onchange = e => { S.iv.pd.bankId = e.target.value; };
+  const pbn = $("#pb_n"); if (pbn) pbn.oninput = e => { S.iv.pd.payBank = e.target.value; };
+  const pbr = $("#pb_r"); if (pbr) pbr.oninput = e => { S.iv.pd.ref = e.target.value; };
+  document.querySelectorAll("[data-brate]").forEach(el => el.oninput = () => { S.iv.brate[el.dataset.brate] = el.value; });
+  const iec = $("#ie_cur"); if (iec){ const box = document.querySelector(".ie"), due = num(box.dataset.iedue), d = ivPayDate();
+    iec.onchange = () => { const c = iec.value, r = c==="USD" ? 1 : rateOn(c, d); $("#ie_rl").hidden = c==="USD"; $("#ie_rate").value = c==="USD" ? 1 : (r ? fxRate(c, d) : ""); $("#ie_amt").value = r ? (usdOfV(due, d) * r).toFixed(2) : ""; ieUpdate(); };
+    $("#ie_rate").oninput = () => { const r = num($("#ie_rate").value); if (r) $("#ie_amt").value = (usdOfV(due, d) * r).toFixed(2); ieUpdate(); };
+    $("#ie_amt").oninput = ieUpdate; ieUpdate(); $("#ie_amt").focus(); }
   const ivv = $("#ivVen"); if (ivv) ivv.onchange = e => { S.iv.ven = e.target.value; render(); };
   const ivf = $("#ivFreq"); if (ivf) ivf.onchange = e => { S.iv.freq = e.target.value; };
   const ivqq = $("#ivQ"); if (ivqq) ivqq.oninput = e => { S.iv.q = e.target.value; clearTimeout(wireView.iq); wireView.iq = setTimeout(render, 250); };
@@ -4056,6 +4157,13 @@ document.addEventListener("click", e => {
   const ofx = e.target.closest("[data-ownfix]"); if (ofx){ ownFix(ofx); return; }
   const iva = e.target.closest("[data-ivact]"); if (iva){ ivAction(iva); return; }
   const ivp = e.target.closest("[data-ivpay]"); if (ivp){ openInvestorPay(ivp.dataset.ivpay); return; }
+  const ive = e.target.closest("[data-ivedit]"); if (ive){ S.iv.edit = S.iv.edit===ive.dataset.ivedit ? null : ive.dataset.ivedit; render(); return; }
+  const ies = e.target.closest("[data-iesave]"); if (ies){ ieSave(ies); return; }
+  const ivc = e.target.closest("[data-ivcur]"); if (ivc){ const c = ivc.dataset.ivcur, {ym} = ivMonth();
+    const due = [...new Set(invMonthRows(ym).filter(r=>r.isPosted && r.cf > 0.005).map(r=>r.p.investor))];
+    S.iv.psel = new Set(c==="" ? [] : due.filter(n => c==="*" || invCur(invMonthRows(ym).find(r=>r.p.investor===n).p)===c)); render(); return; }
+  const ivb = e.target.closest("[data-ivbulk]"); if (ivb){ ivBulkPay(ivb); return; }
+  if (e.target.closest(".ieditor,.paybar,[data-ipsel]")) return;
   const ivq = e.target.closest("[data-ivq]"); if (ivq){ S.iv.q = ivq.dataset.ivq; render(); $("#ivPay")?.scrollIntoView({behavior:"smooth", block:"start"}); return; }
   const fv = e.target.closest("[data-fsv]"); if (fv){ S.fsView = fv.dataset.fsv; render(); return; }
   const mrb = e.target.closest("[data-mr]"); if (mrb){ e.preventDefault(); monthlyAction(mrb); return; }
@@ -4071,7 +4179,7 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-acc]")){ openAccruals(); return; }
   const op = e.target.closest("[data-ownplace]"); if (op){ openForm("led", null, {prefill:{type:"Investment Addition", bizId:"", ref:"Own money placed"}, note:"Placing Future Axis's own money in a venture. Investor money is placed automatically when you add a placement."}); return; }
   const nc = e.target.closest("[data-newcap]"); if (nc){ openForm("led", null, {prefill:{type:nc.dataset.newcap, bizId:"", shareholderId:S.sh.length===1?S.sh[0].id:""}}); return; }
-  if (e.target.closest("[data-ownplace],[data-vsel],[data-vwd],[data-ivpay]")) return;
+  if (e.target.closest("[data-ownplace],[data-vsel],[data-vwd],[data-ivpay],[data-ivedit],[data-iesave],[data-ivcur],[data-ivbulk],.ieditor,.paybar,[data-ipsel]")) return;
   if (e.target.closest("[data-rcpt],[data-rview],[data-rrm],[data-ivsel],[data-ivact],[data-mdtog],[data-mdpl],[data-mdk],[data-mdact],[data-fx],[data-fxdel],[data-ownfix]")) return;
   const t = e.target.closest("[data-tab],[data-go],[data-new],[data-edit],[data-csv],[data-goledger]"); if (!t) return;
   if (t.dataset.tab || t.dataset.go){ S.tab = t.dataset.tab || t.dataset.go; if (S.tab==="logs") S.lg.rows = null; if (S.tab==="backups") S.bk.rows = null; store.set("fa.tab", S.tab); render(); window.scrollTo(0,0); }

@@ -127,7 +127,9 @@ Every change you commit on GitHub redeploys automatically.
 
 ## Investor payments (Investors tab → Investor summary)
 - Per investor for the chosen month: **payable b/f + profit for the month = total due**, then paid in (currency), paid (currency amount), paid converted to USD, and **payable c/f**.
-- **Mark paid** on the row: enter the amount actually paid in the investor's currency and the rate. The USD equivalent is shown as you type.
+- **Payment details bar** above the table: date, mode, bank, reference and an optional receipt. These apply to every payment you mark.
+- **Mark paid** on a row opens an inline strip with no pop-up: currency paid in (defaults to the investor's), rate, and amount in that currency (pre-filled with the amount due). The USD equivalent is shown as you type. Click Save.
+- **Bulk:** tick investors, or click **All PKR / All AED / All USD** to select everyone paid in one currency. Enter that currency's rate once and click **Mark N paid in full**.
   - Less than due: the difference stays payable and carries to next month's b/f.
   - More than due: shown **in red**, and saved only after you confirm. The row and a banner stay red, and the credit reduces the next month's due.
 - **Mark all paid up to [month]**: settles everything outstanding for every investor in one step (for example, "up to Aug 2026").
