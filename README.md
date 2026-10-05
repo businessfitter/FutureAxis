@@ -85,10 +85,26 @@ Every change you commit on GitHub redeploys automatically.
 - Switch between **Total portfolio**, **Investor money** (earned, investor share, kept by Future Axis) and **Share capital** (own capital, owner income, return).
 - Includes month-by-month investment raised and placed, split between investor money and owner money, with charts.
 
-## Share capital: owner equity statement
-Initial paid-up capital → profit earned on initial paid-up capital → profit earned on additional investments (investor placements, net of investor share) → retained earnings → closing owner equity. It is shown for the period and inception to date, and ties to the balance sheet.
-- Initial paid-up capital covers contributions up to a date you can change on the page. Later contributions show as additional paid-up capital.
-- FAMCON is Future Axis's own company, so it belongs here. If it appears as an investor placement, the Investors tab shows **Move to share capital**. Afterwards, post the accruals again.
+## Share capital
+**Closing owner equity = Paid-up capital + Retained earnings carried forward**
+
+| Paid-up capital | Retained earnings |
+|---|---|
+| Paid-up capital brought forward | Retained earnings brought forward |
+| + Initial paid-up capital | + Profit on initial capital |
+| + Additional capital contributed | + Profit on additional investment (investor money, net of investor share) |
+| − Drawings / capital withdrawn | ± Other income less operating expenses |
+| = Paid-up capital | = Retained earnings carried forward (next period's brought forward) |
+
+- Shown for the period and inception to date, with a check against total assets − total liabilities.
+- Initial paid-up capital covers contributions up to a date you can change on the page. Later contributions are additional capital.
+- **Trail of owner money**: every contribution, placement of own money in a venture, withdrawal from a venture and drawing, with payment details, receipts and running balances (in ventures / not yet placed). Investor money placed in ventures is excluded. Use **Place own money in a venture** to record new placements of own money.
+- FAMCON is Future Axis's own company and always sits in Share capital. If it is ever recorded as an investor placement, the first Admin, CFO or Editor to sign in moves it automatically:
+  - A backup is saved first.
+  - The placement becomes a FAMCON capital contribution, and its venture investment becomes owner money.
+  - Investor accruals on it are removed and profit accruals are re-posted.
+  - A note on the Dashboard and Share capital confirms the move.
+  - Placements with investor payments or withdrawals already recorded are left for you to review, using **Move to share capital** on the Investors tab.
 
 ## Currencies (Settings → Currencies)
 - Profit is calculated in USD. Each investor is paid in their own currency: set **Paid in currency** in Master data, or tick placements on the Investors tab and use **Paid in… → Apply**.
