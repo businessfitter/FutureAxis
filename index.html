@@ -288,6 +288,11 @@ tr.dim td{opacity:.55}
 .segctl{flex-wrap:wrap}
 
 .form .chkl{display:flex;flex-direction:row;align-items:center;gap:8px;font-weight:600}.form .chkl input{width:auto}
+
+.fxgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.fxcard{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--sunk)}
+.fxcard .v{font:800 16px var(--f-num)}
+.fxres{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:12px;background:var(--accent-soft);font-size:15px}
 </style>
 </head>
 <body class="authmode">
@@ -346,7 +351,7 @@ const TYPES = {
 };
 const INV_TYPES = ["Investor Profit Accrued","Investor Profit Paid","Investor Capital Repaid"];
 const VEN_TYPES = ["Investment Addition","Investment Withdrawal","Profit Accrued","Profit Received"];
-const TABS = [["dashboard","Dashboard"],["capital","Share capital"],["investors","Investors"],["ventures","Ventures"],["statements","Statements"],["master","Master data"],["|"],["ledger","Ledger"],["bank","Bank"],["expenses","Expenses"],["|"],["returns","Returns"],["monthly","Monthly"],["reports","Reports"],["|"],["settings","Settings"]];
+const TABS = [["dashboard","Dashboard"],["portfolio","Portfolio"],["investors","Investors"],["ventures","Ventures"],["statements","Statements"],["capital","Share capital"],["master","Master data"],["|"],["ledger","Ledger"],["bank","Bank"],["expenses","Expenses"],["|"],["returns","Returns"],["monthly","Monthly"],["reports","Reports"],["|"],["settings","Settings"]];
 const MODES = ["Mudarabah","Musharakah","Equity","Loan","Profit participation","Other"];
 const METHODS = ["Bank transfer","Cash","Cheque","Profit adjustment","Card","Other"];
 const isCashType = t => !!(TYPES[t]||{}).cash;
@@ -1024,8 +1029,9 @@ function openForm(kind, id, opt={}){
       ["payCur","payAmt","payRef"].forEach(k => { const el = $("#fl_"+k); if (el) el.hidden = !cashT; }); };
     $("#ff_method").addEventListener("change", ps); $("#ff_type")?.addEventListener("change", ps); ps();
     const fxs = () => { const c = $("#ff_payCur").value, a = num($("#ff_payAmt").value), hint = $("#fxHint");
-      if (c && CURS.includes(c) && a){ const v = conv(a, c, VIEW()); $("#ff_amount").value = v.toFixed(2); hint.textContent = c===VIEW() ? "" : `= ${VIEW()} ${fmt2(v)} at the Settings rate`; }
-      else hint.textContent = c && a ? `Enter the ${VIEW()} amount above yourself (${c} isn't converted automatically).` : ""; };
+      const d = $("#ff_date")?.value || todayIso(), v = c && a ? fxConv(a, c, VIEW(), d) : null;
+      if (v != null){ $("#ff_amount").value = v.toFixed(2); hint.textContent = c===VIEW() ? "" : `= ${VIEW()} ${fmt2(v)} at 1 USD = ${fxRate(c, d)} ${c}`; }
+      else hint.textContent = c && a ? `No ${c} rate on file: add one in Settings → Currencies, or enter the ${VIEW()} amount above yourself.` : ""; };
     $("#ff_payAmt").addEventListener("input", fxs); $("#ff_payCur").addEventListener("change", fxs);
   }
   $("#fForm").onsubmit = async e => {
@@ -1046,8 +1052,8 @@ function openForm(kind, id, opt={}){
       if (opt.sign && (TYPES[data.type]||{}).cash !== opt.sign) err = err || (opt.sign>0 ? "This bank line is money IN. Choose a type that brings money in, such as Profit Received, Investment Withdrawal or Owner Capital Contribution." : "This bank line is money OUT. Choose a type that pays money out, such as Operating Expense, Investment Addition or Investor Profit Paid.");
     }
     if (kind==="pl"||kind==="inv"){ data.portal = data.portalSel==="Yes"; delete data.portalSel; }
-    if (kind==="pl"){ const I = S.inv.find(i=>i.id===data.investorId); if (!I) err = err || "Choose the investor. Add new investors in Master data."; else { data.investor = I.name; data.contact = I.phone || I.email || rec?.contact || ""; } }
-    if (kind==="inv"){ const dn = S.inv.find(x=>x.id!==id && String(x.name).trim().toLowerCase()===String(data.name).trim().toLowerCase()); if (dn) err = err || `${data.name} already exists as ${dn.code}.`; }
+    if (kind==="pl"){ const I = S.inv.find(i=>i.id===data.investorId); if (!I) err = err || "Choose the investor. Add new investors in Master data."; else if (isOwnName(I.name)) err = err || `${I.name} is Future Axis's own company. Record its money in Share capital, not as an investor placement.`; else { data.investor = I.name; data.contact = I.phone || I.email || rec?.contact || ""; } }
+    if (kind==="inv"){ const dn = S.inv.find(x=>x.id!==id && String(x.name).trim().toLowerCase()===String(data.name).trim().toLowerCase()); if (dn) err = err || `${data.name} already exists as ${dn.code}.`; if (isOwnName(data.name)) err = err || `${data.name} is Future Axis's own company (a shareholder). Add it in Share capital instead.`; }
     if (kind==="bl"){
       const dr = num(data.dr), cr = num(data.cr);
       if ((dr>0) === (cr>0)) err = err || "Enter either money out or money in (one of them, not both).";
@@ -1060,7 +1066,7 @@ function openForm(kind, id, opt={}){
     if ("method" in data){
       if (data.method==="Profit adjustment") data.bankId = "";
       if (data.method!=="Bank transfer") data.payBank = "";
-      if (data.payCur && data.payAmt && data.payCur!=="Other"){ data.fxCur = data.payCur; data.fxAmount = data.payAmt; }
+      if (data.payCur && data.payAmt && data.payCur!=="Other"){ data.fxCur = data.payCur; data.fxAmount = data.payAmt; const r = rateOn(data.payCur, data.date); if (r) data.fxRate = r; }
     }
     if (err){ $("#fErr").textContent = err; return; }
     const docId = id || newId(), rmPaths = [...document.querySelectorAll("#ff_receipts .rcpt.rm")].map(x=>x.dataset.rpath);
@@ -1778,7 +1784,7 @@ function viewCapital(){
   const B = balanceSheet(end), P = pnl(start,end), sp = incomeSplit(start,end), spAll = incomeSplit(ORIGIN,end);
   const ownDep = sp.rows.reduce((s,r)=>s+r.ownCap,0);
   const undeployed = B.eq - ownDep;
-  const W = S.canWrite!==false;
+  const W = S.canWrite!==false, RR = ratios(), yl = Object.fromEntries(ventureAccounts().map(x=>[x.b.id, x.yld]));
   const k = (l,v,s)=>`<div class="kpi"><span class="eyebrow">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`;
   // by shareholder
   const own = id => S.led.filter(t => OWNER_TYPES.includes(t.type) && (t.shareholderId||"")===id && t.date<=end);
@@ -1795,20 +1801,18 @@ function viewCapital(){
   const alloc = sp.rows.filter(r => r.ownCap > 0 || r.own);
   csvReg("owner-allocation",["Venture","Own capital deployed","% of own deployed","Owner income (period)","Return p.a."], alloc.map(r=>[r.b.name,r0(r.ownCap),p2(div(r.ownCap,ownDep)),r0(r.own),p2(div(r.own,r.ownCap)*an)]));
   const aTable = alloc.map(r => `<tr class="click" data-goledger="${r.b.id}"><td><i class="sw" style="display:inline-block;margin-right:8px;background:${vcol(r.b.id)}"></i>${h(r.b.name)}<div class="note">${h(r.b.mode||"")}</div></td>
-    <td class="n">${money(r.ownCap)}</td><td class="n">${pct(div(r.ownCap,ownDep))}</td><td class="n">${pct(r.shOwn)}</td><td class="n">${money(r.own)}</td><td class="n">${pct(div(r.own,r.ownCap)*an)}</td></tr>`).join("");
+    <td class="n">${money(r.ownCap)}</td><td class="n">${pct(div(r.ownCap,ownDep))}</td><td class="n">${pct(r.shOwn)}</td><td class="n">${money(r.own)}</td><td class="n">${pct(yl[r.b.id])}</td></tr>`).join("");
   // movements
   const mv = S.led.filter(t => OWNER_TYPES.includes(t.type)).sort((a,b)=>b.date.localeCompare(a.date));
   const mTable = mv.slice(0,200).map(t => `<tr class="click" data-edit="led:${t.id}"><td class="n" style="text-align:left">${fmtDate(t.date)}</td><td>${h(shName(t.shareholderId)||"–")}</td><td><span class="pill ${t.type==="Owner Drawing"?"warn":"ok"}">${t.type==="Owner Drawing"?"Drawing":"Contribution"}</span></td><td class="note">${h(t.ref||"")}</td><td class="note">${h([t.method, bankCode(t.bankId)].filter(Boolean).join(" · "))}</td><td class="n">${money(t.type==="Owner Drawing"?-num(t.amount):num(t.amount))}</td></tr>`).join("");
   return `<div class="head"><div><span class="eyebrow">Owner investment</span><h1>Share capital</h1><p>Capital put in by the shareholders, where it is invested, and what it earned from ${fmtDate(start)} to ${fmtDate(end)}.</p></div>
     ${W?`<div class="row"><button class="btn" data-new="sh">Add shareholder</button><button class="btn" data-newcap="Owner Drawing">Record drawing</button><button class="btn primary" data-newcap="Owner Capital Contribution">Record contribution</button></div>`:""}</div>
   <div class="stack">
+  ${equitySection()}
   <div class="kpis">
-    ${k("Share capital", money(B.owner), "contributions less drawings")}
-    ${k("Retained earnings", money(B.re), "profit kept in the business")}
-    ${k("Owner's equity", money(B.eq), `at ${fmtDate(end)}`)}
-    ${k("Invested in ventures", money(ownDep), `${pct(div(ownDep,B.eq),0)} of equity`)}
+    ${k("Invested in ventures", money(ownDep), `${pct(div(ownDep,B.eq),0)} of owner equity`)}
     ${k("Not yet invested", money(undeployed), "held as cash or receivables")}
-    ${k("Owner income", money(sp.own), `${pct(div(sp.own,ownDep)*an)} p.a. on own capital invested`)}
+    ${k("Owner income this period", money(sp.own), `${pct(div(RR.incOwn, RR.Oavg)*RR.an)} p.a. on average own capital`)}
   </div>
   <div class="grid2">
     <section class="sheet"><div class="sheet-h"><div><h2>Own capital by venture</h2><p>Owner's money invested in each venture at ${fmtDate(end)}</p></div></div>
@@ -1823,7 +1827,7 @@ function viewCapital(){
   <section class="sheet"><div class="sheet-h"><div><h2>Allocation of own capital to ventures</h2><p>Own capital = venture investment not funded by investor placements. Click a row for its ledger.</p></div>${csvBtn("owner-allocation")}</div>
     <div class="tbl"><table><thead><tr><th>Venture</th><th class="n">Own capital</th><th class="n">% of own invested</th><th class="n">Own share of venture</th><th class="n">Owner income</th><th class="n">Return p.a.</th></tr></thead>
     <tbody>${aTable || `<tr><td colspan="6" class="empty">No own capital invested in ventures yet.</td></tr>`}</tbody>
-    ${aTable?`<tfoot><tr><td>Total</td><td class="n">${money(ownDep)}</td><td class="n">${pct(ownDep?1:0)}</td><td></td><td class="n">${money(sp.rows.reduce((s,r)=>s+r.own,0))}</td><td class="n">${pct(div(sp.rows.reduce((s,r)=>s+r.own,0),ownDep)*an)}</td></tr></tfoot>`:""}</table></div></section>
+    ${aTable?`<tfoot><tr><td>Total</td><td class="n">${money(ownDep)}</td><td class="n">${pct(ownDep?1:0)}</td><td></td><td class="n">${money(sp.rows.reduce((s,r)=>s+r.own,0))}</td><td class="n">${pct(div(RR.incOwn, RR.Oavg)*RR.an)}</td></tr></tfoot>`:""}</table></div></section>
   <section class="sheet"><div class="sheet-h"><div><h2>Capital movements</h2><p>${mv.length} contribution${mv.length===1?"":"s"} and drawing${mv.length===1?"":"s"}</p></div></div>
     <div class="tbl"><table><thead><tr><th>Date</th><th>Shareholder</th><th>Type</th><th>Reference</th><th>Paid via</th><th class="n">Amount</th></tr></thead>
     <tbody>${mTable || `<tr><td colspan="6" class="empty">No capital contributions recorded yet.</td></tr>`}</tbody></table></div></section>
@@ -2722,13 +2726,13 @@ function monthlyRows(ym){
     const month = acc.filter(t=>t.date>=from).reduce((s,t)=>s+num(t.amount),0)*f, todate = acc.reduce((s,t)=>s+num(t.amount),0)*f;
     const amount = num(p.amount)*f - repaid;
     if (amount < 0.005 && !month) continue;
-    rows.push({code:p.code||"", investor:p.investor||"", venture: p.bizId ? bizName(p.bizId) : "", date:p.date, maturity:p.maturity||"", amount, rate:num(p.rate), month, todate, paid, payable: todate - paid});
+    rows.push({cur: invCur(p), code:p.code||"", investor:p.investor||"", venture: p.bizId ? bizName(p.bizId) : "", date:p.date, maturity:p.maturity||"", amount, rate:num(p.rate), month, todate, paid, payable: todate - paid});
   }
   return rows.sort((a,b)=>a.investor.localeCompare(b.investor) || String(a.code).localeCompare(String(b.code),undefined,{numeric:true}));
 }
 function monthlyByInvestor(rows){
   const by = {};
-  for (const r of rows){ const x = by[r.investor] ||= {investor:r.investor, n:0, amount:0, rw:0, month:0, todate:0, paid:0, payable:0};
+  for (const r of rows){ const x = by[r.investor] ||= {investor:r.investor, cur:r.cur, n:0, amount:0, rw:0, month:0, todate:0, paid:0, payable:0};
     x.n++; x.amount += r.amount; x.rw += r.amount*r.rate; x.month += r.month; x.todate += r.todate; x.paid += r.paid; x.payable += r.payable; }
   return Object.values(by).map(x=>({...x, rate: div(x.rw, x.amount)})).sort((a,b)=>b.amount-a.amount);
 }
@@ -2745,10 +2749,11 @@ function monthlyXlsx(ym){
     [`Investor profit for ${lab} (${c})`, r2(T.month)], [`Investor profit to date (${c})`, r2(T.todate)], [`Paid to date (${c})`, r2(T.paid)], [`Payable to investors (${c})`, r2(T.payable)], [],
     ["Prepared", `${fmtDate(todayIso())}${S.user?.email ? " by " + S.user.email : ""}`], ["Purpose", "Backup control: independent monthly record of investors, amounts and agreed rates."]]);
   sum["!cols"] = [{wch:38},{wch:26}]; sum["B7"].z = "0.00%";
-  const head1 = ["Investor", "Placements", `Amount (${c})`, "Weighted agreed rate", `Profit ${lab}`, "Profit to date", "Paid to date", "Payable"];
-  const s1 = XLSX.utils.aoa_to_sheet([head1, ...inv.map(x=>[x.investor, x.n, r2(x.amount), r2(x.rate*100)/100, r2(x.month), r2(x.todate), r2(x.paid), r2(x.payable)]),
+  const me = monthEnd(ym), lc = (v, cur) => cur && cur!=="USD" && rateOn(cur, me) ? r2(v*rateOn(cur, me)) : "";
+  const head1 = ["Investor", "Placements", `Amount (${c})`, "Weighted agreed rate", `Profit ${lab}`, "Profit to date", "Paid to date", "Payable", "Paid in", "Rate (1 USD =)", `Profit ${lab} in payout currency`, "Payable in payout currency"];
+  const s1 = XLSX.utils.aoa_to_sheet([head1, ...inv.map(x=>[x.investor, x.n, r2(x.amount), r2(x.rate*100)/100, r2(x.month), r2(x.todate), r2(x.paid), r2(x.payable), x.cur, x.cur==="USD" ? 1 : (rateOn(x.cur, me) || ""), x.cur==="USD" ? r2(x.month) : lc(x.month, x.cur), x.cur==="USD" ? r2(x.payable) : lc(x.payable, x.cur)]),
     ["Total", T.placements, r2(T.amount), r2(T.rate*100)/100, r2(T.month), r2(T.todate), r2(T.paid), r2(T.payable)]]);
-  s1["!cols"] = [{wch:32},{wch:11},{wch:16},{wch:20},{wch:16},{wch:16},{wch:14},{wch:14}];
+  s1["!cols"] = [{wch:32},{wch:11},{wch:16},{wch:20},{wch:16},{wch:16},{wch:14},{wch:14},{wch:9},{wch:14},{wch:22},{wch:22}];
   for (let i=2; i<=inv.length+2; i++) if (s1["D"+i]) s1["D"+i].z = "0.00%";
   const head2 = ["Placement", "Investor", "Venture", "Placement date", "Maturity", `Amount (${c})`, "Agreed rate", `Profit ${lab}`, "Profit to date", "Paid to date", "Payable"];
   const s2 = XLSX.utils.aoa_to_sheet([head2, ...rows.map(r=>[r.code, r.investor, r.venture, r.date, r.maturity, r2(r.amount), r.rate, r2(r.month), r2(r.todate), r2(r.paid), r2(r.payable)]),
@@ -2764,9 +2769,11 @@ async function monthlyPdf(ym){
   let y = pdfFrame(doc, `Monthly investor report · ${lab}`, `As at ${fmtDate(monthEnd(ym))} · amounts in ${c} · backup control`);
   y = pdfTable(doc, y, ["Investors", "Placements", "Investor capital", "Weighted agreed rate", `Profit ${lab}`, "Profit to date", "Payable to investors"],
     [[String(T.investors), String(T.placements), fmt2(T.amount), pct2(T.rate), fmt2(T.month), fmt2(T.todate), fmt2(T.payable)]], {cols:{2:R,3:R,4:R,5:R,6:R}});
-  y = pdfTable(doc, y, ["Investor", "Placements", "Amount", "Agreed rate", `Profit ${lab}`, "Profit to date", "Paid to date", "Payable"],
-    [...inv.map(x=>[x.investor, String(x.n), fmt2(x.amount), pct2(x.rate), fmt2(x.month), fmt2(x.todate), fmt2(x.paid), fmt2(x.payable)]),
-     [B("Total"), B(String(T.placements)), B(fmt2(T.amount)), B(pct2(T.rate)), B(fmt2(T.month)), B(fmt2(T.todate)), B(fmt2(T.paid)), B(fmt2(T.payable))]], {cols:{1:R,2:R,3:R,4:R,5:R,6:R,7:R}});
+  const me = monthEnd(ym), payTxt = x => x.cur==="USD" ? "USD" : rateOn(x.cur, me) ? `${x.cur} ${fmt2(x.payable*rateOn(x.cur, me))}` : `${x.cur} (no rate)`;
+  y = pdfTable(doc, y, ["Investor", "Placements", "Amount", "Agreed rate", `Profit ${lab}`, "Profit to date", "Paid to date", "Payable", "Payable in payout currency"],
+    [...inv.map(x=>[x.investor, String(x.n), fmt2(x.amount), pct2(x.rate), fmt2(x.month), fmt2(x.todate), fmt2(x.paid), fmt2(x.payable), payTxt(x)]),
+     [B("Total"), B(String(T.placements)), B(fmt2(T.amount)), B(pct2(T.rate)), B(fmt2(T.month)), B(fmt2(T.todate)), B(fmt2(T.paid)), B(fmt2(T.payable)), ""]], {cols:{1:R,2:R,3:R,4:R,5:R,6:R,7:R,8:R}});
+  const usedC = [...new Set(inv.map(x=>x.cur).filter(c=>c!=="USD"))]; if (usedC.length){ doc.setFontSize(9); doc.setTextColor(91,102,131); doc.text(`Rates at ${fmtDate(me)}: ${usedC.map(c=>`1 USD = ${fxRate(c, me) || "not set"} ${c}`).join(" · ")}`, 14, y - 3); doc.setTextColor(14,23,48); y += 4; }
   doc.addPage(); y = pdfFrame(doc, `Placements · ${lab}`, `Every investor placement with its agreed rate · amounts in ${c}`);
   y = pdfTable(doc, y, ["Placement", "Investor", "Venture", "Placed", "Amount", "Agreed rate", `Profit ${lab}`, "Profit to date", "Payable"],
     [...rows.map(r=>[r.code, r.investor, r.venture, fmtDate(r.date), fmt2(r.amount), pct2(r.rate), fmt2(r.month), fmt2(r.todate), fmt2(r.payable)]),
@@ -2940,7 +2947,7 @@ function payBlockHtml(pfx, o={}){
   return `<label>Mode of payment<select id="${pfx}m">${METHODS.map(m=>`<option ${m===(o.method||"Bank transfer")?"selected":""}>${m}</option>`).join("")}</select></label>
     <label id="${pfx}bl">${o.bankLabel||"Paid from bank account"}<select id="${pfx}b">${bankOpts(S.bank.length===1?S.bank[0].id:"")}</select></label>
     <label id="${pfx}nl">${o.payBankLabel||"Receiving bank name"}<input id="${pfx}n" placeholder="e.g. Meezan Bank, Emirates NBD"></label>
-    <label>Payment currency<select id="${pfx}c">${PAY_CURS.map(c=>`<option ${c===(o.cur||VIEW())?"selected":""}>${c}</option>`).join("")}</select></label>
+    ${o.noCur?"":`<label>Payment currency<select id="${pfx}c">${PAY_CURS.map(c=>`<option ${c===(o.cur||VIEW())?"selected":""}>${c}</option>`).join("")}</select></label>`}
     ${o.amt?`<label>Amount in payment currency<input id="${pfx}a" type="number" step="any" min="0"><span class="note" id="${pfx}h"></span></label>`:""}
     <label class="${o.amt?"":"full"}">Payment reference / transaction ID<input id="${pfx}r" value="${h(o.ref||"")}"></label>
     <div class="full"><span class="lbl">Receipts and proof of payment</span><input type="file" id="${pfx}f" multiple accept="image/*,.pdf,.heic,.doc,.docx,.xls,.xlsx"><span class="note">PDF or photo, up to 10 MB each. Stored privately in Supabase.</span></div>`;
@@ -2949,13 +2956,15 @@ function payBlockWire(pfx, amtEl){
   const s = () => { const m = $(`#${pfx}m`).value; $(`#${pfx}nl`).hidden = m!=="Bank transfer"; $(`#${pfx}bl`).hidden = m==="Profit adjustment"; };
   $(`#${pfx}m`).onchange = s; s();
   const a = $(`#${pfx}a`), c = $(`#${pfx}c`);
-  if (a && amtEl){ const fx = () => { const v = num(a.value), cur = c.value; if (v && CURS.includes(cur)){ const b = conv(v, cur, VIEW()); amtEl.value = b.toFixed(2); $(`#${pfx}h`).textContent = cur===VIEW() ? "" : `= ${VIEW()} ${fmt2(b)} at the Settings rate`; } else $(`#${pfx}h`).textContent = v ? `Enter the ${VIEW()} amount yourself (${cur} isn't converted automatically)` : ""; };
-    a.oninput = fx; c.onchange = fx; }
+  if (a && amtEl){ const fx = () => { const v = num(a.value), cur = c.value, d = $("#ivWd")?.value || todayIso(), b = fxConv(v, cur, VIEW(), d);
+      if (v && b != null){ amtEl.value = b.toFixed(2); $(`#${pfx}h`).textContent = cur===VIEW() ? "" : `= ${VIEW()} ${fmt2(b)} at 1 USD = ${fxRate(cur, d)} ${cur}`; }
+      else $(`#${pfx}h`).textContent = v ? `No ${cur} rate on file: add one in Settings → Currencies, or enter the ${VIEW()} amount yourself` : ""; };
+    a.oninput = fx; c.onchange = fx; payBlockWire.fx = fx; }
 }
 async function payBlockRead(pfx, col, id){
   const method = $(`#${pfx}m`).value, files = [...($(`#${pfx}f`)?.files||[])];
-  const d = {method, bankId: method==="Profit adjustment" ? "" : $(`#${pfx}b`).value, payBank: method==="Bank transfer" ? $(`#${pfx}n`).value.trim() : "", payCur: $(`#${pfx}c`).value, payRef: $(`#${pfx}r`).value.trim()};
-  if ($(`#${pfx}a`) && num($(`#${pfx}a`).value)) d.payAmt = num($(`#${pfx}a`).value);
+  const d = {method, bankId: method==="Profit adjustment" ? "" : $(`#${pfx}b`).value, payBank: method==="Bank transfer" ? $(`#${pfx}n`).value.trim() : "", payCur: $(`#${pfx}c`)?.value || "", payRef: $(`#${pfx}r`).value.trim()};
+  if ($(`#${pfx}a`) && num($(`#${pfx}a`).value)){ d.payAmt = num($(`#${pfx}a`).value); const r = rateOn(d.payCur, $("#ivWd")?.value); if (r) d.fxRate = r; }
   d.receipts = files.length ? await uploadReceipts(col, id, files) : [];
   return d;
 }
@@ -3057,21 +3066,23 @@ function viewInvestors(){
   for (const id of [...S.iv.sel]) if (!all.some(r=>r.p.id===id)) S.iv.sel.delete(id);
   const T = k => all.reduce((s,r)=>s+r[k],0), notPosted = all.some(r=>r.status==="calc"), C = VIEW();
   // investor summary
-  const by = {}; for (const r of all){ const x = by[r.p.investor] ||= {name:r.p.investor, n:0, closing:0, profit:0, paid:0, out:0, due:0}; x.n++; x.closing += r.closing; x.profit += r.profit; x.paid += r.paidM; x.out += r.outstanding; if (r.status==="due"||r.status==="part") x.due++; }
+  const by = {}; for (const r of all){ const x = by[r.p.investor] ||= {name:r.p.investor, cur:invCur(r.p), n:0, closing:0, profit:0, paid:0, out:0, due:0}; x.n++; x.closing += r.closing; x.profit += r.profit; x.paid += r.paidM; x.out += r.outstanding; if (r.status==="due"||r.status==="part") x.due++; }
   const inv = Object.values(by).sort((a,b)=>b.closing-a.closing);
-  const sumRows = inv.map(x=>`<tr class="click" data-ivq="${h(x.name)}" title="Show ${h(x.name)}'s placements"><td><b style="font-weight:600">${h(x.name)}</b></td><td class="n">${x.n}</td><td class="n">${fmt2(x.closing)}</td><td class="n">${fmt2(x.profit)}</td><td class="n">${fmt2(x.paid)}</td><td class="n">${fmt2(x.out)}</td>
+  const sumRows = inv.map(x=>`<tr class="click" data-ivq="${h(x.name)}" title="Show ${h(x.name)}'s placements"><td><b style="font-weight:600">${h(x.name)}</b></td><td class="n">${x.n}</td><td class="n">${fmt2(x.closing)}</td><td class="n">${fmt2(x.profit)}</td><td class="n">${fmt2(x.paid)}</td><td class="n">${fmt2(x.out)}</td><td class="n">${curTxt(x.out, x.cur, monthEnd(ym))}</td>
     <td>${x.profit<0.005?'<span class="mut">–</span>':x.paid>=x.profit-0.01?'<span class="pill ok">Paid</span>':x.due?'<span class="pill warn">Due</span>':notPosted?'<span class="pill">Not posted</span>':'<span class="pill">Accruing</span>'}</td></tr>`).join("");
   csvReg("investor-summary", ["Investor","Placements",`Closing investment (${C})`,`Profit ${lab}`,`Paid for ${lab}`,"Outstanding payable"], inv.map(x=>[x.name, x.n, x.closing.toFixed(2), x.profit.toFixed(2), x.paid.toFixed(2), x.out.toFixed(2)]));
   // monthly profit & payments
   const allSel = rows.length && rows.every(r=>S.iv.sel.has(r.p.id)), nSel = S.iv.sel.size;
   const pRows = rows.map(r=>`<tr class="${S.iv.sel.has(r.p.id)?"selrow":""}"><td><input type="checkbox" data-ivsel="${r.p.id}" ${S.iv.sel.has(r.p.id)?"checked":""} aria-label="Select ${h(r.p.code)}"></td>
     <td class="click" data-edit="pl:${r.p.id}">${h(r.p.code)}</td><td>${h(r.p.investor)}</td><td>${h(bizName(r.p.bizId))}</td><td>${h(r.p.frequency||"Quarterly")}</td>
-    <td class="n">${fmt2(r.closing)}</td><td class="n">${pct(num(r.p.rate),2)}</td><td class="n">${fmt2(r.profit)}${r.isPosted?"":'<div class="note">calculated</div>'}</td><td>${ivPill(r)}${r.payEntry?rcptBadge("ledger", r.payEntry):""}</td><td class="n">${fmt2(r.outstanding)}</td></tr>`).join("");
+    <td class="n">${fmt2(r.closing)}</td><td class="n">${pct(num(r.p.rate),2)}</td><td class="n"${profitCalcTip(r.p, ym, r.profit, r.isPosted)}>${fmt2(r.profit)}${r.isPosted?"":'<div class="note">calculated</div>'}</td><td class="n">${curTxt(r.profit, invCur(r.p), monthEnd(ym))}</td><td>${ivPill(r)}${r.payEntry?rcptBadge("ledger", r.payEntry):""}</td><td class="n">${fmt2(r.outstanding)}</td></tr>`).join("");
   csvReg("investor-month", ["Placement","Investor","Venture","Payout","Closing investment","Agreed rate",`Profit ${lab}`,"Posted","Status","Outstanding payable"], rows.map(r=>[r.p.code, r.p.investor, bizName(r.p.bizId), r.p.frequency||"Quarterly", r.closing.toFixed(2), num(r.p.rate), r.profit.toFixed(2), r.isPosted?"Yes":"No", IV_STATUS[r.status][0], r.outstanding.toFixed(2)]));
   const k = (l,v,s) => `<div class="kpi"><span class="eyebrow">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`;
   return `<div class="head"><div><span class="eyebrow">Investors · ${h(C)}</span><h1>Investors</h1><p>Monthly profit, payments and withdrawals for every placement. Choose the month, tick placements, then mark profit paid or change the payout frequency.</p></div>
     <div class="row">${W?`<button class="btn" data-ivact="withdraw" type="button">Add withdrawal</button><button class="btn primary" data-new="pl">Add placement</button>`:""}</div></div>
   <div class="stack">
+  ${ownBanner()}
+  ${(()=>{ const m = missingRates(all.map(r=>invCur(r.p))); return m.length ? `<div class="alert bad"><span class="dot"></span><div><b>No exchange rate for ${m.join(", ")}.</b> Some investors are paid in ${m.length===1?"this currency":"these currencies"}. Add the rate to show and pay their amounts.</div><button class="btn sm" data-tab="fx" type="button">Currencies</button></div>` : ""; })()}
   <div class="row" style="gap:10px;flex-wrap:wrap"><label class="inl">Month <select id="ivYm">${months.map(m=>`<option value="${m}" ${m===ym?"selected":""}>${monthLabel(m)}</option>`).join("")}</select></label>
     ${notPosted&&W?`<span class="note">Profit for ${lab} is calculated but not posted yet.</span><button class="btn sm" data-acc="1" type="button">Run profit accruals</button>`:""}</div>
   <div class="kpis">
@@ -3081,21 +3092,23 @@ function viewInvestors(){
     ${k("Outstanding payable", money(T("outstanding")), `${all.filter(r=>r.status==="due"||r.status==="part").length} due this month`)}
   </div>
   <section class="sheet"><div class="sheet-h"><div><h2>Investor summary · ${lab}</h2><p>Closing investment and profit for the month, by investor. Click an investor to show their placements below.</p></div>${csvBtn("investor-summary")}</div>
-    <div class="tbl"><table><thead><tr><th>Investor</th><th class="n">Placements</th><th class="n">Closing investment</th><th class="n">Profit ${lab}</th><th class="n">Paid</th><th class="n">Outstanding</th><th>Status</th></tr></thead>
-    <tbody>${sumRows || `<tr><td colspan="7" class="empty">No investors at ${lab}.</td></tr>`}</tbody>
-    ${inv.length?`<tfoot><tr><td>Total</td><td class="n">${all.length}</td><td class="n">${fmt2(T("closing"))}</td><td class="n">${fmt2(T("profit"))}</td><td class="n">${fmt2(T("paidM"))}</td><td class="n">${fmt2(T("outstanding"))}</td><td></td></tr></tfoot>`:""}</table></div></section>
-  ${capFlowSection()}
-  <section class="sheet" id="ivPay"><div class="sheet-h"><div><h2>Monthly profit and payments · ${lab}</h2><p>Payout months follow each placement's frequency: quarterly in Mar, Jun, Sep and Dec; semi-annual in Jun and Dec; annual in Dec.</p></div>${csvBtn("investor-month")}</div>
+    <div class="tbl"><table><thead><tr><th>Investor</th><th class="n">Placements</th><th class="n">Closing investment</th><th class="n">Profit ${lab}</th><th class="n">Paid</th><th class="n">Outstanding</th><th class="n">Outstanding in payout currency</th><th>Status</th></tr></thead>
+    <tbody>${sumRows || `<tr><td colspan="8" class="empty">No investors at ${lab}.</td></tr>`}</tbody>
+    ${inv.length?`<tfoot><tr><td>Total</td><td class="n">${all.length}</td><td class="n">${fmt2(T("closing"))}</td><td class="n">${fmt2(T("profit"))}</td><td class="n">${fmt2(T("paidM"))}</td><td class="n">${fmt2(T("outstanding"))}</td><td></td><td></td></tr></tfoot>`:""}</table></div></section>
+  <section class="sheet" id="ivPay"><div class="sheet-h"><div><h2>Monthly profit and payments · ${lab}</h2><p>Hover or tap a profit figure to see how it is calculated. Payout months follow each placement's frequency: quarterly in Mar, Jun, Sep and Dec; semi-annual in Jun and Dec; annual in Dec.</p></div>${csvBtn("investor-month")}</div>
     <div class="sheet-b row ivbar" style="gap:8px;flex-wrap:wrap">
       <input id="ivQ" placeholder="Search investor, placement or venture" value="${h(S.iv.q)}" style="max-width:260px">${S.iv.q?`<button class="btn sm" data-ivact="clearq" type="button">Show all</button>`:""}
       <span class="note" style="margin-left:auto">${nSel ? `<b>${nSel} selected</b>` : "Tick placements to act on them"}</span>
       ${W?`<button class="btn sm primary" data-ivact="paid" type="button" ${nSel?"":"disabled"}>Mark paid</button>
       <button class="btn sm" data-ivact="unpaid" type="button" ${nSel?"":"disabled"}>Mark unpaid</button>
       <select id="ivFreq" ${nSel?"":"disabled"} aria-label="Payout frequency"><option value="">Payout frequency…</option>${PAYOUTS.map(f=>`<option ${S.iv.freq===f?"selected":""}>${f}</option>`).join("")}</select>
-      <button class="btn sm" data-ivact="freq" type="button" ${nSel?"":"disabled"}>Apply</button>`:""}
+      <button class="btn sm" data-ivact="freq" type="button" ${nSel?"":"disabled"}>Apply</button>
+      <select id="ivCur" ${nSel?"":"disabled"} aria-label="Payout currency"><option value="">Paid in…</option>${PAY_CURS.filter(c=>c!=="Other").map(c=>`<option>${c}</option>`).join("")}</select>
+      <button class="btn sm" data-ivact="cur" type="button" ${nSel?"":"disabled"}>Apply</button>
+      <button class="btn sm" data-ivact="own" type="button" ${nSel?"":"disabled"} title="For Future Axis's own company money recorded as a placement">Move to share capital</button>`:""}
     </div>
-    <div class="tbl"><table><thead><tr><th><input type="checkbox" data-ivsel="*" ${allSel?"checked":""} aria-label="Select all"></th><th>Placement</th><th>Investor</th><th>Venture</th><th>Payout</th><th class="n">Closing investment</th><th class="n">Rate</th><th class="n">Profit ${lab}</th><th>Status</th><th class="n">Outstanding</th></tr></thead>
-    <tbody>${pRows || `<tr><td colspan="10" class="empty">No placements${q?" match the search":""}.</td></tr>`}</tbody></table></div></section>
+    <div class="tbl"><table><thead><tr><th><input type="checkbox" data-ivsel="*" ${allSel?"checked":""} aria-label="Select all"></th><th>Placement</th><th>Investor</th><th>Venture</th><th>Payout</th><th class="n">Closing investment</th><th class="n">Rate</th><th class="n">Profit ${lab}</th><th class="n">In payout currency</th><th>Status</th><th class="n">Outstanding</th></tr></thead>
+    <tbody>${pRows || `<tr><td colspan="11" class="empty">No placements${q?" match the search":""}.</td></tr>`}</tbody></table></div></section>
   ${placementRegister()}
   </div>`;
 }
@@ -3123,6 +3136,20 @@ const bankOpts = sel => `<option value="">Not specified</option>` + S.bank.filte
 async function ivAction(b){
   const a = b.dataset.ivact, {ym} = ivMonth(), lab = monthLabel(ym), rows = invMonthRows(ym), sel = rows.filter(r=>S.iv.sel.has(r.p.id));
   if (a==="clearq"){ S.iv.q = ""; return render(); }
+  if (a==="cur"){
+    const c = $("#ivCur").value; if (!c){ toast("Choose the payout currency first"); return; }
+    b.disabled = true;
+    try { const invIds = [...new Set(sel.map(r=>r.p.investorId).filter(id=>S.inv.some(i=>i.id===id)))], loose = sel.filter(r=>!invIds.includes(r.p.investorId));
+      if (invIds.length) await S.db.bulk("investors", invIds.map(id=>{ const {id:_, ...d} = S.inv.find(i=>i.id===id); return {id, data:{...d, payCur:c, updatedAt:new Date().toISOString()}}; }));
+      if (loose.length) await S.db.bulk("placements", loose.map(r=>{ const {id, ...d} = S.pl.find(p=>p.id===r.p.id); return {id, data:{...d, payoutCur:c}}; }));
+      logEvent("Payout currency changed", `${invIds.length} investors, ${loose.length} placements to ${c}`); toast(`${invIds.length + loose.length} set to be paid in ${c}`); }
+    catch(x){ toast("Could not save: " + (x.message||"")); b.disabled = false; }
+    return;
+  }
+  if (a==="own"){ const pls = sel.map(r=>r.p);
+    if (!b.classList.contains("armed")){ b.classList.add("armed"); b.textContent = `Confirm: move ${pls.length} to share capital`; return; }
+    b.disabled = true; try { await moveToCapital(pls); S.iv.sel.clear(); await loadAll(); render(); toast("Moved to share capital. Post the accruals again so the profit split is updated."); openAccruals(); } catch(x){ toast(x.message||"Could not move"); b.disabled = false; }
+    return; }
   if (a==="freq"){
     const f = $("#ivFreq").value; if (!f){ toast("Choose a payout frequency first"); return; }
     b.disabled = true;
@@ -3134,15 +3161,32 @@ async function ivAction(b){
   if (a==="paid"){
     const ok = sel.filter(r=>r.isPosted && r.outstanding > 0.005), skip = sel.length - ok.length, tot = ok.reduce((s,r)=>s+r.outstanding,0);
     if (!ok.length){ toast(sel.some(r=>!r.isPosted) ? `Profit for ${lab} isn't posted yet. Run profit accruals first.` : "Nothing outstanding for the selected placements"); return; }
-    return ivDialog("ivP", `Mark profit paid · ${lab}`, `
-      <div class="full banner" style="margin:0">Pays everything outstanding up to ${lab} for <b>${ok.length}</b> placement${ok.length===1?"":"s"}: <b>${h(VIEW())} ${fmt2(tot)}</b>.${skip?` ${skip} selected placement${skip===1?" has":"s have"} nothing posted or outstanding and ${skip===1?"is":"are"} skipped.`:""}</div>
-      <label>Payment date<input id="ivPd" type="date" required value="${todayIso()}"></label>
-      ${payBlockHtml("pbP", {payBankLabel:"Investor's bank name"})}
-      <div class="full tbl" style="max-height:220px;overflow:auto"><table><tbody>${ok.map(r=>`<tr><td>${h(r.p.code)}</td><td>${h(r.p.investor)}</td><td class="n">${fmt2(r.outstanding)}</td></tr>`).join("")}</tbody></table></div>`,
-      async () => { const now = new Date().toISOString(), date = $("#ivPd").value, pd = await payBlockRead("pbP", "ledger", `profit-${ym}-${Date.now()}`);
-        await S.db.bulk("ledger", ok.map(r => { const ex = r.payEntry; return {id: PAY_ID(r.p.id, ym), data:{...pd, receipts:[...(ex?.receipts||[]), ...pd.receipts], date, type:"Investor Profit Paid", bizId:r.p.bizId, placementId:r.p.id, amount: +((ex ? num(ex.amount) : 0) + r.outstanding).toFixed(2), ref:`Profit ${lab}`, payMonth:ym, createdAt: ex?.createdAt || now, updatedAt: now}}; }));
-        logEvent("Investor profit marked paid", `${lab}: ${ok.length} placements, ${VIEW()} ${fmt2(tot)}`); S.iv.sel.clear();
-        return `${ok.length} placement${ok.length===1?"":"s"} marked paid · ${VIEW()} ${fmt2(tot)}`; }, `Mark paid · ${VIEW()} ${fmt2(tot)}`), payBlockWire("pbP");
+    const curs = [...new Set(ok.map(r=>invCur(r.p)))].sort((a,b)=>a==="USD"?-1:b==="USD"?1:a.localeCompare(b)), d0 = todayIso();
+    const usdOf = r => VIEW()==="USD" ? r.outstanding : fxConv(r.outstanding, VIEW(), "USD", d0);
+    ivDialog("ivP", `Mark profit paid · ${lab}`, `
+      <div class="full banner" style="margin:0">Pays everything outstanding up to ${lab} for <b>${ok.length}</b> placement${ok.length===1?"":"s"}: <b>${h(VIEW())} ${fmt2(tot)}</b>, calculated in USD and paid in each investor's currency.${skip?` ${skip} selected placement${skip===1?" has":"s have"} nothing posted or outstanding and ${skip===1?"is":"are"} skipped.`:""}</div>
+      <label>Payment date<input id="ivPd" type="date" required value="${d0}"></label>
+      <div class="full fxgrid">${curs.map(c=>`<div class="fxcard"><b>${c}</b><span class="note">${ok.filter(r=>invCur(r.p)===c).length} placements · USD ${fmt2(ok.filter(r=>invCur(r.p)===c).reduce((s,r)=>s+usdOf(r),0))}</span>${c==="USD"?`<span class="v">USD ${fmt2(ok.filter(r=>invCur(r.p)===c).reduce((s,r)=>s+usdOf(r),0))}</span>`:`<label class="inl">1 USD = <input type="number" step="any" min="0" required data-pr="${c}" value="${fxRate(c, d0)}" style="width:110px"> ${c}</label><span class="v" id="prT_${c}"></span>`}</div>`).join("")}
+        <label class="chkl"><input type="checkbox" id="ivPsave" checked> Save these rates to the rate table</label></div>
+      ${payBlockHtml("pbP", {payBankLabel:"Investor's bank name", noCur:true})}
+      <div class="full tbl" style="max-height:240px;overflow:auto"><table><thead><tr><th>Placement</th><th>Investor</th><th class="n">USD</th><th class="n">Paid in currency</th></tr></thead><tbody>${ok.map((r,i)=>`<tr><td>${h(r.p.code)}</td><td>${h(r.p.investor)}</td><td class="n">${fmt2(usdOf(r))}</td><td class="n" id="prR_${i}"></td></tr>`).join("")}</tbody></table></div>`,
+      async () => { const now = new Date().toISOString(), date = $("#ivPd").value, rates = {USD:1};
+        for (const c of curs) if (c!=="USD"){ const v = num(document.querySelector(`[data-pr="${c}"]`).value); if (!(v>0)) throw new Error(`Enter the ${c} rate`); rates[c] = v; }
+        const pd = await payBlockRead("pbP", "ledger", `profit-${ym}-${Date.now()}`);
+        if ($("#ivPsave").checked){ const nr = curs.filter(c=>c!=="USD" && Math.abs(rateOn(c, date) - rates[c]) > 1e-9).map(c=>({cur:c, date, rate:rates[c], src:`Profit payment ${lab}`, by:S.user?.email||""})); if (nr.length) await saveFx(nr); }
+        await S.db.bulk("ledger", ok.map(r => { const ex = r.payEntry, c = invCur(r.p), usd = usdOf(r); return {id: PAY_ID(r.p.id, ym), data:{...pd, receipts:[...(ex?.receipts||[]), ...pd.receipts], date, type:"Investor Profit Paid", bizId:r.p.bizId, placementId:r.p.id,
+          amount: +((ex ? num(ex.amount) : 0) + r.outstanding).toFixed(2), payCur:c, fxRate:rates[c], payAmt: +(((ex?.payCur===c ? num(ex.payAmt) : 0)) + usd*rates[c]).toFixed(2), ...(c!=="USD"?{fxCur:c, fxAmount: +(((ex?.payCur===c ? num(ex.payAmt) : 0)) + usd*rates[c]).toFixed(2)}:{}),
+          ref:`Profit ${lab}`, payMonth:ym, createdAt: ex?.createdAt || now, updatedAt: now}}; }));
+        const by = curs.map(c=>`${c} ${fmt2(ok.filter(r=>invCur(r.p)===c).reduce((s,r)=>s+usdOf(r)*rates[c],0))}`).join(" · ");
+        logEvent("Investor profit marked paid", `${lab}: ${ok.length} placements, ${VIEW()} ${fmt2(tot)} (${by})`); S.iv.sel.clear();
+        return `${ok.length} placement${ok.length===1?"":"s"} marked paid · ${by}`; }, `Mark paid · ${VIEW()} ${fmt2(tot)}`);
+    payBlockWire("pbP");
+    const upd = () => { const rate = c => c==="USD" ? 1 : num(document.querySelector(`[data-pr="${c}"]`)?.value);
+      ok.forEach((r,i) => { const c = invCur(r.p), v = usdOf(r)*rate(c); $(`#prR_${i}`).textContent = c==="USD" ? "–" : (v ? `${c} ${fmt2(v)}` : `${c} rate needed`); });
+      curs.filter(c=>c!=="USD").forEach(c => { const t = ok.filter(r=>invCur(r.p)===c).reduce((s,r)=>s+usdOf(r),0)*rate(c); $(`#prT_${c}`).textContent = t ? `${c} ${fmt2(t)}` : ""; }); };
+    document.querySelectorAll("[data-pr]").forEach(x=>x.oninput = upd);
+    $("#ivPd").onchange = () => { curs.filter(c=>c!=="USD").forEach(c => { const el = document.querySelector(`[data-pr="${c}"]`); if (rateOn(c, $("#ivPd").value)) el.value = fxRate(c, $("#ivPd").value); }); upd(); };
+    upd(); return;
   }
   if (a==="unpaid"){
     const del = sel.filter(r=>r.payEntry);
@@ -3180,8 +3224,8 @@ function openWithdrawal(pid){
       logEvent("Investor withdrawal", `${p.code} ${p.investor}: ${VIEW()} ${fmt2(amt)}${full?" (full)":""}`);
       return `Withdrawal of ${VIEW()} ${fmt2(amt)} recorded for ${p.investor}. Re-run profit accruals from ${monthLabel(date.slice(0,7))} to update profit.`;
     }, "Record withdrawal");
-  const sync = () => { const p = S.pl.find(x=>x.id===$("#ivWp").value); $("#ivWi").textContent = p ? `Outstanding ${fmt2(out(p))} at ${pct(num(p.rate),2)} p.a. Profit stops on the withdrawn amount from the withdrawal date.` : ""; if (p && $("#ivWf").checked) $("#ivWa").value = out(p).toFixed(2); };
-  payBlockWire("pbW", $("#ivWa"));
+  const sync = () => { const p = S.pl.find(x=>x.id===$("#ivWp").value); if (p && $("#pbWc") && !sync.touched){ $("#pbWc").value = invCur(p); } $("#ivWi").textContent = p ? `Outstanding ${fmt2(out(p))} at ${pct(num(p.rate),2)} p.a. Profit stops on the withdrawn amount from the withdrawal date.` : ""; if (p && $("#ivWf").checked) $("#ivWa").value = out(p).toFixed(2); };
+  payBlockWire("pbW", $("#ivWa")); $("#pbWc").addEventListener("change", () => sync.touched = true);
   $("#ivWp").onchange = sync; $("#ivWf").onchange = sync; $("#ivWa").oninput = () => { const p = S.pl.find(x=>x.id===$("#ivWp").value); if (p) $("#ivWf").checked = Math.abs(num($("#ivWa").value) - out(p)) < 0.01; }; sync();
 }
 
@@ -3331,7 +3375,7 @@ function plClosing(p){ return num(p.amount) - S.led.filter(t=>t.placementId===p.
 function unlinkedPlacements(){ return S.pl.filter(p => !p.investorId || !S.inv.some(i=>i.id===p.investorId)); }
 /* create investor master records for placements that only carry a name, and link them */
 async function linkInvestors(){
-  const un = unlinkedPlacements(); if (!un.length) return 0;
+  const un = unlinkedPlacements().filter(p=>!isOwnName(p.investor)); if (!un.length) return 0;
   const key = s => String(s||"").trim().replace(/\s+/g," ").toLowerCase(), byName = new Map(S.inv.map(i=>[key(i.name), i]));
   let n = Math.max(0, ...S.inv.map(x=>parseInt(String(x.code||"").replace(/\D/g,""))||0)); const now = new Date().toISOString(), add = [];
   for (const p of un){ const k = key(p.investor); if (!k || byName.has(k)) continue;
@@ -3357,10 +3401,10 @@ function viewMaster(){
   const stp = x => inactive(x) ? '<span class="pill">Inactive</span>' : (x.status && x.status!=="Active" ? `<span class="pill warn">${h(x.status)}</span>` : '<span class="pill ok">Active</span>');
   let head, rows, add = {inv:"Add investor", biz:"Add venture", bank:"Add bank account", sup:"Add supplier"}[K];
   if (K==="inv"){
-    head = `<th>ID</th><th>Investor</th><th>Contact</th><th>Payout bank</th><th>Default payout</th><th class="n">Placements</th><th class="n">Closing investment</th><th>Status</th><th></th>`;
+    head = `<th>ID</th><th>Investor</th><th>Contact</th><th>Payout bank</th><th>Payout · currency</th><th class="n">Placements</th><th class="n">Closing investment</th><th>Status</th><th></th>`;
     rows = shown.map(x=>{ const ps = invPlacements(x.id), cl = ps.reduce((s,p)=>s+plClosing(p),0);
       return `<tr class="${inactive(x)?"dim":""}"><td>${h(x.code)}</td><td><b style="font-weight:600">${h(x.name)}</b><div class="note">${h([x.kind, x.contactPerson, x.country].filter(Boolean).join(" · "))}</div></td><td class="note">${h([x.phone, x.email].filter(Boolean).join(" · "))}</td>
-      <td class="note">${h([x.bankName, x.bankTitle, x.iban ? "···"+String(x.iban).slice(-4) : ""].filter(Boolean).join(" · "))}</td><td>${h(x.frequency||"")}${x.portal?' <span class="pill inv">Portal</span>':""}</td>
+      <td class="note">${h([x.bankName, x.bankTitle, x.iban ? "···"+String(x.iban).slice(-4) : ""].filter(Boolean).join(" · "))}</td><td>${h(x.frequency||"")} · ${h(x.payCur||"USD")}${x.portal?' <span class="pill inv">Portal</span>':""}</td>
       <td class="n">${ps.length}</td><td class="n">${money(cl)}</td><td>${stp(x)}</td><td>${act("inv", x)}</td></tr>`; }).join("");
   } else if (K==="biz"){
     head = `<th>ID</th><th>Venture</th><th>Nature</th><th>Contact</th><th class="n">Expected p.a.</th><th class="n">Placements</th><th>Status</th><th></th>`;
@@ -3374,13 +3418,14 @@ function viewMaster(){
     rows = shown.map(x=>`<tr class="${inactive(x)?"dim":""}"><td>${h(x.code)}</td><td><b style="font-weight:600">${h(x.name)}</b><div class="note">${h(x.category||"")}</div></td><td class="note">${h(x.service||"")}</td><td>${h([x.country, x.currency].filter(Boolean).join(" · "))}</td>
       <td class="note">${h([x.bankTitle, x.bankName, x.iban ? "···"+String(x.iban).slice(-4) : ""].filter(Boolean).join(" · "))}</td><td class="n">${S.led.filter(t=>t.supplierId===x.id).length}</td><td>${stp(x)}</td><td>${act("sup", x)}</td></tr>`).join("");
   }
-  const un = K==="inv" ? unlinkedPlacements() : [];
+  const un = K==="inv" ? unlinkedPlacements().filter(p=>!isOwnName(p.investor)) : [];
   const unNames = new Set(un.map(p=>String(p.investor||"").trim().toLowerCase()).filter(Boolean)).size;
   const cols = head.match(/<th/g).length;
   return `<div class="head"><div><span class="eyebrow">Master data</span><h1>Master data</h1><p>Create, edit and deactivate investors, ventures, bank accounts and suppliers. Inactive records stay on existing entries but can't be picked for new ones.</p></div>${W?`<button class="btn primary" data-new="${K}" type="button">${add}</button>`:""}</div>
   ${seg}
   <div class="stack">
-  ${un.length && W ? `<div class="alert warn"><span class="dot"></span><div><b>${un.length} placement${un.length===1?" isn't":"s aren't"} linked to an investor record.</b> Create ${unNames} investor record${unNames===1?"":"s"} from the names on the placements and link them, in one step.</div><button class="btn sm primary" data-mdact="link" type="button">Create and link</button></div>` : ""}
+  ${K==="inv" ? ownBanner() : ""}
+  ${un.filter(p=>!isOwnName(p.investor)).length && W ? `<div class="alert warn"><span class="dot"></span><div><b>${un.length} placement${un.length===1?" isn't":"s aren't"} linked to an investor record.</b> Create ${unNames} investor record${unNames===1?"":"s"} from the names on the placements and link them, in one step.</div><button class="btn sm primary" data-mdact="link" type="button">Create and link</button></div>` : ""}
   <section class="sheet"><div class="sheet-h"><div><h2>${MD_KINDS.find(k=>k[0]===K)[1]}</h2><p>${all.length - nIn} active${nIn?` · ${nIn} inactive`:""}</p></div>
     <div class="row"><input id="mdQ" placeholder="Search" value="${h(S.md.q)}" style="max-width:220px"><select id="mdSt" aria-label="Status"><option value="active" ${st==="active"?"selected":""}>Active</option><option value="inactive" ${st==="inactive"?"selected":""}>Inactive</option><option value="all" ${st==="all"?"selected":""}>All</option></select></div></div>
     <div class="tbl"><table><thead><tr>${head}</tr></thead><tbody>${rows || `<tr><td colspan="${cols}" class="empty">${all.length ? "Nothing matches." : `No ${MD_KINDS.find(k=>k[0]===K)[1].toLowerCase()} yet.`}</td></tr>`}</tbody></table></div></section>
@@ -3398,11 +3443,263 @@ async function mdToggle(spec){
 function confirmArm(key){ const t = Date.now(); if (confirmArm.k===key && t - confirmArm.t < 8000){ confirmArm.k = ""; return true; } confirmArm.k = key; confirmArm.t = t; return false; }
 
 /* settings sub-sections */
-const SET_SUBS = [["settings","General"],["users","Users"],["import","Import"],["logs","Log"],["backups","Backups"]];
+const SET_SUBS = [["settings","General"],["fx","Currencies"],["users","Users"],["import","Import"],["logs","Log"],["backups","Backups"]];
 function settingsBar(){
   const ok = k => k==="users" ? S.isAdmin : k==="import" ? S.canWrite!==false : (k==="logs"||k==="backups") ? S.isFull : true;
   const pend = (S.members||[]).filter(m=>m.status==="pending").length;
   return `<div class="segctl" role="tablist" aria-label="Settings">${SET_SUBS.filter(([k])=>ok(k)).map(([k,l])=>`<button role="tab" type="button" data-tab="${k}" aria-selected="${S.tab===k}">${l}${k==="users"&&pend?` <span class="pill warn">${pend}</span>`:""}</button>`).join("")}</div>`;
+}
+
+/* ---------- currencies: dated exchange rates, converter, investor payout currency ---------- */
+const FX_CURS = ["AED","PKR","GBP","EUR","SAR"];
+const fxRows = () => Array.isArray(S.cfg.fx) ? S.cfg.fx : [];
+function rateOn(cur, date){
+  cur = String(cur||"USD").toUpperCase(); if (cur==="USD") return 1;
+  const rows = fxRows().filter(r=>r.cur===cur && num(r.rate)>0).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const d = date || todayIso(), r = rows.find(x=>x.date<=d) || rows[rows.length-1];
+  if (r) return num(r.rate);
+  if (cur==="AED") return num(S.cfg.aedRate) || 3.6725;
+  return 0;
+}
+const fxConv = (v, from, to, date) => { const a = rateOn(from, date), b = rateOn(to, date); return a && b ? num(v)/a*b : null; };
+const fxRate = (cur, date) => { const r = rateOn(cur, date); return r ? (r >= 10 ? r.toFixed(2) : r.toFixed(4)) : ""; };
+/* the currency an investor is paid in: investor master first, then the placement */
+const invCur = p => { const c = S.inv.find(i=>i.id===p.investorId)?.payCur || p.payoutCur || "USD"; return c==="Other" ? "USD" : c; };
+const inCur = (usd, cur, date) => { if (!cur || cur==="USD") return null; const r = rateOn(cur, date); return r ? usd*r : NaN; };
+const curTxt = (usd, cur, date) => { if (!cur || cur==="USD") return '<span class="mut">USD</span>'; const v = inCur(usd, cur, date); return isNaN(v) ? `<span class="pill bad" title="Add a ${h(cur)} rate in Settings → Currencies">No ${h(cur)} rate</span>` : `${h(cur)} ${fmt2(v)}`; };
+function missingRates(curs){ return [...new Set(curs)].filter(c=>c && c!=="USD" && !rateOn(c)); }
+async function saveFx(rows, note){
+  const fx = [...fxRows()];
+  for (const r of rows){ const i = fx.findIndex(x=>x.cur===r.cur && x.date===r.date); if (i>=0) fx[i] = {...fx[i], ...r}; else fx.push(r); }
+  fx.sort((a,b)=>a.cur.localeCompare(b.cur) || String(b.date).localeCompare(String(a.date)));
+  const aed = fx.find(x=>x.cur==="AED");
+  const cfg = {...S.cfg, fx, ...(aed ? {aedRate: num(aed.rate)} : {})};
+  await S.db.doc("config/settings").set(cfg); S.cfg = cfg;
+  logEvent("Exchange rates saved", note || rows.map(r=>`${r.cur} ${r.rate} (${r.date})`).join(", "));
+}
+S.fx = {live:null, err:"", amt:"1000", from:"USD", to:"PKR", date:""};
+function viewFx(){
+  const W = S.canWrite!==false, used = [...new Set([...S.inv.map(i=>i.payCur), ...S.pl.map(invCur)].filter(c=>c && c!=="USD" && c!=="Other"))];
+  const curs = [...new Set([...FX_CURS, ...fxRows().map(r=>r.cur)])];
+  const latest = c => fxRows().filter(r=>r.cur===c).sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0];
+  const rows = curs.map(c => { const r = latest(c), n = fxRows().filter(x=>x.cur===c).length, rate = rateOn(c);
+    return `<tr><td><b style="font-weight:600">${c}</b>${used.includes(c)?' <span class="pill inv">Investors paid in this</span>':""}</td><td class="n">${rate ? fxRate(c) : '<span class="pill bad">Not set</span>'}</td><td class="n">${rate ? (1/rate).toFixed(6) : "–"}</td><td>${r ? fmtDate(r.date) : c==="AED" ? "Settings rate" : "–"}</td><td class="note">${h(r?.src || "")}</td><td class="n">${n}</td></tr>`; }).join("");
+  const hist = fxRows().slice(0, 60).map((r,i)=>`<tr><td>${h(r.cur)}</td><td>${fmtDate(r.date)}</td><td class="n">${r.rate}</td><td class="note">${h(r.src||"")}${r.by?` · ${h(r.by)}`:""}</td><td>${W?`<button class="btn sm" data-fxdel="${h(r.cur)}|${h(r.date)}" type="button">Remove</button>`:""}</td></tr>`).join("");
+  const L = S.fx.live, F = S.fx, conv1 = fxConv(F.amt, F.from, F.to, F.date || todayIso());
+  return `<div class="head"><div><span class="eyebrow">Settings</span><h1>Currencies</h1><p>Profit is calculated in ${h(BASE())}. Investors are paid in their own currency: set it in Master data → Investors (Paid in currency). Rates are units per 1 USD, with the date they apply from. Each payment keeps the rate it was made at.</p></div></div>
+  <div class="stack">
+  ${missingRates(used).length ? `<div class="alert bad"><span class="dot"></span><div><b>No rate for ${missingRates(used).join(", ")}.</b> Investors are paid in ${missingRates(used).length===1?"this currency":"these currencies"}. Add a rate below or click Get latest rates.</div></div>` : ""}
+  <section class="sheet"><div class="sheet-h"><div><h2>Current rates</h2><p>The latest rate on or before a date is used for that date</p></div>${W?`<button class="btn" data-fx="live" type="button">Get latest rates</button>`:""}</div>
+    ${L ? `<div class="sheet-b"><div class="banner" style="margin:0"><b>Market rates ${h(L.when)}</b> (open.er-api.com). Check them, then save.
+      <div class="tbl" style="margin:10px 0"><table><thead><tr><th>Currency</th><th class="n">Current</th><th class="n">Market</th><th class="n">Change</th><th>Save</th></tr></thead><tbody>${L.rows.map(r=>`<tr><td>${r.cur}</td><td class="n">${fxRate(r.cur)||"–"}</td><td class="n">${r.rate}</td><td class="n">${rateOn(r.cur)?pct(r.rate/rateOn(r.cur)-1,2):"new"}</td><td><input type="checkbox" data-fxlive="${r.cur}" ${r.cur==="AED"&&Math.abs(r.rate-3.6725)<0.001?"":"checked"} aria-label="Save ${r.cur}"></td></tr>`).join("")}</tbody></table></div>
+      <div class="row"><label class="inl">Effective date <input type="date" id="fxLiveD" value="${todayIso()}"></label><button class="btn primary sm" data-fx="savelive" type="button">Save ticked rates</button><button class="btn sm" data-fx="droplive" type="button">Cancel</button></div></div></div>` : ""}
+    ${S.fx.err?`<div class="sheet-b"><div class="banner">${h(S.fx.err)}</div></div>`:""}
+    <div class="tbl"><table><thead><tr><th>Currency</th><th class="n">1 USD =</th><th class="n">1 unit = USD</th><th>Effective from</th><th>Source</th><th class="n">Rates on file</th></tr></thead><tbody>${rows}</tbody></table></div></section>
+  <div class="grid4">
+    ${W?`<section class="sheet"><div class="sheet-h"><div><h2>Add or update a rate</h2><p>For example the rate your bank or exchange house gave you</p></div></div>
+      <form id="fxForm" class="form" style="padding:16px 20px">
+        <label>Currency<input id="fxC" list="fxCl" required maxlength="3" placeholder="PKR" style="text-transform:uppercase"><datalist id="fxCl">${FX_CURS.map(c=>`<option>${c}</option>`).join("")}</datalist></label>
+        <label>Effective from<input id="fxD" type="date" required value="${todayIso()}"></label>
+        <label>1 USD =<input id="fxR" type="number" step="any" min="0" required placeholder="e.g. 280.50"></label>
+        <label>Source / note<input id="fxS" placeholder="e.g. Meezan Bank TT rate"></label>
+        <div class="full row"><button class="btn primary" type="submit">Save rate</button><span class="note" id="fxM"></span></div></form></section>`:""}
+    <section class="sheet"><div class="sheet-h"><div><h2>Converter</h2><p>Uses the rates on file for the date chosen</p></div></div>
+      <div class="form" style="padding:16px 20px">
+        <label>Amount<input id="fxA" type="number" step="any" value="${h(F.amt)}"></label>
+        <label>Date<input id="fxCd" type="date" value="${h(F.date || todayIso())}"></label>
+        <label>From<select id="fxF">${["USD", ...curs].map(c=>`<option ${c===F.from?"selected":""}>${c}</option>`).join("")}</select></label>
+        <label>To<select id="fxT">${["USD", ...curs].map(c=>`<option ${c===F.to?"selected":""}>${c}</option>`).join("")}</select></label>
+        <div class="full fxres" id="fxOut">${conv1==null ? `Add a rate for ${h(rateOn(F.from)?F.to:F.from)} first.` : `<b>${h(F.from)} ${fmt2(F.amt)} = ${h(F.to)} ${fmt2(conv1)}</b><span class="note">1 ${h(F.from)} = ${(conv1/num(F.amt||1)).toFixed(6)} ${h(F.to)}</span>`}</div>
+      </div></section>
+  </div>
+  <section class="sheet"><div class="sheet-h"><div><h2>Rate history</h2><p>${fxRows().length} rates on file</p></div></div>
+    <div class="tbl"><table><thead><tr><th>Currency</th><th>Effective from</th><th class="n">1 USD =</th><th>Source</th><th></th></tr></thead><tbody>${hist || `<tr><td colspan="5" class="empty">No rates yet. AED uses the Settings rate (3.6725).</td></tr>`}</tbody></table></div></section>
+  </div>`;
+}
+async function fxAction(b){
+  const a = b.dataset.fx;
+  if (a==="live"){ b.disabled = true; S.fx.err = "";
+    try { const r = await fetch("https://open.er-api.com/v6/latest/USD"); const j = await r.json(); if (j.result!=="success") throw new Error("no data");
+      const curs = [...new Set([...FX_CURS, ...fxRows().map(x=>x.cur)])].filter(c=>j.rates[c]);
+      S.fx.live = {when: (j.time_last_update_utc||"").replace(/ \+0000$/," UTC"), rows: curs.map(c=>({cur:c, rate:+(+j.rates[c]).toFixed(c==="AED"||c==="SAR"?4:4)}))}; }
+    catch(x){ S.fx.err = "Couldn't reach the rates service. Enter rates by hand below."; }
+    return render(); }
+  if (a==="droplive"){ S.fx.live = null; return render(); }
+  if (a==="savelive"){ const d = $("#fxLiveD").value || todayIso(), pick = [...document.querySelectorAll("[data-fxlive]:checked")].map(x=>x.dataset.fxlive);
+    const rows = S.fx.live.rows.filter(r=>pick.includes(r.cur)).map(r=>({cur:r.cur, date:d, rate:r.rate, src:"Market (open.er-api.com)", by:S.user?.email||""}));
+    if (!rows.length){ toast("Tick at least one rate"); return; }
+    try { await saveFx(rows); S.fx.live = null; toast(`${rows.length} rate${rows.length===1?"":"s"} saved`); render(); } catch(x){ toast("Could not save: " + (x.message||"")); } }
+}
+async function fxDelete(spec){
+  const [cur, date] = spec.split("|"); if (!confirmArm("fxdel-"+spec)){ toast(`Click Remove again to delete the ${cur} rate of ${fmtDate(date)}`); return; }
+  const fx = fxRows().filter(r=>!(r.cur===cur && r.date===date)), cfg = {...S.cfg, fx};
+  try { await S.db.doc("config/settings").set(cfg); S.cfg = cfg; logEvent("Exchange rate removed", `${cur} ${fmtDate(date)}`); render(); } catch(x){ toast("Could not save: " + (x.message||"")); }
+}
+
+/* ---------- own company money recorded as an investor placement (e.g. FAMCON) ---------- */
+const normName = n => String(n||"").trim().replace(/\s+/g," ").toLowerCase();
+const isOwnName = n => OWNER_HINT.test(String(n||"")) || S.sh.some(s=>normName(s.name)===normName(n));
+const ownPlacements = () => S.pl.filter(p=>isOwnName(p.investor));
+function ownBanner(){
+  const o = ownPlacements(); if (!o.length || S.canWrite===false) return "";
+  const names = [...new Set(o.map(p=>p.investor))].join(", "), amt = o.reduce((s,p)=>s+num(p.amount),0);
+  return `<div class="alert bad"><span class="dot"></span><div><b>${h(names)} is Future Axis's own money, not an investor.</b> ${o.length} placement${o.length===1?"":"s"} (${h(VIEW())} ${fmt2(amt)}) should be paid-up share capital. Moving ${o.length===1?"it":"them"} keeps the venture investment, records a shareholder capital contribution, and removes the investor profit accrued on ${o.length===1?"it":"them"}.</div><button class="btn sm primary" data-ownfix type="button">Move to share capital</button></div>`;
+}
+async function moveToCapital(pls){
+  const stop = pls.filter(p=>S.led.some(t=>t.placementId===p.id && (t.type==="Investor Profit Paid" || t.type==="Investor Capital Repaid")));
+  if (stop.length) throw new Error(`${stop.map(p=>p.code).join(", ")} ${stop.length===1?"has":"have"} investor payments or withdrawals recorded. Change those to owner drawings in the Ledger first.`);
+  const now = new Date().toISOString(); let n = Math.max(0, ...S.sh.map(x=>parseInt(String(x.code||"").replace(/\D/g,""))||0));
+  const shFor = {};
+  for (const p of pls){
+    const k = normName(p.investor);
+    let sh = shFor[k] || S.sh.find(s=>normName(s.name)===k);
+    if (!sh){ sh = {id:newId(), code:"S"+String(++n).padStart(3,"0"), name:String(p.investor).trim()}; await S.db.collection("shareholders").doc(sh.id).set({code:sh.code, name:sh.name, notes:"Future Axis's own company (moved from investor placements)", createdAt:now}); }
+    shFor[k] = sh;
+    await S.db.collection("ledger").doc(`own-${p.id}`).set({date:p.date, type:"Owner Capital Contribution", bizId:"", placementId:"", shareholderId:sh.id, amount:num(p.amount), method:p.method||"Bank transfer", bankId:p.bankId||"",
+      payBank:p.payBank||"", payCur:p.payCur||"", payAmt:p.payAmt||"", payRef:p.payRef||"", receipts:p.receipts||[], ref:`Paid-up capital from ${p.investor} (was placement ${p.code})`, createdAt:now});
+    for (const t of S.led.filter(t=>t.placementId===p.id)) await S.db.collection("ledger").doc(t.id).delete();
+    await S.db.collection("placements").doc(p.id).delete();
+  }
+  for (const i of S.inv.filter(i=>isOwnName(i.name) && !S.pl.some(p=>p.investorId===i.id && !pls.includes(p)))) await S.db.collection("investors").doc(i.id).delete();
+  logEvent("Moved to share capital", pls.map(p=>`${p.code} ${p.investor} ${fmt2(p.amount)}`).join("; "));
+}
+async function ownFix(b){
+  const o = ownPlacements(); if (!o.length) return;
+  if (!b.classList.contains("armed")){ b.classList.add("armed"); b.textContent = `Confirm: move ${o.length} placement${o.length===1?"":"s"}`; return; }
+  b.disabled = true; b.textContent = "Moving…";
+  try { await moveToCapital(o); await loadAll(); render(); toast("Moved to share capital. Post the accruals again so the profit split is updated.");
+    if (S.canWrite!==false) openAccruals(); }
+  catch(x){ toast(x.message || "Could not move"); b.disabled = false; b.textContent = "Move to share capital"; }
+}
+
+/* ---------- portfolio: total position, investor money, share capital ---------- */
+S.pf = {view:"total"};
+function portfolioRows(){
+  const va = ventureAccounts(), sp = incomeSplit(S.start, S.end);
+  return va.map(x => { const r = sp.rows.find(y=>y.b.id===x.b.id) || {own:0, inv:0, ownCap:0, invDep:0};
+    return {b:x.b, net:x.net, icap:Math.max(0, r.invDep ?? x.icap), own:Math.max(0, r.ownCap ?? x.own), acc:x.acc, incOwn:r.own, incInv:r.inv, share:x.share, yld:x.yld, rate:num(x.b.rate), invRate:x.invRate, avg:x.avg}; })
+    .filter(r => r.net > 0.5 || r.acc > 0.5);
+}
+function viewPortfolio(){
+  const V = S.pf.view, rows = portfolioRows(), an = 365/(days(S.start,S.end)+1), R = ratios();
+  const T = k => rows.reduce((s,r)=>s+r[k],0), cur = h(VIEW());
+  const seg = `<div class="segctl" role="tablist" aria-label="Portfolio view">${[["total","Total portfolio"],["inv","Investor money"],["own","Share capital"]].map(([k,l])=>`<button role="tab" type="button" data-pfv="${k}" aria-selected="${V===k}">${l}</button>`).join("")}</div>`;
+  const cap = r => V==="inv" ? r.icap : V==="own" ? r.own : r.net;
+  const inc = r => V==="inv" ? r.incInv : V==="own" ? r.incOwn : r.acc;
+  const tc = T(V==="inv"?"icap":V==="own"?"own":"net"), ti = rows.reduce((s,r)=>s+inc(r),0);
+  const k = (l,v,s,col) => `<div class="kpi kx" style="--kc:${col||"var(--accent)"}"><span class="eyebrow">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`;
+  let kpis;
+  if (V==="total") kpis = `${k("Portfolio deployed", money(T("net")), `${rows.length} venture${rows.length===1?"":"s"} at ${fmtDate(S.end)}`, "var(--c1)")}
+    ${k("Investor money", money(T("icap")), `${pct(div(T("icap"),T("net")))} of the portfolio`, "var(--gold)")}
+    ${k("Share capital", money(T("own")), `${pct(div(T("own"),T("net")))} of the portfolio`, "var(--accent)")}
+    ${k("Profit income", money(T("acc")), `${pct(div(R.P.inc, R.Tavg)*R.an)} p.a. on average capital`, "var(--pos)")}`;
+  else if (V==="inv") kpis = `${k("Investor money deployed", money(T("icap")), `${pct(div(T("icap"),T("net")))} of the portfolio`, "var(--gold)")}
+    ${k("Earned on investor money", money(T("incInv")), "venture profit on investor capital", "var(--c1)")}
+    ${k("Paid or due to investors", money(T("share")), `${pct(div(R.P.share, R.Kavg)*R.an)} p.a. average agreed`, "var(--c5)")}
+    ${k("Kept by Future Axis", money(T("incInv")-T("share")), `${pct(div(T("incInv")-T("share"), T("incInv")))} of what investor money earned`, "var(--pos)")}`;
+  else kpis = `${k("Share capital deployed", money(T("own")), `${pct(div(T("own"),T("net")))} of the portfolio`, "var(--accent)")}
+    ${k("Owner income", money(T("incOwn")), "full venture profit on own capital", "var(--pos)")}
+    ${k("Return on share capital", pct(div(R.incOwn, R.Oavg)*R.an), "p.a. on average own capital", "var(--c3)")}
+    ${k("Owner equity", money(balanceSheet(S.end).eq), `share capital plus retained earnings`, "var(--c7)")}`;
+  const tr = rows.map(r => { const c = cap(r), i = inc(r);
+    const extra = V==="total" ? `<td class="n">${money(r.icap)}</td><td class="n">${money(r.own)}</td><td class="n">${pct(r.rate)}</td><td class="n">${pct(r.yld)}</td>`
+      : V==="inv" ? `<td class="n">${pct(r.invRate,2)}</td><td class="n">${pct(r.rate)}</td><td class="n">${money(r.share)}</td><td class="n">${money(r.incInv - r.share)}</td>`
+      : `<td class="n">${pct(div(r.own, r.net))}</td><td class="n">${pct(r.rate)}</td><td class="n">${pct(r.yld)}</td>`;
+    return `<tr class="click" data-goledger="${r.b.id}"><td><i class="sw" style="display:inline-block;margin-right:8px;background:${vcol(r.b.id)}"></i><b style="font-weight:600">${h(r.b.name)}</b><div class="note">${h(r.b.nature||"")}</div></td>
+      <td class="n">${money(c)}</td><td class="n">${pct(div(c, tc))}</td><td><div class="split"${tipData(r.b.name, [["Share of this view", pc1(div(c,tc))]])}><i style="width:${div(c,tc)*100}%;background:${vcol(r.b.id)}"></i></div></td><td class="n">${money(i)}</td>${extra}</tr>`; }).join("");
+  const head = V==="total" ? `<th class="n">Investor money</th><th class="n">Share capital</th><th class="n">Expected p.a.</th><th class="n">Actual p.a.</th>`
+    : V==="inv" ? `<th class="n">Investors' avg rate</th><th class="n">Venture rate</th><th class="n">Investor share</th><th class="n">Kept by Future Axis</th>`
+    : `<th class="n">Own share of venture</th><th class="n">Venture rate</th><th class="n">Return p.a.</th>`;
+  const foot = V==="total" ? `<td class="n">${money(T("icap"))}</td><td class="n">${money(T("own"))}</td><td></td><td class="n">${pct(div(R.P.inc, R.Tavg)*R.an)}</td>`
+    : V==="inv" ? `<td></td><td></td><td class="n">${money(T("share"))}</td><td class="n">${money(T("incInv")-T("share"))}</td>` : `<td class="n">${pct(div(T("own"),T("net")))}</td><td></td><td class="n">${pct(div(R.incOwn, R.Oavg)*R.an)}</td>`;
+  csvReg("portfolio", ["Venture", `Capital (${V})`, "% of view", "Profit income", "Investor money", "Share capital", "Expected rate", "Actual p.a."], rows.map(r=>[r.b.name, r0(cap(r)), p2(div(cap(r),tc)), r0(inc(r)), r0(r.icap), r0(r.own), p2(r.rate), p2(r.yld)]));
+  const lbl = V==="inv" ? "Investor money" : V==="own" ? "Share capital" : "Deployed";
+  const donutA = donut(rows.map(r=>({l:r.b.name, v:cap(r), c:vcol(r.b.id), extra: V==="total" ? [["Investor money", fmtV(r.icap)], ["Share capital", fmtV(r.own)]] : []})), {center:lbl, fmt:kfmt, aria:`${lbl} by venture`, empty:"Appears once capital is invested."});
+  const donutB = V==="total" ? donut([{l:"Investor money", v:T("icap"), c:"var(--gold)"}, {l:"Share capital", v:T("own"), c:"var(--accent)"}], {center:"Funded by", fmt:kfmt, aria:"Portfolio funding"})
+    : donut(rows.map(r=>({l:r.b.name, v:inc(r), c:vcol(r.b.id)})), {center:V==="inv"?"Earned":"Owner income", fmt:kfmt, aria:"Profit by venture", empty:"Appears once profit is accrued in this period."});
+  return `<div class="head"><div><span class="eyebrow">Portfolio · ${cur}</span><h1>Portfolio</h1><p>Total position at ${fmtDate(S.end)} with profit from ${fmtDate(S.start)} to ${fmtDate(S.end)}. Switch the view to see the whole portfolio, investor money only, or share capital only.</p></div>${csvBtn("portfolio")}</div>
+  ${seg}
+  <div class="stack">
+  <div class="kpis">${kpis}</div>
+  ${V==="total" ? `<section class="sheet"><div class="sheet-b">${compBar([{l:"Investor money", v:T("icap"), c:"var(--gold)"}, {l:"Share capital", v:T("own"), c:"var(--accent)"}])}</div></section>` : ""}
+  <div class="grid4">
+    <section class="sheet"><div class="sheet-h"><div><h2>${lbl} by venture</h2><p>Share of ${lbl.toLowerCase()} in each venture</p></div></div><div class="sheet-b">${donutA}</div></section>
+    <section class="sheet"><div class="sheet-h"><div><h2>${V==="total"?"How the portfolio is funded":V==="inv"?"Earned on investor money by venture":"Owner income by venture"}</h2><p>${V==="total"?"Investor money against share capital":`${fmtDate(S.start)} to ${fmtDate(S.end)}`}</p></div></div><div class="sheet-b">${donutB}</div></section>
+  </div>
+  <section class="sheet"><div class="sheet-h"><div><h2>Position by venture</h2><p>Click a venture for its ledger</p></div></div>
+    <div class="tbl"><table><thead><tr><th>Venture</th><th class="n">${lbl}</th><th class="n">% of total</th><th style="min-width:110px">Share</th><th class="n">${V==="inv"?"Earned":V==="own"?"Owner income":"Profit income"}</th>${head}</tr></thead>
+    <tbody>${tr || `<tr><td colspan="10" class="empty">No capital invested yet.</td></tr>`}</tbody>
+    ${tr?`<tfoot><tr><td>Total</td><td class="n">${money(tc)}</td><td class="n">${pct(tc?1:0)}</td><td></td><td class="n">${money(ti)}</td>${foot}</tr></tfoot>`:""}</table></div></section>
+  ${capFlowSection()}
+  </div>`;
+}
+
+/* ---------- share capital: owner equity statement ---------- */
+function initialTo(){
+  if (S.cfg.initialTo) return S.cfg.initialTo;
+  const c = S.led.filter(t=>t.type==="Owner Capital Contribution").map(t=>t.date).sort();
+  const imp = S.led.filter(t=>t.type==="Owner Capital Contribution" && String(t.id).startsWith("imp-own-")).map(t=>t.date).sort();
+  return imp.length ? imp[imp.length-1] : (c[0] || "");
+}
+function equityStatement(from, to){
+  const it = initialTo(), sum = (f) => S.led.filter(f).reduce((s,t)=>s+num(t.amount),0), inR = d => d>=from && d<=to;
+  const contrib = t => t.type==="Owner Capital Contribution";
+  const initAll = sum(t=>contrib(t) && t.date<=it && t.date<=to), addAll = sum(t=>contrib(t) && t.date>it && t.date<=to), drawAll = sum(t=>t.type==="Owner Drawing" && t.date<=to);
+  const initP = sum(t=>contrib(t) && t.date<=it && inR(t.date)), addP = sum(t=>contrib(t) && t.date>it && inR(t.date)), drawP = sum(t=>t.type==="Owner Drawing" && inR(t.date));
+  /* own-capital profit split between initial and additional paid-up capital by time-weighted capital */
+  const split = (f, t2) => { const sp = incomeSplit(f, t2), aEnd = lastAccrual(f, t2) || t2;
+    const ci = capDays(S.led.filter(t=>contrib(t) && t.date<=it).map(t=>[t.date, num(t.amount)]), f, aEnd);
+    const ca = capDays([...S.led.filter(t=>contrib(t) && t.date>it).map(t=>[t.date, num(t.amount)]), ...S.led.filter(t=>t.type==="Owner Drawing").map(t=>[t.date, -num(t.amount)])], f, aEnd);
+    const w = ci + Math.max(0, ca) > 0 ? ci/(ci + Math.max(0, ca)) : 1, P = pnl(f, t2);
+    return {onInit: sp.own*w, onAdd: sp.own*(1-w), onInv: sp.inv - P.share, other: P.oinc - P.opex, net: P.net}; };
+  const p = split(from, to), a = split(ORIGIN, to), O = balanceSheet(addDays(from,-1)), B = balanceSheet(to);
+  return {it, initAll, addAll, drawAll, initP, addP, drawP, p, a, O, B};
+}
+function equitySection(){
+  const E = equityStatement(S.start, S.end), W = S.canWrite!==false, hasAdd = Math.abs(E.addAll) > 0.5 || Math.abs(E.drawAll) > 0.5;
+  const L = (l, a, b, cls="ind", tip) => `<tr class="${cls}"><td>${l}${tip?`<div class="note">${tip}</div>`:""}</td><td class="n">${a===undefined?"":money(a)}</td><td class="n">${b===undefined?"":money(b)}</td></tr>`;
+  const reP = E.p.net, reA = E.B.re;
+  const months = monthsBetween(S.start.slice(0,7), S.end.slice(0,7)).map(ym => { const d = [S.end, monthEnd(ym)].sort()[0], B = balanceSheet(d); return {label: monthLabel(ym).slice(0,3), title: `${monthLabel(ym)} (month end)`, v:{cap:B.owner, re:Math.max(0,B.re)}}; });
+  csvReg("owner-equity", ["Line", "This period", "Inception to date"], [["Opening owner equity", r0(E.O.eq), ""], ["Initial paid-up capital", r0(E.initP), r0(E.initAll)], ["Additional paid-up capital", r0(E.addP), r0(E.addAll)], ["Drawings", r0(-E.drawP), r0(-E.drawAll)],
+    ["Profit earned on initial paid-up capital", r0(E.p.onInit), r0(E.a.onInit)], ["Profit earned on additional paid-up capital", r0(E.p.onAdd), r0(E.a.onAdd)], ["Profit earned on additional investments (investor placements, net of investor share)", r0(E.p.onInv), r0(E.a.onInv)],
+    ["Other income less expenses", r0(E.p.other), r0(E.a.other)], ["Retained earnings", r0(reP), r0(reA)], ["Closing owner equity", r0(E.B.eq), r0(E.B.eq)]]);
+  const k = (l,v,s,col) => `<div class="kpi kx" style="--kc:${col}"><span class="eyebrow">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`;
+  return `<div class="kpis">
+    ${k("Initial paid-up capital", money(E.initAll), E.it ? `contributions up to ${fmtDate(E.it)}` : "no contributions yet", "var(--accent)")}
+    ${k("Profit on initial paid-up capital", money(E.a.onInit), `inception to date · ${money(E.p.onInit)} this period`, "var(--c3)")}
+    ${k("Profit on additional investments", money(E.a.onInv), `investor placements, net of investor share`, "var(--gold)")}
+    ${k("Retained earnings", money(reA), "all profit kept in the business", "var(--pos)")}
+    ${k("Closing owner equity", money(E.B.eq), `at ${fmtDate(S.end)}`, "var(--c7)")}
+  </div>
+  <div class="grid4">
+  <section class="sheet fs"><div class="sheet-h"><div><h2>Owner equity statement</h2><p>From initial paid-up capital to closing owner equity</p></div>${csvBtn("owner-equity")}</div><div class="tbl"><table>
+    <thead><tr><th></th><th class="n">This period</th><th class="n">Inception to ${fmtDate(S.end)}</th></tr></thead><tbody>
+    ${L("Opening owner equity", E.O.eq, undefined, "ind", fmtDate(addDays(S.start,-1)))}
+    <tr class="sub"><td colspan="3">Paid-up capital</td></tr>
+    ${L("Initial paid-up capital", E.initP, E.initAll)}
+    ${hasAdd ? L("Additional paid-up capital", E.addP, E.addAll) + (Math.abs(E.drawAll)>0.5 ? L("Less: drawings", -E.drawP, -E.drawAll) : "") : ""}
+    ${L("Paid-up capital", E.initP + E.addP - E.drawP, E.initAll + E.addAll - E.drawAll, "tot")}
+    <tr class="sub"><td colspan="3">Profit earned</td></tr>
+    ${L("Profit earned on initial paid-up capital", E.p.onInit, E.a.onInit)}
+    ${Math.abs(E.a.onAdd) > 0.5 ? L("Profit earned on additional paid-up capital", E.p.onAdd, E.a.onAdd) : ""}
+    ${L("Profit earned on additional investments", E.p.onInv, E.a.onInv, "ind", "investor placements: venture profit on investor money less the investors' share")}
+    ${Math.abs(E.a.other) > 0.5 ? L("Other income less operating expenses", E.p.other, E.a.other) : ""}
+    ${L("Retained earnings", reP, reA, "tot")}
+    ${L("Closing owner equity", E.B.eq, E.B.eq, "gt")}
+    <tr class="ind"><td class="note">Retained earnings as % of paid-up capital</td><td class="n note"></td><td class="n note">${pct(div(reA, E.initAll + E.addAll - E.drawAll))}</td></tr>
+    </tbody></table></div>
+    <div class="sheet-b note" style="border-top:1px solid var(--line)">Initial paid-up capital = contributions up to <b>${E.it?fmtDate(E.it):"–"}</b>${W?` <input type="date" id="capInit" value="${h(E.it)}" style="width:auto;display:inline-block;padding:2px 6px"> <button class="btn sm" data-capinit type="button">Change</button>`:""}. Later contributions are additional paid-up capital. Profit on paid-up capital is split between initial and additional capital by time-weighted amount.</div></section>
+  <section class="sheet"><div class="sheet-h"><div><h2>Owner equity build-up</h2><p>Paid-up capital and retained earnings at each month end</p></div></div>
+    <div class="sheet-b" style="overflow-x:auto">${areaChart(months, [{k:"cap", l:"Paid-up capital", c:"var(--accent)"}, {k:"re", l:"Retained earnings", c:"var(--pos)"}], {totalLabel:"Owner equity", aria:"Owner equity build-up"})}
+    ${donut([{l:"Profit on initial paid-up capital", v:E.a.onInit, c:"var(--c3)"}, {l:"Profit on additional paid-up capital", v:E.a.onAdd, c:"var(--c1)"}, {l:"Profit on additional investments", v:E.a.onInv, c:"var(--gold)"}, {l:"Other income less expenses", v:E.a.other, c:"var(--c5)"}], {center:"Retained earnings", fmt:kfmt, aria:"Where retained earnings came from"})}</div></section>
+  </div>`;
+}
+/* profit calculation shown on hover for each placement-month */
+function profitCalcTip(p, ym, profit, isPosted){
+  const from = ym+"-01", to = monthEnd(ym), start = p.date >= from ? addDays(p.date, 1) : from, stop = p.maturity && p.maturity < to ? p.maturity : to;
+  const dd = Math.max(0, days(start, stop) + 1), rate = num(p.rate), cl = num(p.amount) - S.led.filter(t=>t.placementId===p.id && t.type==="Investor Capital Repaid" && t.date<=to).reduce((s,t)=>s+num(t.amount),0);
+  return tipData(`${p.code} · profit ${monthLabel(ym)}`, [["Capital", fmtV(cl)], ["Agreed rate", pc1(rate)], ["Days earning", `${dd} of ${days(from,to)+1}`], ["Per day", `${VIEW()} ${fmt2(cl*rate/365)}`], ["Capital × rate × days ÷ 365", `${VIEW()} ${fmt2(cl*rate*dd/365)}`], [isPosted ? "Posted" : "Calculated", `${VIEW()} ${fmt2(profit)}`]],
+    "Day by day: withdrawals during the month reduce the capital from their date.");
 }
 
 /* ---------- render ---------- */
@@ -3410,7 +3707,7 @@ function syncCur(){ const sel = $("#viewCur"); if (!sel) return; sel.innerHTML =
 function renderTabs(){
   syncCur();
   const pend = (S.members||[]).filter(m=>m.status==="pending").length;
-  $("#tabs").innerHTML = TABS.filter(t => (t[0]!=="users" || S.isAdmin) && (t[0]!=="import" || S.canWrite) && (!["logs","backups"].includes(t[0]) || S.isFull)).map(t => t[0]==="|" ? '<span class="sep" aria-hidden="true"></span>' : `<button role="tab" data-tab="${t[0]}" aria-selected="${S.tab===t[0] || (t[0]==="settings" && ["users","import","logs","backups"].includes(S.tab))}">${t[1]}${t[0]==="settings"&&pend&&S.isAdmin?` <span class="pill warn">${pend}</span>`:""}</button>`).join("");
+  $("#tabs").innerHTML = TABS.filter(t => (t[0]!=="users" || S.isAdmin) && (t[0]!=="import" || S.canWrite) && (!["logs","backups"].includes(t[0]) || S.isFull)).map(t => t[0]==="|" ? '<span class="sep" aria-hidden="true"></span>' : `<button role="tab" data-tab="${t[0]}" aria-selected="${S.tab===t[0] || (t[0]==="settings" && ["users","import","logs","backups","fx"].includes(S.tab))}">${t[1]}${t[0]==="settings"&&pend&&S.isAdmin?` <span class="pill warn">${pend}</span>`:""}</button>`).join("");
 }
 function render(){
   if (window.hideTip) hideTip();
@@ -3421,7 +3718,7 @@ function render(){
   if (S.start > S.end){ $("#main").innerHTML = `<div class="banner">The period start is after its end. Adjust the dates at the top.</div>`; return; }
   if ((S.tab==="users" && !S.isAdmin) || (S.tab==="import" && !S.canWrite) || (["logs","backups"].includes(S.tab) && !S.isFull)) S.tab = "dashboard";
   S.csv = {};
-  const V = {dashboard:viewDashboard, ventures:viewVentures, investors:viewInvestors, ledger:viewLedger, returns:viewReturns, monthly:viewMonthly, statements:viewStatements, reports:viewReports, expenses:viewExpenses, capital:viewCapital, bank:viewBank, import:viewImport, users:viewUsers, settings:viewSettings, logs:viewLogs, backups:viewBackups, master:viewMaster}[S.tab] || viewDashboard;
+  const V = {dashboard:viewDashboard, ventures:viewVentures, investors:viewInvestors, ledger:viewLedger, returns:viewReturns, monthly:viewMonthly, statements:viewStatements, reports:viewReports, expenses:viewExpenses, capital:viewCapital, bank:viewBank, import:viewImport, users:viewUsers, settings:viewSettings, logs:viewLogs, backups:viewBackups, master:viewMaster, fx:viewFx, portfolio:viewPortfolio}[S.tab] || viewDashboard;
   const ro = S.canWrite===false ? `<div class="banner" style="margin-bottom:16px">You have view access. Ask the owner for edit access to record entries.</div>` : "";
   const fy = document.activeElement?.id, sel = fy && document.activeElement.selectionStart;
   $("#main").innerHTML = ro + (SET_SUBS.some(x=>x[0]===S.tab) ? settingsBar() : "") + V();
@@ -3445,6 +3742,12 @@ function wireView(){
   const ivv = $("#ivVen"); if (ivv) ivv.onchange = e => { S.iv.ven = e.target.value; render(); };
   const ivf = $("#ivFreq"); if (ivf) ivf.onchange = e => { S.iv.freq = e.target.value; };
   const ivqq = $("#ivQ"); if (ivqq) ivqq.oninput = e => { S.iv.q = e.target.value; clearTimeout(wireView.iq); wireView.iq = setTimeout(render, 250); };
+  const fxf = $("#fxForm"); if (fxf) fxf.onsubmit = async e => { e.preventDefault(); const c = $("#fxC").value.trim().toUpperCase(), r = num($("#fxR").value), d = $("#fxD").value;
+    if (!/^[A-Z]{3}$/.test(c)){ $("#fxM").textContent = "Use a 3-letter currency code, e.g. PKR"; return; } if (!(r>0)){ $("#fxM").textContent = "Enter the rate"; return; }
+    try { await saveFx([{cur:c, date:d, rate:r, src:$("#fxS").value.trim() || "Manual", by:S.user?.email||""}]); toast(`${c} rate saved`); render(); } catch(x){ $("#fxM").textContent = "Could not save: " + (x.message||""); } };
+  const fxu = () => { S.fx.amt = $("#fxA").value; S.fx.from = $("#fxF").value; S.fx.to = $("#fxT").value; S.fx.date = $("#fxCd").value;
+    const v = fxConv(S.fx.amt, S.fx.from, S.fx.to, S.fx.date || todayIso()); $("#fxOut").innerHTML = v==null ? `Add a rate for ${h(rateOn(S.fx.from)?S.fx.to:S.fx.from)} first.` : `<b>${h(S.fx.from)} ${fmt2(S.fx.amt)} = ${h(S.fx.to)} ${fmt2(v)}</b><span class="note">1 ${h(S.fx.from)} = ${(v/num(S.fx.amt||1)).toFixed(6)} ${h(S.fx.to)}</span>`; };
+  ["#fxA","#fxF","#fxT","#fxCd"].forEach(k => { const el = $(k); if (el) el.oninput = el.onchange = fxu; });
   const my = $("#mrYm"); if (my) my.onchange = e => { S.mrYm = e.target.value; render(); };
   const lw = $("#lgWho"); if (lw) lw.onchange = e => { S.lg.who = e.target.value; render(); };
   const lgq = $("#lgQ"); if (lgq) lgq.oninput = e => { S.lg.q = e.target.value; clearTimeout(wireView.lt); wireView.lt = setTimeout(()=>{ render(); const x=$("#lgQ"); if (x){ x.focus(); x.setSelectionRange(x.value.length,x.value.length); } }, 250); };
@@ -3513,6 +3816,11 @@ document.addEventListener("click", e => {
   const rv = e.target.closest("[data-rview]"); if (rv){ e.preventDefault(); openReceipt(rv.dataset.rview); return; }
   const rr = e.target.closest("[data-rrm]"); if (rr){ const d = rr.closest(".rcpt"); d.classList.toggle("rm"); rr.textContent = d.classList.contains("rm") ? "Undo" : "Remove"; return; }
   const rb = e.target.closest("[data-rcpt]"); if (rb){ const [c,i] = rb.dataset.rcpt.split(":"); openReceipts(c, i); return; }
+  const pfv = e.target.closest("[data-pfv]"); if (pfv){ S.pf.view = pfv.dataset.pfv; render(); return; }
+  const ci = e.target.closest("[data-capinit]"); if (ci){ const d = $("#capInit").value; if (!d) return; S.db.doc("config/settings").set({...S.cfg, initialTo:d}).then(()=>{ S.cfg.initialTo = d; logEvent("Initial paid-up capital date changed", d); render(); toast("Saved"); }, x=>toast("Could not save: "+(x.message||""))); return; }
+  const fxb = e.target.closest("[data-fx]"); if (fxb){ fxAction(fxb); return; }
+  const fxd = e.target.closest("[data-fxdel]"); if (fxd){ fxDelete(fxd.dataset.fxdel); return; }
+  const ofx = e.target.closest("[data-ownfix]"); if (ofx){ ownFix(ofx); return; }
   const iva = e.target.closest("[data-ivact]"); if (iva){ ivAction(iva); return; }
   const ivq = e.target.closest("[data-ivq]"); if (ivq){ S.iv.q = ivq.dataset.ivq; render(); $("#ivPay")?.scrollIntoView({behavior:"smooth", block:"start"}); return; }
   const fv = e.target.closest("[data-fsv]"); if (fv){ S.fsView = fv.dataset.fsv; render(); return; }
@@ -3528,7 +3836,7 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-iradd]")){ const n = Math.max(0, ...S.imp.recs.map(x=>parseInt(x.sr)||0)) + 1; S.imp.recs.push({sr:String(n), inv:"", rate:"", date:"", amt:0, alloc:Object.fromEntries(S.imp.ventures.map(v=>[v,0])), owner:false}); render(); return; }
   if (e.target.closest("[data-acc]")){ openAccruals(); return; }
   const nc = e.target.closest("[data-newcap]"); if (nc){ openForm("led", null, {prefill:{type:nc.dataset.newcap, bizId:"", shareholderId:S.sh.length===1?S.sh[0].id:""}}); return; }
-  if (e.target.closest("[data-rcpt],[data-rview],[data-rrm],[data-ivsel],[data-ivact],[data-mdtog],[data-mdpl],[data-mdk],[data-mdact]")) return;
+  if (e.target.closest("[data-rcpt],[data-rview],[data-rrm],[data-ivsel],[data-ivact],[data-mdtog],[data-mdpl],[data-mdk],[data-mdact],[data-fx],[data-fxdel],[data-ownfix]")) return;
   const t = e.target.closest("[data-tab],[data-go],[data-new],[data-edit],[data-csv],[data-goledger]"); if (!t) return;
   if (t.dataset.tab || t.dataset.go){ S.tab = t.dataset.tab || t.dataset.go; if (S.tab==="logs") S.lg.rows = null; if (S.tab==="backups") S.bk.rows = null; store.set("fa.tab", S.tab); render(); window.scrollTo(0,0); }
   else if (t.dataset.new) openForm(t.dataset.new);

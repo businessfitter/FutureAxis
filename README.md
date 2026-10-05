@@ -78,7 +78,25 @@ Every change you commit on GitHub redeploys automatically.
 
 
 ## Screens
-**Dashboard · Share capital · Investors · Ventures · Statements · Master data** | Ledger · Bank · Expenses | Returns · Monthly · Reports | **Settings** (General, Users, Import, Log, Backups)
+**Dashboard · Portfolio · Investors · Ventures · Statements · Share capital · Master data** | Ledger · Bank · Expenses | Returns · Monthly · Reports | **Settings** (General, Currencies, Users, Import, Log, Backups)
+
+## Portfolio
+- Total position by venture with percentages, profit income and expected against actual rates.
+- Switch between **Total portfolio**, **Investor money** (earned, investor share, kept by Future Axis) and **Share capital** (own capital, owner income, return).
+- Includes month-by-month investment raised and placed, split between investor money and owner money, with charts.
+
+## Share capital: owner equity statement
+Initial paid-up capital → profit earned on initial paid-up capital → profit earned on additional investments (investor placements, net of investor share) → retained earnings → closing owner equity. It is shown for the period and inception to date, and ties to the balance sheet.
+- Initial paid-up capital covers contributions up to a date you can change on the page. Later contributions show as additional paid-up capital.
+- FAMCON is Future Axis's own company, so it belongs here. If it appears as an investor placement, the Investors tab shows **Move to share capital**. Afterwards, post the accruals again.
+
+## Currencies (Settings → Currencies)
+- Profit is calculated in USD. Each investor is paid in their own currency: set **Paid in currency** in Master data, or tick placements on the Investors tab and use **Paid in… → Apply**.
+- Rates are units per 1 USD and dated. The latest rate on or before a date is used. **Get latest rates** pulls market rates; you can also enter your bank's rate.
+- Investors tab and monthly report show profit and payable in the payout currency.
+- **Mark paid** asks for the rate of each currency involved, records the USD amount settled, the amount paid in PKR/AED and the rate, and can save the rate to the table.
+- Withdrawals and payments entered in PKR or AED convert to USD at the dated rate.
+- The converter on the same page converts any amount on any date.
 
 ## Master data
 - One place to create, edit, **deactivate** and reactivate **investors, ventures, bank accounts and suppliers**.
