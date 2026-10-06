@@ -257,3 +257,9 @@ If cash shows negative, receipts such as venture withdrawals aren't recorded yet
   - *Owner money · new paid-up capital*: also books a capital contribution, so paid-up capital rises.
   - *Investor money*: pick the investor and their placement. The form shows how much of that placement isn't yet placed and warns before it is counted twice.
 - Every active venture now shows on the Ventures tab, even with nothing recorded yet.
+
+## Initial paid-up capital (6 Oct 2026)
+- **Share capital → Initial paid-up capital**: enter the shareholders' names and what each put into each venture, e.g. SK Livestock AED 35,000 and Empyrean USD 16,666 per shareholder, with dates.
+- It replaces the FAMCON paid-up capital entries (the same money) with one entry per shareholder per venture, so the shareholder table shows each shareholder's % and share of equity.
+- The preview compares the amounts with the owner money recorded as placed in each venture. Ticking the box records any shortfall as owner money invested, so cash per books stays at 0.
+- Running it again replaces the earlier entries, so nothing is counted twice.
