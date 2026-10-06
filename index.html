@@ -846,7 +846,7 @@ function ventureAccounts(){
     const cd = capDays(S.led.filter(t=>f(t) && (t.type==="Investment Addition"||t.type==="Investment Withdrawal"||t.type==="Profit Reinvested")).map(t=>[t.date, num(t.amount)*(t.type==="Investment Withdrawal"?-1:1)]), start, yEnd);
     const yld = cd > 0 ? acc*365/cd : 0, avg = cd / (days(start, yEnd)+1);
     const pls = S.pl.filter(p=>p.bizId===b.id && p.date && p.date<=end), invRate = div(pls.reduce((s,p)=>s+num(p.amount)*num(p.rate),0), pls.reduce((s,p)=>s+num(p.amount),0));
-    return {b, added, wd, net, icap, own, acc, recd, rec, share, pay, contrib:acc-share, yld, avg, invRate, varr: yld - num(b.rate)};
+    return {b, added, wd, net, pos: net + rec, icap, own, acc, recd, rec, share, pay, contrib:acc-share, yld, avg, invRate, varr: yld - num(b.rate)};
   });
 }
 function ratios(){
@@ -931,20 +931,20 @@ function viewDashboard(){
   if (!S.biz.length && !S.led.length) return `${monthlyAlert()}<div class="head"><div><h1>Dashboard</h1><p>Nothing recorded yet.</p></div></div>
     <div class="sheet"><div class="empty"><b>Start with your first venture</b>Add ventures and investors in Master data, then record placements and investments.<div class="row" style="justify-content:center;margin-top:14px"><button class="btn primary" data-tab="master" type="button">Open master data</button></div></div></div>`;
   const R = ratios(), va = ventureAccounts(), B = balanceSheet(S.end), y = +S.end.slice(0,4), mo = monthly(y), curM = S.end.slice(0,7);
-  const live = va.filter(x => x.net > 0.5).sort((a,b)=>b.net-a.net);
+  const live = va.filter(x => x.pos > 0.5).sort((a,b)=>b.pos-a.pos), PS = live.reduce((s,x)=>s+x.pos,0);
   const nInv = new Set(S.pl.filter(p=>p.date<=S.end && !isOwnName(p.investor)).map(p=>(p.investorId||p.investor||"").toString().trim().toLowerCase())).size;
-  const O = Math.max(0, R.O), K = Math.max(0, R.K), T = R.T, npa = R.roc*R.an;
+  const O = B.eq, KC = B.icap, PY = B.pay, K = KC, T = O + K, npa = R.roc*R.an;
   const top = recommendations(R, va, B).filter(r=>r.sev==="high").slice(0,1)[0];
   const alert = Math.abs(B.diff) > 0.5 ? `<div class="alert bad"><span class="dot"></span><div><b>Balance sheet is out by ${nf.format(B.diff)}.</b> Check the ledger for entries with a missing venture or placement.</div><button class="btn sm" data-tab="ledger" type="button">Ledger</button></div>`
     : top ? `<div class="alert ${top.sev==="high"?"warn":""}"><span class="dot"></span><div><b>${top.title}</b> <span class="note">${top.text}</span></div>${top.btn||""}</div>` : "";
   const stat = (lb, v, sub, ic, col, chip="", tip="", extra="") => `<div class="stat" style="--kc:${col}"${tip}><div class="sh"><span class="lb">${lb}</span><span class="ic">${nico(ic, 19)}</span></div><span class="v">${v}</span><div class="row" style="gap:8px">${chip?`<span class="chip">${chip}</span>`:""}<span class="s">${sub}</span></div>${extra}</div>`;
   const eqA = equityStatement(ORIGIN, S.end).a, pe = eqA.onInit + eqA.onAdd + eqA.onOi + eqA.onInv;
-  const capTip = tipData("Total capital deployed", [["Share capital in ventures", `${fmtV(O)} · ${pc1(div(O,T))}`, "var(--accent)"], ["Investor money", `${fmtV(K)} · ${pc1(div(K,T))}`, "var(--gold)"], ...live.map(x=>[x.b.name, `${fmtV(x.net)} · ${pc1(div(x.net,T))}`, vcol(x.b.id)])]);
+  const capTip = tipData("Total capital deployed", [["Share capital", `${fmtV(O)} · ${pc1(div(O,T))}`, "var(--accent)"], ["Investor money", `${fmtV(K)} · ${pc1(div(K,T))}`, "var(--gold)"], ["Total", fmtV(T)], ["Investor profit payable (paid separately)", fmtV(PY)], ...live.map(x=>[x.b.name, `${fmtV(x.pos)} · ${pc1(div(x.pos,T))}`, vcol(x.b.id)]), ...(Math.abs(B.cash)>0.5?[["Cash", fmtV(B.cash)]]:[])]);
   const npTip = tipData("Net profit %", [["Net profit", fmtV(R.P.net)], ["Average capital deployed", fmtV(R.Tavg)], ["Return p.a.", pc1(npa)], ["On own capital p.a.", pc1(R.nprOwn*R.an)], ["On investor money p.a.", pc1(R.nprInv*R.an)], ["Net profit ÷ venture income", pc1(R.npr)]]);
-  const rows = live.map(x => { const own = Math.max(0, x.net - x.icap), iv = Math.max(0, x.icap);
-    return `<div class="vrow"${tipData(x.b.name, [["Position", fmtV(x.net)], ["Share capital", `${fmtV(own)} · ${pc1(div(own,x.net))}`, "var(--accent)"], ["Investor money", `${fmtV(iv)} · ${pc1(div(iv,x.net))}`, "var(--gold)"], ["Actual p.a.", pc1(x.yld)], ["Expected p.a.", pc1(num(x.b.rate))]])}>
-      <span class="nm"><i style="background:${vcol(x.b.id)}"></i>${h(x.b.name)}</span><span class="am">${money(x.net)}<small>${pc1(div(x.net,T))}</small></span>
-      <span class="tr"><i style="width:${div(own,x.net)*100}%;background:var(--accent)"></i><i style="width:${div(iv,x.net)*100}%;background:var(--gold)"></i></span></div>`; }).join("");
+  const rows = live.map(x => { const iv = Math.max(0, x.icap), own = Math.max(0, x.pos - x.icap - x.pay);
+    return `<div class="vrow"${tipData(x.b.name, [["Position", fmtV(x.pos)], ["of which receivable", fmtV(x.rec)], ["Share capital", `${fmtV(own)} · ${pc1(div(own,x.pos))}`, "var(--accent)"], ["Investor money", `${fmtV(iv)} · ${pc1(div(iv,x.pos))}`, "var(--gold)"], ["Actual p.a.", pc1(x.yld)], ["Expected p.a.", pc1(num(x.b.rate))]])}>
+      <span class="nm"><i style="background:${vcol(x.b.id)}"></i>${h(x.b.name)}</span><span class="am">${money(x.pos)}<small>${pc1(div(x.pos,PS))}</small></span>
+      <span class="tr"><i style="width:${div(own,x.pos)*100}%;background:var(--accent)"></i><i style="width:${div(iv,x.pos)*100}%;background:var(--gold)"></i></span></div>`; }).join("");
   return `${monthlyAlert()}${flashHtml("mrNote")}${flashHtml("ownNote")}
   <div class="head"><div><span class="eyebrow">Position at ${fmtDate(S.end)} · ${h(VIEW())}</span><h1>Dashboard</h1><p>Profit from ${fmtDate(S.start)} to ${fmtDate(S.end)}. Hover any figure for the detail.</p></div>
     ${S.canWrite!==false?`<div class="row"><button class="btn" data-acc="1" type="button">Run profit accruals</button><button class="btn primary" data-vinv="" type="button">Add investment</button></div>`:""}</div>
@@ -952,22 +952,22 @@ function viewDashboard(){
   <div class="dgrid">
     <div class="hero"${capTip}><span class="eyebrow">Total capital deployed</span><div class="hv">${money(T)}</div>
       <div class="hs">${live.length} venture${live.length===1?"":"s"} · ${nInv} investor${nInv===1?"":"s"} · ${pc1(npa)} net profit p.a.</div>
-      <div class="hbar"><i style="width:${div(O,O+K)*100}%;background:#a5b4fc"></i><i style="width:${div(K,O+K)*100}%;background:#fbbf24"></i></div>
-      <div class="hk"><span><i style="background:#a5b4fc"></i>Share capital <b>${money(O)}</b> · ${pc1(div(O,O+K))}</span><span><i style="background:#fbbf24"></i>Investors <b>${money(K)}</b> · ${pc1(div(K,O+K))}</span></div>
+      <div class="hbar"><i style="width:${div(Math.max(0,O),T)*100}%;background:#a5b4fc"></i><i style="width:${div(Math.max(0,K),T)*100}%;background:#fbbf24"></i></div>
+      <div class="hk"><span><i style="background:#a5b4fc"></i>Share capital <b>${money(O)}</b> · ${pc1(div(O,T))}</span><span>+</span><span><i style="background:#fbbf24"></i>Investor money <b>${money(K)}</b> · ${pc1(div(K,T))}</span><span>= <b>${money(T)}</b></span></div>
       <div class="htiles">
         <div><span>Venture profit</span><b>${money(R.P.inc)}</b><small>${pc1(div(R.P.inc, R.Tavg)*R.an)} p.a.</small></div>
         <div><span>Profit receivable</span><b>${money(B.rec)}</b><small>due from ventures</small></div>
-        <div><span>Investor profit payable</span><b>${money(B.pay)}</b><small>due to investors</small></div>
+        <div><span>Investor profit payable</span><b>${money(B.pay)}</b><small>paid separately</small></div>
       </div></div>
     <div class="dk" style="grid-template-columns:1fr 1fr">
-      ${stat("Share capital", money(B.eq), `paid-up ${nf.format(B.owner)} · profit ${nf.format(pe)}${Math.abs(eqA.oinc)>0.5?` · other income ${nf.format(eqA.oinc)}`:""}`, "sh", "var(--accent)", "", tipData("Share capital", [["Paid-up capital", fmtV(B.owner)], ["Profit earned", fmtV(pe)], ["Other income", fmtV(eqA.oinc)], ["Total", fmtV(B.eq)]]))}
-      ${stat("Investor capital", money(K), `${nInv} investor${nInv===1?"":"s"}`, "inv", "var(--gold)", pc1(div(K,T)) + " of deployed")}
+      ${stat("Share capital", money(O), `initial ${nf.format(B.owner)} + retained ${nf.format(pe)}${Math.abs(eqA.oinc)>0.5?` + other income ${nf.format(eqA.oinc)}`:""}`, "sh", "var(--accent)", "", tipData("Share capital", [["Initial capital", fmtV(B.owner)], ["Retained earnings", fmtV(pe)], ["Other income", fmtV(eqA.oinc)], ...(Math.abs(eqA.opex)>0.5?[["Less: expenses", fmtV(-eqA.opex)]]:[]), ["Share capital", fmtV(B.eq)]]))}
+      ${stat("Investor money", money(K), `${nInv} investor${nInv===1?"":"s"} · profit payable ${nf.format(PY)} paid separately`, "inv", "var(--gold)", pc1(div(K,T)) + " of total")}
       <div style="grid-column:1/-1">${stat("Net profit %", pc1(npa), `net profit ${money(R.P.net)} · ${pc1(R.npr)} of venture income`, "ret", "var(--pos)", "p.a.", npTip, `<div style="margin-top:2px">${spark(mo.filter(m=>m.from.slice(0,7)<=curM).map(m=>m.net), "var(--pos)")}</div>`)}</div>
     </div>
   </div>
   <div class="dgrid">
     <section class="sheet"><div class="sheet-h"><div><h2>Portfolio allocation</h2><p>Capital in each venture at ${fmtDate(S.end)}</p></div><button class="btn sm" data-tab="ventures" type="button">Ventures</button></div>
-      <div class="sheet-b">${donut(live.map(x=>({l:x.b.name, v:x.net, c:vcol(x.b.id), extra:[["Share capital", fmtV(Math.max(0,x.net-x.icap))], ["Investor money", fmtV(x.icap)], ["Actual p.a.", pc1(x.yld)]]})), {center:"Deployed", fmt:kfmt, aria:"Portfolio allocation by venture", empty:"Appears once capital is invested in a venture."})}</div></section>
+      <div class="sheet-b">${donut(live.map(x=>({l:x.b.name, v:x.pos, c:vcol(x.b.id), extra:[["Invested", fmtV(x.net)], ["Receivable", fmtV(x.rec)], ["Investor money", fmtV(x.icap)], ["Actual p.a.", pc1(x.yld)]]})), {center:"In ventures", fmt:kfmt, aria:"Portfolio allocation by venture", empty:"Appears once capital is invested in a venture."})}</div></section>
     <section class="sheet"><div class="sheet-h"><div><h2>Who funds each venture</h2><p><span class="pill" style="color:var(--accent)">Share capital</span> <span class="pill inv">Investors</span></p></div></div>
       <div class="sheet-b"><div class="vlist">${rows || '<p class="note">Nothing invested yet.</p>'}</div>
       <div class="minis">
@@ -990,12 +990,12 @@ function viewVentures(){
   const T = k => va.reduce((s,x)=>s+x[k],0);
   const acc = va.map(x=>`<tr class="click" data-goledger="${x.b.id}"><td>${h(x.b.name)}</td><td class="n">${money(x.added)}</td><td class="n">${money(x.wd)}</td><td class="n">${money(x.net)}</td><td class="n">${money(x.icap)}</td><td class="n">${money(x.own)}</td><td class="n">${money(x.acc)}</td><td class="n">${money(x.recd)}</td><td class="n">${money(x.rec)}</td><td class="n">${money(x.share)}</td><td class="n">${money(x.pay)}</td><td class="n">${money(x.contrib)}</td><td class="n">${pct(x.yld)}</td><td class="n">${x.net?pct(x.varr):'<span class="mut">–</span>'}</td></tr>`).join("");
   const [V, seg] = subTabs("ven", [["overview","Overview","dash"],["monthly","Monthly position","cal"],["accounts","Accounts","book"]], "overview");
-  const vs = va.filter(x=>!inactive(x.b) || Math.abs(x.net) > 0.5 || x.acc), T0 = vs.reduce((s,x)=>s+Math.max(0,x.net),0);
-  const card = x => { const b = x.b, own = Math.max(0, x.net - x.icap), iv = Math.max(0, x.icap), z = Math.abs(x.net) < 0.5;
+  const vs = va.filter(x=>!inactive(x.b) || Math.abs(x.pos) > 0.5 || x.acc), T0 = vs.reduce((s,x)=>s+Math.max(0,x.pos),0);
+  const card = x => { const b = x.b, iv = Math.max(0, x.icap), own = Math.max(0, x.pos - x.icap - x.pay), z = Math.abs(x.pos) < 0.5;
     return `<div class="vcard${z?" zero":""}" style="--vc:${vcol(b.id)}"><div class="vh"><div class="vt"><span class="vi">${h(String(b.code||b.name||"?").replace(/[^A-Za-z0-9]/g,"").slice(0,2).toUpperCase())}</span><div><b>${h(b.name)}</b><span>${h([b.nature, profitMode(b)].filter(Boolean).join(" · "))}</span></div></div>
-      ${inactive(b)?'<span class="pill">Inactive</span>':`<span class="chip" style="--kc:${vcol(b.id)}">${pc1(div(Math.max(0,x.net), T0))}</span>`}</div>
-      <div><span class="note">Invested</span><div class="vv">${money(x.net)}</div></div>
-      <div class="vrow" style="grid-template-columns:1fr"${tipData(b.name, [["Share capital", `${fmtV(own)} · ${pc1(div(own,x.net))}`, "var(--accent)"], ["Investor money", `${fmtV(iv)} · ${pc1(div(iv,x.net))}`, "var(--gold)"]])}><span class="tr"><i style="width:${div(own,x.net)*100}%;background:var(--accent)"></i><i style="width:${div(iv,x.net)*100}%;background:var(--gold)"></i></span></div>
+      ${inactive(b)?'<span class="pill">Inactive</span>':`<span class="chip" style="--kc:${vcol(b.id)}">${pc1(div(Math.max(0,x.pos), T0))}</span>`}</div>
+      <div><span class="note">Position · invested ${nf.format(x.net)} + receivable ${nf.format(x.rec)}</span><div class="vv">${money(x.pos)}</div></div>
+      <div class="vrow" style="grid-template-columns:1fr"${tipData(b.name, [["Share capital", `${fmtV(own)} · ${pc1(div(own,x.pos))}`, "var(--accent)"], ["Investor money", `${fmtV(iv)} · ${pc1(div(iv,x.pos))}`, "var(--gold)"]])}><span class="tr"><i style="width:${div(own,x.pos)*100}%;background:var(--accent)"></i><i style="width:${div(iv,x.pos)*100}%;background:var(--gold)"></i></span></div>
       <div class="vgrid"><div><span>Receivable</span><b>${nf.format(x.rec)}</b></div><div><span>Profit (period)</span><b>${nf.format(x.acc)}</b></div><div><span>Actual / expected</span><b>${z?"–":pc1(x.yld)}</b> <span class="note" style="display:inline">${pc1(num(b.rate))}</span></div></div>
       <div class="vact"><button class="btn sm" data-vopen="${b.id}" type="button">Monthly</button>${W?`<button class="btn sm" data-vinv="${b.id}" type="button">Add investment</button><button class="btn sm" data-vwd="${b.id}" type="button">Withdrawals</button><button class="btn sm" data-edit="biz:${b.id}" type="button">Edit</button>`:""}</div></div>`; };
   const tot = k => vs.reduce((s,x)=>s+x[k],0);
@@ -1005,8 +1005,8 @@ function viewVentures(){
    <tbody>${acc || `<tr><td colspan="14" class="empty">No ventures yet.</td></tr>`}</tbody>
    <tfoot><tr><td>Total</td>${["added","wd","net","icap","own","acc","recd","rec","share","pay","contrib"].map(k=>`<td class="n">${money(T(k))}</td>`).join("")}<td></td><td></td></tr></tfoot></table></div></section>` : `
     <div class="dk" style="grid-template-columns:repeat(4,minmax(0,1fr))">
-      ${st("Invested in ventures", money(tot("net")), `${vs.filter(x=>x.net>0.5).length} active of ${vs.length}`, "ven", "var(--c1)")}
-      ${st("Profit receivable", money(tot("rec")), "accrued, not yet received", "oinc", "var(--gold)")}
+      ${st("Position in ventures", money(tot("pos")), `invested ${nf.format(tot("net"))} + receivable ${nf.format(tot("rec"))}`, "ven", "var(--c1)")}
+      ${st("Investor money", money(tot("icap")), `share capital in ventures ${nf.format(tot("pos") - tot("icap") - tot("pay"))} · profit payable ${nf.format(tot("pay"))}`, "inv", "var(--gold)")}
       ${st("Venture profit", money(tot("acc")), `${fmtDate(S.start)} to ${fmtDate(S.end)}`, "ret", "var(--pos)")}
       ${st("Average return", pc1(div(R.P.inc, R.Tavg)*R.an), "p.a. on capital invested", "dash", "var(--c7)")}
     </div>
@@ -2152,7 +2152,7 @@ function openAccruals(){
 
 /* ---------- one-time investor sheet import: Sr. # · Investor · Rate · Placement date · Investment · one column per venture ---------- */
 const OWNER_HINT = {test: n => /famcon|futureaxis/i.test(String(n||"").replace(/[^a-z]/gi,""))};
-const APP_VERSION = "6 Oct 2026 · 22:00";
+const APP_VERSION = "6 Oct 2026 · 22:50";
 function findSimpleSheet(wb){
   for (const name of wb.SheetNames){
     const rows = sheetRows(wb.Sheets[name]);
@@ -4088,7 +4088,7 @@ function equitySection(){
   const months = monthsBetween(S.start.slice(0,7), S.end.slice(0,7)).map(ym => { const d = [S.end, monthEnd(ym)].sort()[0], Bm = balanceSheet(d); return {label: monthLabel(ym).slice(0,3), title: `${monthLabel(ym)} (month end)`, v:{cap:Bm.owner, re:Math.max(0,Bm.re)}}; });
   csvReg("owner-equity", ["Line", `This period (${S.start} to ${S.end})`, "Inception to date"], [
     ["Share capital before the period", r0(openP), ""], ["Initial paid-up capital", r0(E.initP), r0(E.initAll)], ["Additional paid-up capital", r0(E.addP), r0(E.addAll)], ["Less: drawings", r0(-E.drawP), r0(-E.drawAll)],
-    ["Profit earned", r0(peP), r0(peA)], ["Other income", r0(p.oinc), r0(a.oinc)], ["Less: operating expenses", r0(-p.opex), r0(-a.opex)], ["Share capital (owner funds)", r0(capP + reP), r0(capA + reA)],
+    ["Retained earnings (profit earned)", r0(peP), r0(peA)], ["Other income", r0(p.oinc), r0(a.oinc)], ["Less: operating expenses", r0(-p.opex), r0(-a.opex)], ["Share capital (owner funds)", r0(capP + reP), r0(capA + reA)],
     ["", "", ""], ["Profit earned on initial paid-up capital", r0(p.onInit), r0(a.onInit)], ["Profit earned on additional paid-up capital", r0(p.onAdd), r0(a.onAdd)], ["Profit earned on other income reinvested", r0(p.onOi), r0(a.onOi)], ["Profit earned on investor money", r0(p.onInv), r0(a.onInv)], ["Total profit earned", r0(peP), r0(peA)],
     ["Check: total assets less total liabilities", r0(net), r0(net)]]);
   const k = (l,v,s,col) => `<div class="kpi kx" style="--kc:${col}"><span class="eyebrow">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`;
@@ -4100,13 +4100,13 @@ function equitySection(){
     ${k("Share capital (owner funds)", money(capP + reP), Math.abs(diff) < 0.5 ? "everything not owed to investors" : `differs from the balance sheet by ${nf.format(diff)}`, "var(--c7)")}
   </div>
   <div class="grid4">
-  <section class="sheet fs"><div class="sheet-h"><div><h2>Share capital statement</h2><p><b>Share capital = Initial paid-up capital + Profit earned + Other income</b> = everything not owed to investors</p></div>${csvBtn("owner-equity")}</div><div class="tbl"><table>
+  <section class="sheet fs"><div class="sheet-h"><div><h2>Share capital statement</h2><p><b>Share capital = Initial capital + Retained earnings + Other income</b>. Share capital + investor money = total capital deployed = everything not owed to investors</p></div>${csvBtn("owner-equity")}</div><div class="tbl"><table>
     <thead><tr><th></th><th class="n">This period</th><th class="n">Inception to date</th></tr></thead><tbody>
     ${Math.abs(openP) > 0.5 ? L(`Share capital ${fsFrom} to ${fmtDate(addDays(S.start,-1))}`, openP, undefined, "ind", "before this period") : ""}
     ${L("Initial paid-up capital", E.initP, E.initAll)}
     ${showAdd ? L("Additional paid-up capital", E.addP, E.addAll) : ""}
     ${showDraw ? L("Less: drawings", -E.drawP, -E.drawAll) : ""}
-    ${L("Profit earned", peP, peA, "ind", "see Profit earned below")}
+    ${L("Retained earnings", peP, peA, "ind", "profit earned, see Profit earned below")}
     ${L("Other income", p.oinc, a.oinc)}
     ${Math.abs(a.opex) > 0.5 ? L("Less: operating expenses", -p.opex, -a.opex) : ""}
     ${L("Share capital (owner funds)", capP + reP, capA + reA, "gt")}
@@ -4387,7 +4387,7 @@ function ownerRecon(){
     ${L("In ventures", Y, "ind", "venture positions less investor capital (as on Portfolio)")}${L("Cash and bank", B.cash, "ind", B.cash < -0.5 ? "negative: receipts such as venture withdrawals are not recorded yet" : "")}${L("Profit receivable from ventures", B.rec)}${L("Less: investor profit payable", -B.pay)}
     ${L("Share capital (owner funds)", Y + out, "tot")}
     <tr class="sub"><td colspan="2">Made up of</td></tr>
-    ${(()=>{ const A = equityStatement(ORIGIN, S.end).a, pe = A.onInit + A.onAdd + A.onOi + A.onInv; return L("Paid-up capital", B.owner) + L("Profit earned", pe, "ind", "on initial capital, other income reinvested and investor money") + L("Other income", A.oinc) + (Math.abs(A.opex) > 0.5 ? L("Less: operating expenses", -A.opex) : ""); })()}${L("Share capital (owner funds)", B.eq, "tot")}
+    ${(()=>{ const A = equityStatement(ORIGIN, S.end).a, pe = A.onInit + A.onAdd + A.onOi + A.onInv; return L("Initial capital", B.owner) + L("Retained earnings", pe, "ind", "profit earned on initial capital, other income reinvested and investor money") + L("Other income", A.oinc) + (Math.abs(A.opex) > 0.5 ? L("Less: operating expenses", -A.opex) : ""); })()}${L("Share capital (owner funds)", B.eq, "tot")}
     </tbody></table></div></section>`;
 }
 /* ---------- cash: where book cash came from, bank comparison, reinvest ---------- */

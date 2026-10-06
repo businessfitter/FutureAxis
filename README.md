@@ -282,3 +282,5 @@ If cash shows negative, receipts such as venture withdrawals aren't recorded yet
   - Investors: Monthly profit & payments · Placements · Raised & placed
   - Ventures: Overview (one card per venture, including those at 0) · Monthly position · Accounts
 - New look: indigo/violet theme, line icons, and dark mode follows the device setting.
+- **Dashboard and Ventures use each venture's full position** (amount invested + profit receivable). Empyrean's compounding receivable now counts as money in the venture. Total capital deployed = Share capital + Investor capital + Investor profit payable, the same as total assets.
+- **Share capital + Investor money = Total capital deployed**, always. Investor money is investor capital only; investor profit payable is shown on its own line, because it is paid separately.
