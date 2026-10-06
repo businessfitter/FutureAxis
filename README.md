@@ -284,3 +284,13 @@ If cash shows negative, receipts such as venture withdrawals aren't recorded yet
 - New look: indigo/violet theme, line icons, and dark mode follows the device setting.
 - **Dashboard and Ventures use each venture's full position** (amount invested + profit receivable). Empyrean's compounding receivable now counts as money in the venture. Total capital deployed = Share capital + Investor capital + Investor profit payable, the same as total assets.
 - **Share capital + Investor money = Total capital deployed**, always. Investor money is investor capital only; investor profit payable is shown on its own line, because it is paid separately.
+
+## Load position workbook (6 Oct 2026)
+- **Settings → Import → Load workbook**: choose the monthly *Position as at* workbook. The preview shows ventures and rates, shareholder vs investor capital, and the P&L by month. **Replace data** takes a backup, then rebuilds:
+  - **Ventures**: rates from the sheet (Empyrean 6.25%/month, SK 2.5%/month, Solar 3.11%/month, Commodity 0).
+  - **Share capital**: the first date is initial paid-up capital per shareholder. Later rows are profit reinvested (FAMCON accrued profits).
+  - **Placements**: one per investor row and venture. FAMCON rows are left out because they are already in share capital.
+  - **Monthly P&L**: venture income, other income, expenses, tax and donations. SK profit is all received; Empyrean withdrawals reduce the receivable.
+  - **Investor profit**: worked out per placement and matched to the P&L "Management expenses" each month. Paid up to the month before the last.
+- **Books are closed** to the last P&L month, so Run profit accruals only posts later months.
+- Investors' contact, bank and payout-currency details are kept. Bank accounts, suppliers and users are untouched.
