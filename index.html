@@ -307,17 +307,205 @@ tr.ieditor td{background:var(--accent-soft)}
 @media (max-width:560px){.rvbox{grid-template-columns:1fr}}
 
 tr.negrow td{color:var(--neg)}
+
+/* ===================== 2026 redesign: sidebar shell, modern cards ===================== */
+:root{
+  --bg:#f4f6fb; --surface:#ffffff; --sunk:#f6f7fb; --ink:#0f172a; --muted:#64708a; --line:#e6e9f1;
+  --accent:#4f46e5; --accent-ink:#ffffff; --accent-soft:#eef0ff; --accent-2:#7c3aed;
+  --gold:#d97706; --gold-soft:#fef3e2; --pos:#059669; --neg:#e11d48; --warn:#b45309;
+  --c1:#4f46e5; --c2:#f97316; --c3:#10b981; --c4:#f59e0b; --c5:#ec4899; --c6:#0ea5e9; --c7:#8b5cf6; --c8:#ef4444;
+  --side:#0b1022; --side-2:#141b38; --side-ink:#eef1ff; --side-mut:#8b95b8;
+  --shadow:0 1px 2px rgba(15,23,42,.04), 0 8px 24px -12px rgba(15,23,42,.12);
+  --shadow-lg:0 2px 4px rgba(15,23,42,.04), 0 18px 40px -18px rgba(15,23,42,.22);
+  --r:18px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0a0e1c; --surface:#11172b; --sunk:#0e1426; --ink:#e8ecf8; --muted:#94a0bf; --line:#222b47;
+  --accent:#818cf8; --accent-ink:#0a0e1c; --accent-soft:#1d2350; --accent-2:#a78bfa;
+  --gold:#fbbf24; --gold-soft:#3a2a0c; --pos:#34d399; --neg:#fb7185; --warn:#fbbf24;
+  --c1:#818cf8; --c2:#fb923c; --c3:#34d399; --c4:#fbbf24; --c5:#f472b6; --c6:#38bdf8; --c7:#a78bfa; --c8:#f87171;
+  --side:#070a16; --side-2:#0d1228; --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 26px -14px rgba(0,0,0,.6); --shadow-lg:0 18px 40px -18px rgba(0,0,0,.7)}}
+:root[data-theme="dark"]{
+  --bg:#0a0e1c; --surface:#11172b; --sunk:#0e1426; --ink:#e8ecf8; --muted:#94a0bf; --line:#222b47;
+  --accent:#818cf8; --accent-ink:#0a0e1c; --accent-soft:#1d2350; --accent-2:#a78bfa;
+  --gold:#fbbf24; --gold-soft:#3a2a0c; --pos:#34d399; --neg:#fb7185; --warn:#fbbf24;
+  --c1:#818cf8; --c2:#fb923c; --c3:#34d399; --c4:#fbbf24; --c5:#f472b6; --c6:#38bdf8; --c7:#a78bfa; --c8:#f87171;
+  --side:#070a16; --side-2:#0d1228; --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 26px -14px rgba(0,0,0,.6); --shadow-lg:0 18px 40px -18px rgba(0,0,0,.7)}
+body{background:var(--bg)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.shell{display:grid;grid-template-columns:256px minmax(0,1fr);min-height:100vh}
+body.authmode .shell{display:block} body.authmode .side, body.authmode header.top{display:none}
+body.authmode main{max-width:460px;margin:0 auto}
+.side{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:6px;padding:20px 14px 16px;overflow-y:auto;
+  background:radial-gradient(420px 260px at -10% -10%,rgba(99,102,241,.28),transparent 60%),linear-gradient(180deg,var(--side),var(--side-2));color:var(--side-ink);scrollbar-width:thin}
+.brandmark{display:flex;align-items:center;gap:11px;padding:2px 8px 16px}
+.logo{width:38px;height:38px;flex:0 0 38px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 55%,#22d3ee 120%);box-shadow:0 8px 22px -6px rgba(99,102,241,.7)}
+.bm-t{display:flex;flex-direction:column;min-width:0}
+.bm-t b{font:800 15px/1.2 var(--f-display);letter-spacing:-.01em;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bm-t span{font-size:11px;color:var(--side-mut);letter-spacing:.02em}
+nav.tabs{display:flex;flex-direction:column;gap:2px;padding:0;overflow:visible}
+nav.tabs .navlbl{font:700 10.5px var(--f-body);letter-spacing:.14em;text-transform:uppercase;color:#5f6a90;padding:14px 12px 6px}
+nav.tabs button{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:0;background:none;color:var(--side-mut);font:600 13.5px var(--f-body);padding:10px 12px;border-radius:12px;cursor:pointer;position:relative;transition:background .15s,color .15s}
+nav.tabs button svg{flex:0 0 auto}
+nav.tabs button:hover{background:rgba(255,255,255,.06);color:#fff}
+nav.tabs button[aria-selected="true"]{background:linear-gradient(90deg,rgba(129,140,248,.26),rgba(129,140,248,.06));color:#fff;box-shadow:none}
+nav.tabs button[aria-selected="true"]::before{content:"";position:absolute;left:-14px;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0;background:linear-gradient(#818cf8,#22d3ee)}
+nav.tabs button[aria-selected="true"] svg{color:#a5b4fc}
+nav.tabs button.sec{font-size:12.5px;font-weight:500;padding:8px 12px}
+nav.tabs button .pill{margin-left:auto}
+nav.tabs .morebtn{display:none}
+.side .who{margin-top:auto;display:flex;align-items:center;gap:10px;padding:12px 8px 0;border-top:1px solid rgba(255,255,255,.08);color:var(--side-mut);font-size:12px;flex-wrap:wrap}
+.side .who #whoEmail{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.avatar{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font:800 13px var(--f-body);color:#fff;background:linear-gradient(135deg,#6366f1,#22d3ee);flex:0 0 30px}
+.side .who .btn{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);color:#dfe4fb}
+.side .who .btn:hover{background:rgba(255,255,255,.12)}
+.content{min-width:0;display:flex;flex-direction:column}
+header.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:saturate(1.4) blur(12px);-webkit-backdrop-filter:saturate(1.4) blur(12px);border-bottom:1px solid var(--line);box-shadow:none;color:var(--ink)}
+header.top .topbar{padding:12px 32px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.crumb{display:flex;align-items:center;gap:9px;font-size:13.5px;min-width:0}
+.crumb b{font-weight:700}
+.crumb .cic{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+header.top .period{gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px 6px 4px 10px;box-shadow:var(--shadow)}
+header.top .period .pico{color:var(--muted);display:grid}
+header.top input, header.top select{background:transparent;border:0;color:var(--ink);color-scheme:light dark;border-radius:8px;padding:6px 6px;font-weight:600;font-size:13px}
+header.top select option{color:#0f172a;background:#fff}
+header.top .period .mut{color:var(--muted)}
+main{padding:30px 32px 80px;max-width:1360px;width:100%;margin:0}
+.wrap{max-width:none}
+h1{font:800 30px/1.1 var(--f-display);letter-spacing:-.03em}
+.head{margin-bottom:22px;align-items:flex-end}
+.head p{font-size:13.5px}
+.eyebrow{color:var(--accent);font-weight:700;letter-spacing:.1em;font-size:11px}
+.sheet{border-radius:var(--r);border:1px solid var(--line);box-shadow:var(--shadow);background:var(--surface)}
+.sheet-h{padding:18px 22px;border-bottom:1px solid var(--line)}
+.sheet-h h2{font-size:15.5px}
+.sheet-b{padding:20px 22px}
+th{font-size:10.5px;letter-spacing:.08em;color:var(--muted);font-weight:700;padding:11px 14px;background:var(--sunk)}
+td{padding:11px 14px}
+tbody tr:hover td{background:color-mix(in srgb,var(--accent-soft) 45%,transparent)}
+tfoot td{border-top:1px solid var(--line);background:var(--sunk)}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+.kpi{border-radius:var(--r);padding:18px 20px;border:1px solid var(--line);box-shadow:var(--shadow);background:var(--surface)}
+.kpi .v{font:800 26px/1.1 var(--f-num);letter-spacing:-.03em}
+.kpi.kx::before{display:none}
+.kpi .kic{width:38px;height:38px;flex:0 0 38px;border-radius:12px;color:var(--kc);background:color-mix(in srgb,var(--kc) 13%,transparent)}
+.btn{border-radius:11px;font:600 13px var(--f-body);padding:9px 15px;border-color:var(--line);background:var(--surface);box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.btn:hover{border-color:color-mix(in srgb,var(--accent) 40%,var(--line));color:var(--accent)}
+.btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));border:0;color:#fff;box-shadow:0 8px 18px -8px color-mix(in srgb,var(--accent) 80%,transparent)}
+.btn.primary:hover{color:#fff;filter:brightness(1.07)}
+.btn.sm{padding:6px 11px;border-radius:9px}
+.segctl{border-radius:14px;padding:5px;background:var(--surface);gap:4px;box-shadow:var(--shadow)}
+.segctl button{border-radius:10px;padding:8px 15px;display:inline-flex;align-items:center;gap:7px}
+.segctl button[aria-selected="true"]{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;box-shadow:0 6px 14px -8px var(--accent)}
+.cbox{border-radius:16px;background:var(--surface)}
+.panel{border-radius:22px 0 0 22px}
+input,select,textarea{border-radius:11px}
+.alert{border-radius:14px}
+.toast{background:#0f172a;color:#fff}
+/* dashboard */
+.dgrid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px}
+@media (max-width:1100px){.dgrid{grid-template-columns:1fr}}
+.hero{position:relative;overflow:hidden;border-radius:22px;padding:24px 26px;color:#fff;background:radial-gradient(520px 260px at 100% 0%,rgba(34,211,238,.35),transparent 60%),linear-gradient(135deg,#312e81 0%,#4f46e5 45%,#7c3aed 100%);box-shadow:var(--shadow-lg)}
+.hero .eyebrow{color:rgba(255,255,255,.75)}
+.hero .hv{font:800 40px/1.05 var(--f-num);letter-spacing:-.035em;margin:8px 0 4px}
+.hero .hs{color:rgba(255,255,255,.8);font-size:13px}
+.hero .hbar{display:flex;height:10px;border-radius:99px;overflow:hidden;background:rgba(255,255,255,.18);margin:18px 0 10px;gap:3px}
+.hero .hbar i{display:block;height:100%}
+.hero .hk{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:12.5px;color:rgba(255,255,255,.9)}
+.hero .hk span{display:inline-flex;align-items:center;gap:7px}.hero .hk i{width:9px;height:9px;border-radius:3px;display:inline-block}
+.hero .hk b{font-family:var(--f-num)}
+.dk{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media (max-width:900px){.dk{grid-template-columns:1fr}}
+.stat{border-radius:var(--r);background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);padding:18px 20px;display:flex;flex-direction:column;gap:6px;position:relative;overflow:hidden;min-width:0;--kc:var(--accent)}
+.stat::after{content:"";position:absolute;right:-30px;top:-30px;width:110px;height:110px;border-radius:50%;background:color-mix(in srgb,var(--kc) 9%,transparent)}
+.stat .sh{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.stat .ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;color:var(--kc);background:color-mix(in srgb,var(--kc) 13%,transparent);position:relative;z-index:1}
+.stat .lb{font:700 11px var(--f-body);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:800 27px/1.1 var(--f-num);letter-spacing:-.03em}
+.stat .s{font-size:12.5px;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:4px;font:700 11.5px var(--f-num);padding:3px 8px;border-radius:99px;background:color-mix(in srgb,var(--kc) 12%,transparent);color:var(--kc)}
+.vlist{display:flex;flex-direction:column;gap:14px}
+.vrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center}
+.vrow .nm{display:flex;align-items:center;gap:9px;font-weight:600;min-width:0}
+.vrow .nm i{width:10px;height:10px;border-radius:3px;flex:0 0 10px}
+.vrow .am{font:700 13px var(--f-num);text-align:right}
+.vrow .am small{color:var(--muted);font-weight:600;margin-left:6px}
+.vrow .tr{grid-column:1/-1;display:flex;height:8px;border-radius:99px;overflow:hidden;background:var(--sunk);gap:2px}
+.vrow .tr i{display:block;height:100%}
+.minis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:18px}
+.mini{border-radius:14px;background:var(--sunk);padding:12px 14px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.mini .l{font-size:11.5px;color:var(--muted);font-weight:600}
+.mini .v{font:800 18px var(--f-num);letter-spacing:-.02em}
+@media (max-width:560px){.minis{grid-template-columns:1fr}}
+/* venture cards */
+.vcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.vcard{border-radius:var(--r);background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);padding:18px 20px;display:flex;flex-direction:column;gap:12px;position:relative;overflow:hidden;--vc:var(--accent)}
+.vcard::before{content:"";position:absolute;inset:0 0 auto 0;height:4px;background:linear-gradient(90deg,var(--vc),color-mix(in srgb,var(--vc) 30%,transparent))}
+.vcard .vh{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.vcard .vt{display:flex;gap:11px;align-items:center;min-width:0}
+.vcard .vi{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font:800 14px var(--f-body);color:#fff;background:linear-gradient(135deg,var(--vc),color-mix(in srgb,var(--vc) 55%,#000));flex:0 0 40px}
+.vcard .vt b{display:block;font-size:15px;line-height:1.25}
+.vcard .vt span{font-size:12px;color:var(--muted)}
+.vcard .vv{font:800 26px/1.1 var(--f-num);letter-spacing:-.03em}
+.vcard .vgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.vcard .vgrid div{background:var(--sunk);border-radius:12px;padding:9px 10px;min-width:0}
+.vcard .vgrid span{display:block;font-size:11px;color:var(--muted);font-weight:600}
+.vcard .vgrid b{font:700 13.5px var(--f-num)}
+.vcard .vact{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+.vcard.zero{opacity:.82}
+/* mobile: bottom navigation */
+@media (max-width:960px){
+  .shell{grid-template-columns:1fr}
+  .side{position:fixed;inset:auto 0 0 0;top:auto;height:auto;z-index:45;flex-direction:row;padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));overflow:visible;background:var(--side)}
+  .brandmark,.side .who{display:none}
+  nav.tabs{flex-direction:row;width:100%;justify-content:space-around}
+  nav.tabs>.navlbl{display:none}
+  nav.tabs button.pri,nav.tabs .morebtn{flex-direction:column;gap:3px;font-size:10.5px;padding:7px 4px;width:auto;flex:1;align-items:center;text-align:center;border-radius:12px}
+  nav.tabs .morebtn{display:flex;border:0;background:none;color:var(--side-mut);font-weight:600;cursor:pointer}
+  nav.tabs .morebtn.on{color:#fff}
+  nav.tabs button[aria-selected="true"]::before{display:none}
+  .navmore{display:none;position:absolute;left:8px;right:8px;bottom:calc(100% + 8px);background:var(--side-2);border-radius:18px;padding:8px;box-shadow:0 -10px 40px rgba(0,0,0,.4);max-height:70vh;overflow-y:auto}
+  .side.open .navmore{display:block}
+  .navmore button.sec{flex-direction:row}
+  header.top .topbar{padding:10px 16px}
+  main{padding:22px 16px 110px}
+  .crumb .mut{display:none}
+  h1{font-size:25px}
+}
+
+.hero{display:flex;flex-direction:column}
+.htiles{margin-top:auto;padding-top:22px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.htiles div{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;min-width:0;backdrop-filter:blur(6px)}
+.htiles span{font-size:11.5px;color:rgba(255,255,255,.75);font-weight:600}
+.htiles b{font:800 18px var(--f-num);letter-spacing:-.02em}
+.htiles small{font-size:11.5px;color:rgba(255,255,255,.7)}
+@media (max-width:560px){.htiles{grid-template-columns:1fr}.hero .hv{font-size:32px}}
+.vcard .vt .vi{color:#fff;font-size:14px}
+@media (max-width:640px){
+  header.top .topbar{flex-wrap:nowrap}
+  .crumb b{display:none}
+  #periodBar:not(.custom) #pStart,#periodBar:not(.custom) #pEnd,#periodBar:not(.custom) .mut,header.top .period .pico{display:none}
+  header.top .row{flex-wrap:nowrap;gap:6px!important}
+}
 </style>
 </head>
 <body class="authmode">
 
+<div class="shell">
+<aside class="side" id="side">
+  <div class="brandmark"><span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19 19 5"/><path d="M10 5h9v9"/><path d="M5 9v10h10" opacity=".55"/></svg></span>
+    <div class="bm-t"><b id="entityName">Future Axis Holdings</b><span>Investor &amp; venture ledger</span></div></div>
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Sections" hidden></nav>
+  <div class="who" id="who" hidden><span class="avatar" id="whoAv" aria-hidden="true"></span><span id="whoEmail"></span><button class="btn sm" id="signOut" type="button">Sign out</button></div>
+</aside>
+<div class="content">
 <header class="top">
-  <div class="wrap">
-    <div class="topbar">
-      <div class="brand"><b id="entityName">Future Axis Holdings</b><span>Investor &amp; venture ledger</span></div>
-      <div class="row" style="gap:16px">
+  <div class="topbar">
+    <div class="crumb" id="crumb"></div>
+    <div class="row" style="gap:12px">
       <div class="period" id="periodBar" hidden>
-        <label for="pPreset">Period</label>
+        <span class="pico" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>
+        <label for="pPreset" class="sr">Period</label>
         <select id="pPreset">
           <option value="ytd">Year to date</option>
           <option value="lq">Last full quarter</option>
@@ -330,16 +518,15 @@ tr.negrow td{color:var(--neg)}
         <span class="mut">to</span>
         <input type="date" id="pEnd" aria-label="Period end">
       </div>
-      <label class="period" id="curBar" hidden><span class="note">Show in</span><select id="viewCur" aria-label="Display currency"></select></label>
-      <div class="who" id="who" hidden><span id="whoEmail"></span><button class="btn sm" id="signOut" type="button">Sign out</button></div>
-      </div>
+      <label class="period" id="curBar" hidden><span class="sr">Show in</span><select id="viewCur" aria-label="Display currency"></select></label>
     </div>
-    <nav class="tabs" id="tabs" role="tablist" hidden></nav>
   </div>
 </header>
-<main class="wrap" id="main">
+<main id="main">
   <div class="empty"><b>Opening the ledger</b>Connecting to the database…</div>
 </main>
+</div>
+</div>
 <div id="ovHost"></div>
 <div id="toast" class="toast" hidden></div>
 
@@ -366,6 +553,26 @@ const TYPES = {
 };
 const INV_TYPES = ["Investor Profit Accrued","Investor Profit Paid","Investor Capital Repaid"];
 const VEN_TYPES = ["Investment Addition","Investment Withdrawal","Profit Accrued","Profit Received","Profit Reinvested"];
+const NAV_MAIN = [["dashboard","Dashboard","dash"],["capital","Shareholders","sh"],["investors","Investors","inv"],["ventures","Ventures","ven"],["income","Other income","oinc"]];
+const NAV_MORE = [["Accounts",[["statements","Financial statements","stmt"],["ledger","Ledger","book"],["bank","Bank","bank"],["expenses","Expenses","exp"]]],["Analysis",[["returns","Returns","ret"],["monthly","Monthly","cal"],["reports","Reports","rep"]]],["Setup",[["master","Master data","db"],["settings","Settings","gear"]]]];
+const NICON = {
+  dash:'<rect x="3" y="3" width="7.5" height="9" rx="2"/><rect x="13.5" y="3" width="7.5" height="5.5" rx="2"/><rect x="13.5" y="11.5" width="7.5" height="9.5" rx="2"/><rect x="3" y="15" width="7.5" height="6" rx="2"/>',
+  sh:'<path d="M21 12.5A9 9 0 1 1 11.5 3v9.5z"/><path d="M15 3.4A9 9 0 0 1 20.6 9H15z"/>',
+  inv:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-5.6 6.5-5.6s6.5 2 6.5 5.6"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.2 14.7c2 .7 3.3 2.4 3.3 5.3"/>',
+  ven:'<rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M8.5 7V5.5A2.5 2.5 0 0 1 11 3h2a2.5 2.5 0 0 1 2.5 2.5V7"/><path d="M3 12.5h18"/><path d="M11 12.5v2h2v-2"/>',
+  oinc:'<ellipse cx="9" cy="6.5" rx="6" ry="2.8"/><path d="M3 6.5v4.5c0 1.6 2.7 2.8 6 2.8"/><path d="M3 11v4.5c0 1.6 2.7 2.8 6 2.8"/><circle cx="16.5" cy="15.5" r="5"/><path d="M16.5 13.3v4.4M14.6 15.5h3.8"/>',
+  stmt:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
+  book:'<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/><path d="M9 8h7M9 12h5"/>',
+  bank:'<path d="M3 10 12 4l9 6"/><path d="M5.5 10v7.5M10 10v7.5M14 10v7.5M18.5 10v7.5"/><path d="M3 21h18"/>',
+  exp:'<path d="M6 3h12v18l-2.5-1.6L13 21l-2-1.6L9 21l-2.5-1.6L6 21z"/><path d="M9.5 8h5M9.5 12h5"/>',
+  ret:'<path d="M19 5 5 19"/><circle cx="7" cy="7" r="2.5"/><circle cx="17" cy="17" r="2.5"/>',
+  cal:'<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M8 14h2M12 14h2M16 14h0M8 17h2M12 17h2"/>',
+  rep:'<path d="M4 20V11M10 20V5M16 20v-6M2 20.5h20"/>',
+  db:'<ellipse cx="12" cy="5.5" rx="8" ry="2.8"/><path d="M4 5.5v6c0 1.6 3.6 2.8 8 2.8s8-1.2 8-2.8v-6"/><path d="M4 11.5v6c0 1.6 3.6 2.8 8 2.8s8-1.2 8-2.8v-6"/>',
+  gear:'<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
+  more:'<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'
+};
+const nico = (k, sz=18) => `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${NICON[k]||""}</svg>`;
 const TABS = [["dashboard","Dashboard"],["portfolio","Portfolio"],["investors","Investors"],["ventures","Ventures"],["statements","Statements"],["capital","Share capital"],["master","Master data"],["|"],["ledger","Ledger"],["bank","Bank"],["expenses","Expenses"],["income","Other income"],["|"],["returns","Returns"],["monthly","Monthly"],["reports","Reports"],["|"],["settings","Settings"]];
 const MODES = ["Mudarabah","Musharakah","Equity","Loan","Profit participation","Other"];
 const METHODS = ["Bank transfer","Cash","Cheque","Profit adjustment","Reinvested directly","Card","Other"];
@@ -432,7 +639,7 @@ function initPeriod(){
   const onDate = () => { const a=$("#pStart").value, b=$("#pEnd").value; if (!a||!b||a>b) return; S.start=a; S.end=b; S.preset="custom"; store.set("fa.preset","custom"); store.set("fa.start",a); store.set("fa.end",b); $("#pPreset").value="custom"; render(); };
   $("#pStart").onchange = onDate; $("#pEnd").onchange = onDate;
 }
-function syncPeriodInputs(){ $("#pPreset").value = S.preset; $("#pStart").value = S.start; $("#pEnd").value = S.end; }
+function syncPeriodInputs(){ $("#periodBar").classList.toggle("custom", S.preset==="custom"); $("#pPreset").value = S.preset; $("#pStart").value = S.start; $("#pEnd").value = S.end; }
 
 /* ---------- accounting engine ---------- */
 const eff = (t,k) => (TYPES[t.type]||{})[k] || 0;
@@ -722,93 +929,90 @@ const KICON = {
 };
 function viewDashboard(){
   if (!S.biz.length && !S.led.length) return `${monthlyAlert()}<div class="head"><div><h1>Dashboard</h1><p>Nothing recorded yet.</p></div></div>
-    <div class="sheet"><div class="empty"><b>Start with your first venture</b>Add each business under Ventures, record investor placements under Investors, then post investments and profit accruals in the Ledger. The dashboard fills in from there.<div class="row" style="justify-content:center;margin-top:14px">${S.canWrite!==false?'<button class="btn primary" data-go="ventures">Add a venture</button>':''}</div></div></div>`;
-  const R = ratios(), va = ventureAccounts(), bs = balanceSheet(S.end), y = +S.end.slice(0,4), mo = monthly(y);
-  const inv = va.filter(x => x.net || x.icap || x.acc);
-  const nInv = new Set(S.pl.filter(p=>p.date<=S.end).map(p=>(p.investor||"").trim().toLowerCase())).size;
-  const active = S.biz.filter(b=>(b.status||"Active")==="Active").length;
-  const curM = S.end.slice(0,7), moTo = mo.filter(m=>m.from.slice(0,7) <= curM);
-  const k = (l,v,s,ic,col,tip,extra="") => `<div class="kpi kx" style="--kc:${col}"${tip||""}><div class="kh"><span class="eyebrow">${l}</span><span class="kic" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${KICON[ic]}</svg></span></div><span class="v">${v}</span><span class="s">${s}</span>${extra}</div>`;
-  const rr = (l,v,a,d)=>`<tr><td>${l}</td><td class="n">${pct(v)}</td><td class="n">${a===null?'<span class="mut">n/a</span>':pct(a)}</td><td class="note">${d}</td></tr>`;
-  const alloc = va.filter(x=>x.net||x.icap).map((x,i)=>{
-    const ownW = Math.max(0,div(x.own,x.net))*100, invW = Math.max(0,Math.min(100,div(x.icap,x.net)*100));
-    return `<tr class="click" data-edit="biz:${x.b.id}"><td><i class="sw" style="display:inline-block;margin-right:8px;background:${vcol(x.b.id)}"></i>${h(x.b.name)}<div class="note">${h(x.b.nature||"")}</div></td>
-    <td class="n">${money(x.net)}</td><td class="n">${money(x.own)}</td><td class="n">${money(x.icap)}</td>
-    <td><div class="split"${tipData(x.b.name, [["Own", `${fmtV(x.own)} · ${ownW.toFixed(1)}%`, "var(--accent)"], ["Investor", `${fmtV(x.icap)} · ${invW.toFixed(1)}%`, "var(--gold)"]])}><i style="width:${ownW}%;background:var(--accent)"></i><i style="width:${invW}%;background:var(--gold)"></i></div></td>
-    <td class="n">${pct(div(x.net,R.T))}</td><td class="n">${pct(num(x.b.rate))}</td><td class="n">${pct(x.yld)}</td><td class="n">${money(x.contrib)}</td></tr>`; }).join("");
-  const warn = Math.abs(bs.diff)>0.5 ? `<div class="banner">Balance sheet is out by ${nf.format(bs.diff)}. Check the ledger for entries with a missing venture or placement.</div>`:"";
-  const srcParts = [{l:"Paid-up capital", v:R.incOwn, c:"var(--accent)"}, {l:"Investor funds (net of investor share)", v:R.incInv - R.P.share, c:"var(--gold)"}, {l:"Other income less expenses", v:R.P.oinc - R.P.opex, c:"var(--c3)"}];
-  const capTip = tipData("Capital deployed", [["Own investment", `${fmtV(R.O)} · ${pc1(div(R.O,R.T))}`, "var(--accent)"], ["Investor capital", `${fmtV(R.K)} · ${pc1(div(R.K,R.T))}`, "var(--gold)"], ...inv.filter(x=>x.net>0).map(x=>[x.b.name, `${fmtV(x.net)} · ${pc1(div(x.net,R.T))}`, vcol(x.b.id)])]);
-  const netTip = tipData("Net profit", [...srcParts.map(p=>[p.l, `${fmtV(p.v)} · ${pc1(div(p.v,R.P.net))}`, p.c]), ["Net profit ratio", pc1(R.npr)]]);
+    <div class="sheet"><div class="empty"><b>Start with your first venture</b>Add ventures and investors in Master data, then record placements and investments.<div class="row" style="justify-content:center;margin-top:14px"><button class="btn primary" data-tab="master" type="button">Open master data</button></div></div></div>`;
+  const R = ratios(), va = ventureAccounts(), B = balanceSheet(S.end), y = +S.end.slice(0,4), mo = monthly(y), curM = S.end.slice(0,7);
+  const live = va.filter(x => x.net > 0.5).sort((a,b)=>b.net-a.net);
+  const nInv = new Set(S.pl.filter(p=>p.date<=S.end && !isOwnName(p.investor)).map(p=>(p.investorId||p.investor||"").toString().trim().toLowerCase())).size;
+  const O = Math.max(0, R.O), K = Math.max(0, R.K), T = R.T, npa = R.roc*R.an;
+  const top = recommendations(R, va, B).filter(r=>r.sev==="high").slice(0,1)[0];
+  const alert = Math.abs(B.diff) > 0.5 ? `<div class="alert bad"><span class="dot"></span><div><b>Balance sheet is out by ${nf.format(B.diff)}.</b> Check the ledger for entries with a missing venture or placement.</div><button class="btn sm" data-tab="ledger" type="button">Ledger</button></div>`
+    : top ? `<div class="alert ${top.sev==="high"?"warn":""}"><span class="dot"></span><div><b>${top.title}</b> <span class="note">${top.text}</span></div>${top.btn||""}</div>` : "";
+  const stat = (lb, v, sub, ic, col, chip="", tip="", extra="") => `<div class="stat" style="--kc:${col}"${tip}><div class="sh"><span class="lb">${lb}</span><span class="ic">${nico(ic, 19)}</span></div><span class="v">${v}</span><div class="row" style="gap:8px">${chip?`<span class="chip">${chip}</span>`:""}<span class="s">${sub}</span></div>${extra}</div>`;
+  const eqA = equityStatement(ORIGIN, S.end).a, pe = eqA.onInit + eqA.onAdd + eqA.onOi + eqA.onInv;
+  const capTip = tipData("Total capital deployed", [["Share capital in ventures", `${fmtV(O)} · ${pc1(div(O,T))}`, "var(--accent)"], ["Investor money", `${fmtV(K)} · ${pc1(div(K,T))}`, "var(--gold)"], ...live.map(x=>[x.b.name, `${fmtV(x.net)} · ${pc1(div(x.net,T))}`, vcol(x.b.id)])]);
+  const npTip = tipData("Net profit %", [["Net profit", fmtV(R.P.net)], ["Average capital deployed", fmtV(R.Tavg)], ["Return p.a.", pc1(npa)], ["On own capital p.a.", pc1(R.nprOwn*R.an)], ["On investor money p.a.", pc1(R.nprInv*R.an)], ["Net profit ÷ venture income", pc1(R.npr)]]);
+  const rows = live.map(x => { const own = Math.max(0, x.net - x.icap), iv = Math.max(0, x.icap);
+    return `<div class="vrow"${tipData(x.b.name, [["Position", fmtV(x.net)], ["Share capital", `${fmtV(own)} · ${pc1(div(own,x.net))}`, "var(--accent)"], ["Investor money", `${fmtV(iv)} · ${pc1(div(iv,x.net))}`, "var(--gold)"], ["Actual p.a.", pc1(x.yld)], ["Expected p.a.", pc1(num(x.b.rate))]])}>
+      <span class="nm"><i style="background:${vcol(x.b.id)}"></i>${h(x.b.name)}</span><span class="am">${money(x.net)}<small>${pc1(div(x.net,T))}</small></span>
+      <span class="tr"><i style="width:${div(own,x.net)*100}%;background:var(--accent)"></i><i style="width:${div(iv,x.net)*100}%;background:var(--gold)"></i></span></div>`; }).join("");
   return `${monthlyAlert()}${flashHtml("mrNote")}${flashHtml("ownNote")}
-  <div class="head"><div><span class="eyebrow">Position at ${fmtDate(S.end)} · ${h(VIEW())}</span><h1>Dashboard</h1><p>Profit figures cover ${fmtDate(S.start)} to ${fmtDate(S.end)} (${R.pd} days). Capital figures are balances at period end. Hover or tap any chart for figures.</p></div></div>
-  <div class="stack">${warn}
-  <div class="kpis">
-    ${k("Capital deployed",money(R.T),`${active} active venture${active===1?"":"s"}`,"deploy","var(--c1)",capTip)}
-    ${k("Own investment",money(R.O),`${pct(div(R.O,R.T),0)} of deployed`,"own","var(--accent)")}
-    ${k("Investor capital",money(R.K),`${nInv} investor${nInv===1?"":"s"} · ${S.pl.filter(p=>p.date<=S.end).length} placements`,"inv","var(--gold)")}
-    ${k("Net profit",money(R.P.net),`on income of ${nf.format(R.P.inc)}`,"profit","var(--pos)",netTip, spark(moTo.map(m=>m.net), "var(--pos)"))}
-    ${k("Profit receivable",money(bs.rec),"due from ventures","rec","var(--c2)")}
-    ${k("Cash per books",money(bs.cash),(()=>{ const bh = bankHeld(S.end); return bh ? `bank ${nf.format(bh.total)} · ${Math.abs(bs.cash-bh.total)>0.5?`${nf.format(bs.cash-bh.total)} not explained`:"agrees"}` : bs.cash > 0.5 ? "not yet reinvested or paid out" : "fully reinvested"; })(),"cash","var(--c3)",tipData("Cash per books", cashSources(S.end).rows.map(r=>[r[0], fmtV(r[1])]), "Hover the Cash per books section below for detail"))}
+  <div class="head"><div><span class="eyebrow">Position at ${fmtDate(S.end)} · ${h(VIEW())}</span><h1>Dashboard</h1><p>Profit from ${fmtDate(S.start)} to ${fmtDate(S.end)}. Hover any figure for the detail.</p></div>
+    ${S.canWrite!==false?`<div class="row"><button class="btn" data-acc="1" type="button">Run profit accruals</button><button class="btn primary" data-vinv="" type="button">Add investment</button></div>`:""}</div>
+  <div class="stack">${alert}
+  <div class="dgrid">
+    <div class="hero"${capTip}><span class="eyebrow">Total capital deployed</span><div class="hv">${money(T)}</div>
+      <div class="hs">${live.length} venture${live.length===1?"":"s"} · ${nInv} investor${nInv===1?"":"s"} · ${pc1(npa)} net profit p.a.</div>
+      <div class="hbar"><i style="width:${div(O,O+K)*100}%;background:#a5b4fc"></i><i style="width:${div(K,O+K)*100}%;background:#fbbf24"></i></div>
+      <div class="hk"><span><i style="background:#a5b4fc"></i>Share capital <b>${money(O)}</b> · ${pc1(div(O,O+K))}</span><span><i style="background:#fbbf24"></i>Investors <b>${money(K)}</b> · ${pc1(div(K,O+K))}</span></div>
+      <div class="htiles">
+        <div><span>Venture profit</span><b>${money(R.P.inc)}</b><small>${pc1(div(R.P.inc, R.Tavg)*R.an)} p.a.</small></div>
+        <div><span>Profit receivable</span><b>${money(B.rec)}</b><small>due from ventures</small></div>
+        <div><span>Investor profit payable</span><b>${money(B.pay)}</b><small>due to investors</small></div>
+      </div></div>
+    <div class="dk" style="grid-template-columns:1fr 1fr">
+      ${stat("Share capital", money(B.eq), `paid-up ${nf.format(B.owner)} · profit ${nf.format(pe)}${Math.abs(eqA.oinc)>0.5?` · other income ${nf.format(eqA.oinc)}`:""}`, "sh", "var(--accent)", "", tipData("Share capital", [["Paid-up capital", fmtV(B.owner)], ["Profit earned", fmtV(pe)], ["Other income", fmtV(eqA.oinc)], ["Total", fmtV(B.eq)]]))}
+      ${stat("Investor capital", money(K), `${nInv} investor${nInv===1?"":"s"}`, "inv", "var(--gold)", pc1(div(K,T)) + " of deployed")}
+      <div style="grid-column:1/-1">${stat("Net profit %", pc1(npa), `net profit ${money(R.P.net)} · ${pc1(R.npr)} of venture income`, "ret", "var(--pos)", "p.a.", npTip, `<div style="margin-top:2px">${spark(mo.filter(m=>m.from.slice(0,7)<=curM).map(m=>m.net), "var(--pos)")}</div>`)}</div>
+    </div>
   </div>
-  ${recCards(recommendations(R, va, bs))}
-  ${Math.abs(bs.cash) > 0.5 || bankHeld(S.end) ? cashSection() : ""}
-  <section class="sheet"><div class="sheet-h"><div><h2>Profit by source</h2><p>${fmtDate(S.start)} to ${fmtDate(S.end)} · venture profit split by whose capital earned it, day by day</p></div><div class="row">${S.canWrite!==false?'<button class="btn sm" data-acc="1">Run profit accruals</button>':""}<button class="btn sm" data-go="capital">Share capital</button></div></div>
-    <div class="sheet-b" style="padding-bottom:0">${compBar(srcParts)}</div>
-    <div class="kpis" style="border:0;border-radius:0">
-      ${k("Profit from paid-up capital", money(R.incOwn), `on ${nf.format(R.O)} own capital · ${pct(div(R.incOwn,R.Oavg)*R.an)} p.a.`, "own", "var(--accent)")}
-      ${k("Profit from investor funds", money(R.incInv - R.P.share), `${nf.format(R.incInv)} earned less ${nf.format(R.P.share)} investor share`, "inv", "var(--gold)")}
-      ${k("Other income less expenses", money(R.P.oinc - R.P.opex), `other income ${nf.format(R.P.oinc)} · expenses ${nf.format(R.P.opex)}`, "cash", "var(--c3)")}
-      ${k("Net profit", money(R.P.net), "sum of the three", "profit", "var(--pos)")}
-    </div></section>
-  <div class="grid4">
-    <section class="sheet"><div class="sheet-h"><div><h2>Investment allocation</h2><p>Share of capital deployed in each venture at ${fmtDate(S.end)}</p></div></div>
-      <div class="sheet-b">${donut(inv.map(x=>({l:x.b.name, v:x.net, c:vcol(x.b.id), extra:[["Own", fmtV(x.own)], ["Investor", fmtV(x.icap)]]})), {center:"Deployed", fmt:kfmt, aria:"Investment allocation by venture", empty:"Allocation appears once capital is invested in a venture."})}</div></section>
-    <section class="sheet"><div class="sheet-h"><div><h2>Share of profit by venture</h2><p>Each venture's share of profit income, ${fmtDate(S.start)} to ${fmtDate(S.end)}</p></div></div>
-      <div class="sheet-b">${donut(inv.map(x=>({l:x.b.name, v:x.acc, c:vcol(x.b.id), extra:[["Investor share", fmtV(x.share)], ["Kept by Future Axis", fmtV(x.contrib)]]})), {center:"Profit income", fmt:kfmt, aria:"Share of profit income by venture", empty:"Shares appear once profit is accrued in this period."})}</div></section>
-    <section class="sheet"><div class="sheet-h"><div><h2>Profit % by venture</h2><p>Annualised return on average capital, against the expected rate</p></div></div>
-      <div class="sheet-b">${hbars(inv.filter(x=>x.net>0).sort((p,q)=>q.yld-p.yld).map(x=>({l:x.b.name, v:x.yld, mark:num(x.b.rate), c:vcol(x.b.id), lab:`${(x.yld*100).toFixed(1)}%`,
-        tipRows:[["Actual p.a.", pc1(x.yld), vcol(x.b.id)], ["Expected p.a.", pc1(num(x.b.rate))], ["Difference", `${x.varr>=0?"+":""}${(x.varr*100).toFixed(1)} pts`], ["Investors' average rate", pc1(x.invRate)], ["Profit in period", fmtV(x.acc)], ["Average capital", fmtV(x.avg)]]})),
-        {key:`<div class="keyrow"><span><i class="sw" style="background:var(--muted)"></i>Actual % p.a.</span><span><i class="tick"></i>Expected % p.a.</span></div>`, empty:"Returns appear once capital is invested."})}</div></section>
-    <section class="sheet"><div class="sheet-h"><div><h2>Own vs investor capital</h2><p>How each venture is funded at ${fmtDate(S.end)}</p></div></div>
-      <div class="sheet-b">${stackbars(inv.filter(x=>x.net>0).map(x=>({l:x.b.name, a:Math.max(0,x.own), b:Math.max(0,x.icap), c:vcol(x.b.id)})))}</div></section>
+  <div class="dgrid">
+    <section class="sheet"><div class="sheet-h"><div><h2>Portfolio allocation</h2><p>Capital in each venture at ${fmtDate(S.end)}</p></div><button class="btn sm" data-tab="ventures" type="button">Ventures</button></div>
+      <div class="sheet-b">${donut(live.map(x=>({l:x.b.name, v:x.net, c:vcol(x.b.id), extra:[["Share capital", fmtV(Math.max(0,x.net-x.icap))], ["Investor money", fmtV(x.icap)], ["Actual p.a.", pc1(x.yld)]]})), {center:"Deployed", fmt:kfmt, aria:"Portfolio allocation by venture", empty:"Appears once capital is invested in a venture."})}</div></section>
+    <section class="sheet"><div class="sheet-h"><div><h2>Who funds each venture</h2><p><span class="pill" style="color:var(--accent)">Share capital</span> <span class="pill inv">Investors</span></p></div></div>
+      <div class="sheet-b"><div class="vlist">${rows || '<p class="note">Nothing invested yet.</p>'}</div>
+      <div class="minis">
+        <div class="mini"><span class="l">On own capital</span><span class="v pos">${R.Oavg > 0.5 ? pc1(R.nprOwn*R.an) : "n/a"}</span><span class="note">p.a.</span></div>
+        <div class="mini"><span class="l">On investor money</span><span class="v">${pc1(R.nprInv*R.an)}</span><span class="note">p.a. kept by Future Axis</span></div>
+        <div class="mini"><span class="l">Paid to investors</span><span class="v">${pc1(R.invRet*R.an)}</span><span class="note">p.a. agreed</span></div>
+      </div></div></section>
   </div>
-  <section class="sheet"><div class="sheet-h"><div><h2>Monthly net profit, ${y}</h2><p>Year total ${fmtV(mo.reduce((s,m)=>s+m.net,0))} · by source</p></div><button class="btn sm" data-go="monthly">Monthly detail</button></div><div class="sheet-b" style="overflow-x:auto">${bars(mo)}</div></section>
-  <section class="sheet"><div class="sheet-h"><div><h2>Profitability ratios</h2><p>Capital ratios use average capital from ${fmtDate(S.start)} to the last profit posted (${fmtDate(R.aEnd)}). Annualised = ratio × 365 ÷ ${R.ad} days.</p></div></div>
-    <div class="tbl"><table><thead><tr><th>Ratio</th><th class="n">Period</th><th class="n">Annualised</th><th>How it is measured</th></tr></thead><tbody>
-    ${rr("Net profit ratio",R.npr,null,"Net profit ÷ profit income from ventures")}
-    ${rr("Net profit ratio on own investment",R.nprOwn,R.nprOwn*R.an,"(Income earned on own capital − operating expenses) ÷ average own investment")}
-    ${rr("Net profit ratio on investor amount",R.nprInv,R.nprInv*R.an,"(Income earned on investor capital − investor profit share) ÷ average investor capital")}
-    ${rr("Return credited to investors",R.invRet,R.invRet*R.an,"Investor profit share accrued ÷ average investor capital")}
-    ${rr("Return on capital deployed",R.roc,R.roc*R.an,"Net profit ÷ average capital deployed")}
-    </tbody></table></div>
-    <div class="sheet-b note" style="border-top:1px solid var(--line)">Each venture's income is split between own and investor capital by the capital each had in the venture when it was earned (day by day for automatic accruals): ${nf.format(R.incOwn)} on own capital, ${nf.format(R.incInv)} on investor capital. Operating expenses are borne by Future Axis's own capital.</div>
-  </section>
-  <section class="sheet"><div class="sheet-h"><div><h2>Venture allocations</h2><p><span class="pill">Own</span> <span class="pill inv">Investor</span> split of each venture's capital</p></div></div>
-    <div class="tbl"><table><thead><tr><th>Venture</th><th class="n">Deployed</th><th class="n">Own</th><th class="n">Investor</th><th>Split</th><th class="n">Share</th><th class="n">Expected p.a.</th><th class="n">Actual p.a.</th><th class="n">Net contribution</th></tr></thead>
-    <tbody>${alloc || `<tr><td colspan="9" class="empty">No capital invested yet.</td></tr>`}</tbody>
-    <tfoot><tr><td>Total</td><td class="n">${money(R.T)}</td><td class="n">${money(R.O)}</td><td class="n">${money(R.K)}</td><td></td><td class="n">${pct(R.T?1:0)}</td><td></td><td class="n">${pct(div(R.P.inc,R.Tavg)*R.an)}</td><td class="n">${money(R.P.spread)}</td></tr></tfoot></table></div></section>
   </div>`;
 }
 
+S.sub = S.sub || {};
+function subTabs(key, items, def){
+  const v = items.some(x=>x[0]===S.sub[key]) ? S.sub[key] : def; S.sub[key] = v;
+  return [v, `<div class="segctl" role="tablist" aria-label="View">${items.map(([k,l,ic])=>`<button role="tab" type="button" data-sub="${key}:${k}" aria-selected="${v===k}">${ic?nico(ic,16):""}${l}</button>`).join("")}</div>`];
+}
 function viewVentures(){
-  const va = ventureAccounts();
-  csvReg("ventures",["ID","Name","Nature","Address","Contact person","Phone","Email","Expected rate","Mode of investment","Start date","Status"], S.biz.map(b=>[b.code,b.name,b.nature,b.address,b.contact,b.phone,b.email,p2(num(b.rate)),b.mode,b.startDate,b.status]));
+  const va = ventureAccounts(), W = S.canWrite!==false, R = ratios();
   csvReg("venture-accounts",["ID","Venture","Invested","Withdrawn","Net investment","Investor capital","Own investment","Profit accrued (period)","Profit received (period)","Receivable","Investor share (period)","Investor payable","Net contribution","Actual yield p.a.","Expected p.a."], va.map(x=>[x.b.code,x.b.name,r0(x.added),r0(x.wd),r0(x.net),r0(x.icap),r0(x.own),r0(x.acc),r0(x.recd),r0(x.rec),r0(x.share),r0(x.pay),r0(x.contrib),p2(x.yld),p2(num(x.b.rate))]));
-  const st = s => `<span class="pill ${s==="Active"?"ok":s==="Exited"?"":"warn"}">${h(s||"Active")}</span>`;
-  const rows = S.biz.map(b=>`<tr class="click" data-edit="biz:${b.id}"><td class="n" style="text-align:left">${h(b.code)}</td><td><b style="font-weight:600">${h(b.name)}</b><div class="note">${h(b.nature||"")}</div></td><td>${h(b.contact||"")}<div class="note">${h([b.phone,b.email].filter(Boolean).join(" · "))}</div></td><td class="note" style="max-width:26ch">${h(b.address||"")}</td><td class="n">${pct(num(b.rate))}</td><td>${h(b.mode||"")}</td><td class="n">${fmtDate(b.startDate)}</td><td>${st(b.status)}${b.example?' <span class="pill warn">Example</span>':""}</td></tr>`).join("");
   const T = k => va.reduce((s,x)=>s+x[k],0);
   const acc = va.map(x=>`<tr class="click" data-goledger="${x.b.id}"><td>${h(x.b.name)}</td><td class="n">${money(x.added)}</td><td class="n">${money(x.wd)}</td><td class="n">${money(x.net)}</td><td class="n">${money(x.icap)}</td><td class="n">${money(x.own)}</td><td class="n">${money(x.acc)}</td><td class="n">${money(x.recd)}</td><td class="n">${money(x.rec)}</td><td class="n">${money(x.share)}</td><td class="n">${money(x.pay)}</td><td class="n">${money(x.contrib)}</td><td class="n">${pct(x.yld)}</td><td class="n">${x.net?pct(x.varr):'<span class="mut">–</span>'}</td></tr>`).join("");
-  return `<div class="head"><div><span class="eyebrow">Master data</span><h1>Ventures</h1><p>Each business Future Axis places capital in. Click a row to edit it.</p></div>${S.canWrite!==false?'<div class="row"><button class="btn primary" data-vinv="" type="button">Add investment</button><button class="btn" data-new="biz">Add venture</button></div>':""}</div>
-  <div class="stack">
-  ${ventureMonthlySection()}
-  <section class="sheet"><div class="sheet-h"><div><h2>Venture register</h2><p>${S.biz.length} venture${S.biz.length===1?"":"s"}</p></div>${csvBtn("ventures")}</div>
-   <div class="tbl"><table><thead><tr><th>ID</th><th>Venture</th><th>Contact person</th><th>Address</th><th class="n">Expected p.a.</th><th>Mode</th><th class="n">Start</th><th>Status</th></tr></thead><tbody>${rows || `<tr><td colspan="8"><div class="empty"><b>No ventures yet</b>Add a venture to start allocating capital.</div></td></tr>`}</tbody></table></div></section>
-  <section class="sheet"><div class="sheet-h"><div><h2>Venture accounts</h2><p>Receivable and payable position per venture. Balances at ${fmtDate(S.end)}; profit columns for the period. Click a row to open its ledger.</p></div>${csvBtn("venture-accounts")}</div>
+  const [V, seg] = subTabs("ven", [["overview","Overview","dash"],["monthly","Monthly position","cal"],["accounts","Accounts","book"]], "overview");
+  const vs = va.filter(x=>!inactive(x.b) || Math.abs(x.net) > 0.5 || x.acc), T0 = vs.reduce((s,x)=>s+Math.max(0,x.net),0);
+  const card = x => { const b = x.b, own = Math.max(0, x.net - x.icap), iv = Math.max(0, x.icap), z = Math.abs(x.net) < 0.5;
+    return `<div class="vcard${z?" zero":""}" style="--vc:${vcol(b.id)}"><div class="vh"><div class="vt"><span class="vi">${h(String(b.code||b.name||"?").replace(/[^A-Za-z0-9]/g,"").slice(0,2).toUpperCase())}</span><div><b>${h(b.name)}</b><span>${h([b.nature, profitMode(b)].filter(Boolean).join(" · "))}</span></div></div>
+      ${inactive(b)?'<span class="pill">Inactive</span>':`<span class="chip" style="--kc:${vcol(b.id)}">${pc1(div(Math.max(0,x.net), T0))}</span>`}</div>
+      <div><span class="note">Invested</span><div class="vv">${money(x.net)}</div></div>
+      <div class="vrow" style="grid-template-columns:1fr"${tipData(b.name, [["Share capital", `${fmtV(own)} · ${pc1(div(own,x.net))}`, "var(--accent)"], ["Investor money", `${fmtV(iv)} · ${pc1(div(iv,x.net))}`, "var(--gold)"]])}><span class="tr"><i style="width:${div(own,x.net)*100}%;background:var(--accent)"></i><i style="width:${div(iv,x.net)*100}%;background:var(--gold)"></i></span></div>
+      <div class="vgrid"><div><span>Receivable</span><b>${nf.format(x.rec)}</b></div><div><span>Profit (period)</span><b>${nf.format(x.acc)}</b></div><div><span>Actual / expected</span><b>${z?"–":pc1(x.yld)}</b> <span class="note" style="display:inline">${pc1(num(b.rate))}</span></div></div>
+      <div class="vact"><button class="btn sm" data-vopen="${b.id}" type="button">Monthly</button>${W?`<button class="btn sm" data-vinv="${b.id}" type="button">Add investment</button><button class="btn sm" data-vwd="${b.id}" type="button">Withdrawals</button><button class="btn sm" data-edit="biz:${b.id}" type="button">Edit</button>`:""}</div></div>`; };
+  const tot = k => vs.reduce((s,x)=>s+x[k],0);
+  const st = (lb, v, sub, ic, col) => `<div class="stat" style="--kc:${col}"><div class="sh"><span class="lb">${lb}</span><span class="ic">${nico(ic,19)}</span></div><span class="v">${v}</span><span class="s">${sub}</span></div>`;
+  const body = V==="monthly" ? ventureMonthlySection() : V==="accounts" ? `  <section class="sheet"><div class="sheet-h"><div><h2>Venture accounts</h2><p>Receivable and payable position per venture. Balances at ${fmtDate(S.end)}; profit columns for the period. Click a row to open its ledger.</p></div>${csvBtn("venture-accounts")}</div>
    <div class="tbl"><table><thead><tr><th>Venture</th><th class="n">Invested</th><th class="n">Withdrawn</th><th class="n">Net investment</th><th class="n">Investor capital</th><th class="n">Own investment</th><th class="n">Profit accrued</th><th class="n">Profit received</th><th class="n">Receivable</th><th class="n">Investor share</th><th class="n">Investor payable</th><th class="n">Net contribution</th><th class="n">Actual p.a.</th><th class="n">vs expected</th></tr></thead>
    <tbody>${acc || `<tr><td colspan="14" class="empty">No ventures yet.</td></tr>`}</tbody>
-   <tfoot><tr><td>Total</td>${["added","wd","net","icap","own","acc","recd","rec","share","pay","contrib"].map(k=>`<td class="n">${money(T(k))}</td>`).join("")}<td></td><td></td></tr></tfoot></table></div></section>
-  </div>`;
+   <tfoot><tr><td>Total</td>${["added","wd","net","icap","own","acc","recd","rec","share","pay","contrib"].map(k=>`<td class="n">${money(T(k))}</td>`).join("")}<td></td><td></td></tr></tfoot></table></div></section>` : `
+    <div class="dk" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+      ${st("Invested in ventures", money(tot("net")), `${vs.filter(x=>x.net>0.5).length} active of ${vs.length}`, "ven", "var(--c1)")}
+      ${st("Profit receivable", money(tot("rec")), "accrued, not yet received", "oinc", "var(--gold)")}
+      ${st("Venture profit", money(tot("acc")), `${fmtDate(S.start)} to ${fmtDate(S.end)}`, "ret", "var(--pos)")}
+      ${st("Average return", pc1(div(R.P.inc, R.Tavg)*R.an), "p.a. on capital invested", "dash", "var(--c7)")}
+    </div>
+    <div class="vcards">${vs.map(card).join("") || '<div class="sheet"><div class="empty"><b>No ventures yet</b>Add one in Master data.</div></div>'}</div>`;
+  return `<div class="head"><div><span class="eyebrow">Ventures · ${h(VIEW())}</span><h1>Ventures</h1><p>Every venture, what is invested, who funds it and what it earns. Balances at ${fmtDate(S.end)}.</p></div>${W?`<div class="row"><button class="btn primary" data-vinv="" type="button">Add investment</button><button class="btn" data-new="biz" type="button">Add venture</button></div>`:""}</div>
+  ${seg}<div class="stack">${body}</div>`;
 }
 
 function viewLedger(){
@@ -1804,6 +2008,7 @@ function incomeSplit(from, to){
 const OWNER_TYPES = ["Owner Capital Contribution","Owner Drawing"];
 const shName = id => S.sh.find(x=>x.id===id)?.name || "";
 function viewCapital(){
+  const [SCV, SCSEG] = subTabs("sc", [["overview","Share capital","sh"],["holders","Shareholders","inv"],["invested","Where it is invested","ven"],["trail","Capital trail","book"]], "overview");
   const {start, end} = S, pd = days(start,end)+1, an = 365/pd;
   const B = balanceSheet(end), P = pnl(start,end), sp = incomeSplit(start,end), spAll = incomeSplit(ORIGIN,end);
   const ownDep = sp.rows.reduce((s,r)=>s+r.ownCap,0);
@@ -1829,32 +2034,28 @@ function viewCapital(){
   // movements
   const mv = S.led.filter(t => OWNER_TYPES.includes(t.type)).sort((a,b)=>b.date.localeCompare(a.date));
   const mTable = mv.slice(0,200).map(t => `<tr class="click" data-edit="led:${t.id}"><td class="n" style="text-align:left">${fmtDate(t.date)}</td><td>${h(shName(t.shareholderId)||"–")}</td><td><span class="pill ${t.type==="Owner Drawing"?"warn":"ok"}">${t.type==="Owner Drawing"?"Drawing":"Contribution"}</span></td><td class="note">${h(t.ref||"")}</td><td class="note">${h([t.method, bankCode(t.bankId)].filter(Boolean).join(" · "))}</td><td class="n">${money(t.type==="Owner Drawing"?-num(t.amount):num(t.amount))}</td></tr>`).join("");
-  return `<div class="head"><div><span class="eyebrow">Owner investment</span><h1>Share capital</h1><p>Capital put in by the shareholders, where it is invested, and what it earned from ${fmtDate(start)} to ${fmtDate(end)}.</p></div>
+  return `<div class="head"><div><span class="eyebrow">Owner investment · ${h(VIEW())}</span><h1>Shareholders</h1><p>Capital put in by the shareholders, where it is invested, and what it earned from ${fmtDate(start)} to ${fmtDate(end)}.</p></div>
     ${W?`<div class="row"><button class="btn" data-initcap type="button">Initial paid-up capital</button><button class="btn" data-new="sh">Add shareholder</button><button class="btn" data-newcap="Owner Drawing">Record drawing</button><button class="btn primary" data-newcap="Owner Capital Contribution">Record contribution</button></div>`:""}</div>
+  ${SCSEG}
   <div class="stack">${flashHtml("ownNote")}
-  ${equitySection()}
-  <div class="kpis">
-    ${k("Of which in ventures", money(B.inv - B.icap), "venture positions less investor capital (as on Portfolio)")}
-    ${k("Of which outside ventures", money(B.eq - (B.inv - B.icap)), "cash + receivable − investor profit payable")}
-    ${k("Owner income this period", money(sp.own), `${pct(div(RR.incOwn, RR.Oavg)*RR.an)} p.a. on average own capital`)}
-  </div>
-  <div class="grid2">
+  ${SCV==="overview" ? equitySection() + (Math.abs(B.cash) > 0.5 ? cashSection() : "") : ""}
+  ${SCV==="invested" ? `<div class="grid2">
     <section class="sheet"><div class="sheet-h"><div><h2>Own capital by venture</h2><p>Owner's money invested in each venture at ${fmtDate(end)}</p></div></div>
       <div class="sheet-b">${donut(alloc.map(r=>({l:r.b.name, v:r.ownCap, c:vcol(r.b.id)})), {center:"Own capital", fmt:kfmt, aria:"Own capital by venture", empty:"Appears once own capital is invested in a venture."})}</div></section>
     <section class="sheet"><div class="sheet-h"><div><h2>Income split</h2><p>Venture profit for the period, by whose capital earned it</p></div></div>
       <div class="sheet-b">${donut([{l:"Owner income (own capital)", v:sp.own, c:"var(--accent)"},{l:"Income on investor capital", v:sp.inv, c:"var(--gold)"}], {center:"Venture profit", fmt:kfmt, aria:"Income split", empty:"Appears once profit is accrued in this period."})}</div></section>
   </div>
-  <section class="sheet"><div class="sheet-h"><div><h2>Shareholders</h2><p>Share of profit and equity in proportion to net capital contributed</p></div>${csvBtn("shareholders")}</div>
-    <div class="tbl"><table><thead><tr><th>Shareholder</th><th class="n">Contributed</th><th class="n">Drawn</th><th class="n">Net capital</th><th class="n">% of capital</th><th class="n">Share of net profit</th><th class="n">Share of equity</th></tr></thead>
-    <tbody>${shTable || `<tr><td colspan="7"><div class="empty"><b>No shareholders yet</b>Add each shareholder, then record their capital contributions.</div></td></tr>`}</tbody>
-    ${shTable?`<tfoot><tr><td>Total</td><td class="n">${money(shRows.reduce((s,x)=>s+x.c,0))}</td><td class="n">${money(-shRows.reduce((s,x)=>s+x.d,0))}</td><td class="n">${money(shRows.reduce((s,x)=>s+x.net,0))}</td><td class="n">${pct(totNet?1:0)}</td><td class="n">${money(P.net)}</td><td class="n">${money(B.eq)}</td></tr></tfoot>`:""}</table></div></section>
   <section class="sheet"><div class="sheet-h"><div><h2>Allocation of own capital to ventures</h2><p>Own capital = venture investment not funded by investor placements. Click a row for its ledger.</p></div>${csvBtn("owner-allocation")}</div>
     <div class="tbl"><table><thead><tr><th>Venture</th><th class="n">Own capital</th><th class="n">% of own invested</th><th class="n">Own share of venture</th><th class="n">Owner income</th><th class="n">Return p.a.</th></tr></thead>
     <tbody>${aTable || `<tr><td colspan="6" class="empty">No own capital invested in ventures yet.</td></tr>`}</tbody>
     ${aTable?`<tfoot><tr><td>Total</td><td class="n">${money(ownDep)}</td><td class="n">${pct(ownDep?1:0)}</td><td></td><td class="n">${money(sp.rows.reduce((s,r)=>s+r.own,0))}</td><td class="n">${pct(div(RR.incOwn, RR.Oavg)*RR.an)}</td></tr></tfoot>`:""}</table></div></section>
-  ${ownerRecon()}
-  ${trailSection()}
-  <p class="note">Inception to date, owner income is ${nf.format(spAll.own)} and income on investor capital is ${nf.format(spAll.inv)}.</p>
+  ${ownerRecon()}` : ""}
+  ${SCV==="holders" ? `  <section class="sheet"><div class="sheet-h"><div><h2>Shareholders</h2><p>Share of profit and equity in proportion to net capital contributed</p></div>${csvBtn("shareholders")}</div>
+    <div class="tbl"><table><thead><tr><th>Shareholder</th><th class="n">Contributed</th><th class="n">Drawn</th><th class="n">Net capital</th><th class="n">% of capital</th><th class="n">Share of net profit</th><th class="n">Share of equity</th></tr></thead>
+    <tbody>${shTable || `<tr><td colspan="7"><div class="empty"><b>No shareholders yet</b>Add each shareholder, then record their capital contributions.</div></td></tr>`}</tbody>
+    ${shTable?`<tfoot><tr><td>Total</td><td class="n">${money(shRows.reduce((s,x)=>s+x.c,0))}</td><td class="n">${money(-shRows.reduce((s,x)=>s+x.d,0))}</td><td class="n">${money(shRows.reduce((s,x)=>s+x.net,0))}</td><td class="n">${pct(totNet?1:0)}</td><td class="n">${money(P.net)}</td><td class="n">${money(B.eq)}</td></tr></tfoot>`:""}</table></div></section>
+` : ""}
+  ${SCV==="trail" ? trailSection() : ""}
   </div>`;
 }
 
@@ -1951,7 +2152,7 @@ function openAccruals(){
 
 /* ---------- one-time investor sheet import: Sr. # · Investor · Rate · Placement date · Investment · one column per venture ---------- */
 const OWNER_HINT = {test: n => /famcon|futureaxis/i.test(String(n||"").replace(/[^a-z]/gi,""))};
-const APP_VERSION = "6 Oct 2026 · 20:30";
+const APP_VERSION = "6 Oct 2026 · 22:00";
 function findSimpleSheet(wb){
   for (const name of wb.SheetNames){
     const rows = sheetRows(wb.Sheets[name]);
@@ -3099,6 +3300,7 @@ function ivMonth(){
   return {ym: S.iv.ym, months};
 }
 function viewInvestors(){
+  const [IVV, IVSEG] = subTabs("iv", [["month","Monthly profit & payments","cal"],["pl","Placements","book"],["flows","Raised & placed","ret"]], "month");
   const W = S.canWrite!==false, {ym, months} = ivMonth(), lab = monthLabel(ym);
   const all = invMonthRows(ym), q = S.iv.q.trim().toLowerCase();
   const rows = all.filter(r => !q || `${r.p.investor} ${r.p.code} ${bizName(r.p.bizId)}`.toLowerCase().includes(q)).sort((a,b)=>a.p.investor.localeCompare(b.p.investor) || String(a.p.code).localeCompare(String(b.p.code),undefined,{numeric:true}));
@@ -3129,11 +3331,13 @@ function viewInvestors(){
     <td class="n">${fmt2(r.closing)}</td><td class="n">${pct(num(r.p.rate),2)}</td><td class="n"${profitCalcTip(r.p, ym, r.profit, r.isPosted)}>${fmt2(r.profit)}${r.isPosted?"":'<div class="note">calculated</div>'}</td><td class="n">${curTxt(r.profit, invCur(r.p), monthEnd(ym))}</td><td>${ivPill(r)}${r.payEntry?rcptBadge("ledger", r.payEntry):""}</td><td class="n">${fmt2(r.outstanding)}</td></tr>`).join("");
   csvReg("investor-month", ["Placement","Investor","Venture","Payout","Closing investment","Agreed rate",`Profit ${lab}`,"Posted","Status","Outstanding payable"], rows.map(r=>[r.p.code, r.p.investor, bizName(r.p.bizId), r.p.frequency||"Quarterly", r.closing.toFixed(2), num(r.p.rate), r.profit.toFixed(2), r.isPosted?"Yes":"No", IV_STATUS[r.status][0], r.outstanding.toFixed(2)]));
   const k = (l,v,s) => `<div class="kpi"><span class="eyebrow">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`;
-  return `<div class="head"><div><span class="eyebrow">Investors · ${h(C)}</span><h1>Investors</h1><p>Investor money only: Future Axis's own capital (FAMCON) is in Share capital. Monthly profit, payments and withdrawals for every placement. Choose the month, tick placements, then mark profit paid or change the payout frequency.</p></div>
+  return `<div class="head"><div><span class="eyebrow">Investors · ${h(C)}</span><h1>Investors</h1><p>Investor money only (the shareholders' money is under Shareholders). Monthly profit and payments, every placement, and how investor money was raised and placed.</p></div>
     <div class="row">${W?`<button class="btn primary" data-acc="1" type="button">Run profit accruals</button><button class="btn" data-ivact="withdraw" type="button">Add withdrawal</button><button class="btn" data-new="pl">Add placement</button>`:""}</div></div>
+  ${IVSEG}
   <div class="stack">
   ${flashHtml("ownNote")}${ownBanner()}
   ${(()=>{ const m = missingRates(all.map(r=>invCur(r.p))); return m.length ? `<div class="alert bad"><span class="dot"></span><div><b>No exchange rate for ${m.join(", ")}.</b> Some investors are paid in ${m.length===1?"this currency":"these currencies"}. Add the rate to show and pay their amounts.</div><button class="btn sm" data-tab="fx" type="button">Currencies</button></div>` : ""; })()}
+  ${IVV==="month" ? `
   <div class="row" style="gap:10px;flex-wrap:wrap"><label class="inl">Month <select id="ivYm">${months.map(m=>`<option value="${m}" ${m===ym?"selected":""}>${monthLabel(m)}</option>`).join("")}</select></label>
     ${notPosted&&W?`<span class="note">Profit for ${lab} is calculated but not posted yet.</span><button class="btn sm" data-acc="1" type="button">Run profit accruals</button>`:""}</div>
   <div class="kpis">
@@ -3163,7 +3367,7 @@ function viewInvestors(){
     </div>
     <div class="tbl"><table><thead><tr><th><input type="checkbox" data-ivsel="*" ${allSel?"checked":""} aria-label="Select all"></th><th>Placement</th><th>Investor</th><th>Venture</th><th>Payout</th><th class="n">Closing investment</th><th class="n">Rate</th><th class="n">Profit ${lab}</th><th class="n">In payout currency</th><th>Status</th><th class="n">Outstanding</th></tr></thead>
     <tbody>${pRows || `<tr><td colspan="11" class="empty">No placements${q?" match the search":""}.</td></tr>`}</tbody></table></div></section>
-  ${placementRegister()}
+  ` : IVV==="pl" ? placementRegister() : capFlowSection()}
   </div>`;
 }
 function placementRegister(){
@@ -3866,8 +4070,9 @@ function equityStatement(from, to){
   const split = (f, t2) => { const sp = incomeSplit(f, t2), aEnd = lastAccrual(f, t2) || t2;
     const ci = capDays(S.led.filter(t=>contrib(t) && t.date<=it).map(t=>[t.date, num(t.amount)]), f, aEnd);
     const ca = capDays([...S.led.filter(t=>contrib(t) && t.date>it).map(t=>[t.date, num(t.amount)]), ...S.led.filter(t=>t.type==="Owner Drawing").map(t=>[t.date, -num(t.amount)])], f, aEnd);
-    const w = ci + Math.max(0, ca) > 0 ? ci/(ci + Math.max(0, ca)) : 1, P = pnl(f, t2);
-    return {onInit: sp.own*w, onAdd: sp.own*(1-w), onInv: sp.inv - P.share, other: P.oinc - P.opex, oinc: P.oinc, opex: P.opex, net: P.net}; };
+    const co = capDays(S.led.filter(t=>t.type==="Investment Addition" && t.linkedOi).map(t=>[t.date, num(t.amount)]), f, aEnd);
+    const T = ci + Math.max(0, ca) + co, P = pnl(f, t2), wi = T > 0 ? ci/T : 1, wa = T > 0 ? Math.max(0, ca)/T : 0, wo = T > 0 ? co/T : 0;
+    return {onInit: sp.own*wi, onAdd: sp.own*wa, onOi: sp.own*wo, onInv: sp.inv - P.share, other: P.oinc - P.opex, oinc: P.oinc, opex: P.opex, net: P.net}; };
   const p = split(from, to), a = split(ORIGIN, to), O = balanceSheet(addDays(from,-1)), B = balanceSheet(to);
   return {it, initAll, addAll, drawAll, initP, addP, drawP, p, a, O, B};
 }
@@ -3876,47 +4081,50 @@ function equitySection(){
   const L = (l, x, y, cls="ind", note) => `<tr class="${cls}"><td>${l}${note?`<div class="note">${note}</div>`:""}</td><td class="n">${x===undefined?"":money(x)}</td><td class="n">${y===undefined?"":money(y)}</td></tr>`;
   const sub = l => `<tr class="sub"><td colspan="3">${l}</td></tr>`;
   const capP = O.owner + E.initP + E.addP - E.drawP, capA = E.initAll + E.addAll - E.drawAll;
-  const reP = O.re + p.onInit + p.onAdd + p.onInv + p.other, reA = a.onInit + a.onAdd + a.onInv + a.other;
+  const reP = O.re + p.onInit + p.onAdd + p.onOi + p.onInv + p.other, reA = a.onInit + a.onAdd + a.onOi + a.onInv + a.other;
+  const peP = p.onInit + p.onAdd + p.onOi + p.onInv, peA = a.onInit + a.onAdd + a.onOi + a.onInv, openP = O.owner + O.re;
   const net = B.assets - B.liab, diff = (capP + reP) - net;
   const showAdd = Math.abs(E.addAll) > 0.5, showDraw = Math.abs(E.drawAll) > 0.5, showAddP = Math.abs(a.onAdd) > 0.5, showOth = Math.abs(a.other) > 0.5;
   const months = monthsBetween(S.start.slice(0,7), S.end.slice(0,7)).map(ym => { const d = [S.end, monthEnd(ym)].sort()[0], Bm = balanceSheet(d); return {label: monthLabel(ym).slice(0,3), title: `${monthLabel(ym)} (month end)`, v:{cap:Bm.owner, re:Math.max(0,Bm.re)}}; });
   csvReg("owner-equity", ["Line", `This period (${S.start} to ${S.end})`, "Inception to date"], [
-    ["Paid-up capital brought forward", r0(O.owner), 0], ["Initial paid-up capital", r0(E.initP), r0(E.initAll)], ["Additional capital contributed", r0(E.addP), r0(E.addAll)], ["Less: drawings / capital withdrawn", r0(-E.drawP), r0(-E.drawAll)], ["Paid-up capital", r0(capP), r0(capA)],
-    ["Retained earnings brought forward", r0(O.re), 0], ["Profit on initial capital", r0(p.onInit), r0(a.onInit)], ["Profit on additional paid-up capital", r0(p.onAdd), r0(a.onAdd)], ["Profit on additional investment", r0(p.onInv), r0(a.onInv)], ["Other income less operating expenses", r0(p.other), r0(a.other)],
-    ["Retained earnings carried forward", r0(reP), r0(reA)], ["Closing owner equity", r0(capP + reP), r0(capA + reA)], ["Check: total assets less total liabilities", r0(net), r0(net)]]);
+    ["Share capital before the period", r0(openP), ""], ["Initial paid-up capital", r0(E.initP), r0(E.initAll)], ["Additional paid-up capital", r0(E.addP), r0(E.addAll)], ["Less: drawings", r0(-E.drawP), r0(-E.drawAll)],
+    ["Profit earned", r0(peP), r0(peA)], ["Other income", r0(p.oinc), r0(a.oinc)], ["Less: operating expenses", r0(-p.opex), r0(-a.opex)], ["Share capital (owner funds)", r0(capP + reP), r0(capA + reA)],
+    ["", "", ""], ["Profit earned on initial paid-up capital", r0(p.onInit), r0(a.onInit)], ["Profit earned on additional paid-up capital", r0(p.onAdd), r0(a.onAdd)], ["Profit earned on other income reinvested", r0(p.onOi), r0(a.onOi)], ["Profit earned on investor money", r0(p.onInv), r0(a.onInv)], ["Total profit earned", r0(peP), r0(peA)],
+    ["Check: total assets less total liabilities", r0(net), r0(net)]]);
   const k = (l,v,s,col) => `<div class="kpi kx" style="--kc:${col}"><span class="eyebrow">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`;
+  const fsFrom = (()=>{ const d = S.led.map(t=>t.date).filter(Boolean).sort()[0]; return d ? monthLabel(d.slice(0,7)) : ""; })();
   return `<div class="kpis">
     ${k("Paid-up capital", money(capP), `initial ${nf.format(E.initAll)}${showAdd?` · additional ${nf.format(E.addAll)}`:""}${showDraw?` · drawn ${nf.format(E.drawAll)}`:""}`, "var(--accent)")}
-    ${k("Retained earnings b/f", money(O.re), `at ${fmtDate(addDays(S.start,-1))}`, "var(--c1)")}
-    ${k("Profit for the period", money(p.net), `initial capital ${nf.format(p.onInit + p.onAdd)} · additional investment ${nf.format(p.onInv)}`, "var(--c3)")}
-    ${k("Retained earnings c/f", money(reP), `at ${fmtDate(S.end)}`, "var(--pos)")}
+    ${k("Profit earned", money(peP), `this period · other income ${nf.format(p.oinc)}`, "var(--c3)")}
+    ${k("Retained earnings", money(reP), `at ${fmtDate(S.end)}`, "var(--pos)")}
     ${k("Share capital (owner funds)", money(capP + reP), Math.abs(diff) < 0.5 ? "everything not owed to investors" : `differs from the balance sheet by ${nf.format(diff)}`, "var(--c7)")}
   </div>
   <div class="grid4">
-  <section class="sheet fs"><div class="sheet-h"><div><h2>Share capital statement</h2><p><b>Share capital (owner funds) = Paid-up capital + Retained earnings carried forward</b> = everything not owed to investors</p></div>${csvBtn("owner-equity")}</div><div class="tbl"><table>
+  <section class="sheet fs"><div class="sheet-h"><div><h2>Share capital statement</h2><p><b>Share capital = Initial paid-up capital + Profit earned + Other income</b> = everything not owed to investors</p></div>${csvBtn("owner-equity")}</div><div class="tbl"><table>
     <thead><tr><th></th><th class="n">This period</th><th class="n">Inception to date</th></tr></thead><tbody>
-    ${sub("Paid-up capital")}
-    ${L("Paid-up capital brought forward", O.owner, 0, "ind", `at ${fmtDate(addDays(S.start,-1))}`)}
+    ${Math.abs(openP) > 0.5 ? L(`Share capital ${fsFrom} to ${fmtDate(addDays(S.start,-1))}`, openP, undefined, "ind", "before this period") : ""}
     ${L("Initial paid-up capital", E.initP, E.initAll)}
-    ${showAdd ? L("Additional capital contributed", E.addP, E.addAll) : ""}
-    ${showDraw ? L("Less: drawings / capital withdrawn", -E.drawP, -E.drawAll) : ""}
-    ${L("Paid-up capital", capP, capA, "tot")}
-    ${sub("Retained earnings")}
-    ${L("Retained earnings brought forward", O.re, 0, "ind", `at ${fmtDate(addDays(S.start,-1))}`)}
-    ${L("Add: profit on initial capital", p.onInit, a.onInit, "ind", "full venture profit on Future Axis's own money")}
-    ${showAddP ? L("Add: profit on additional paid-up capital", p.onAdd, a.onAdd) : ""}
-    ${L("Add: profit on additional investment", p.onInv, a.onInv, "ind", "venture profit on investor money less the investors' profit share")}
-    ${Math.abs(a.oinc) > 0.5 ? L("Add: other income", p.oinc, a.oinc, "ind", "deal fees, advisory fees, bank profit and similar") : ""}
+    ${showAdd ? L("Additional paid-up capital", E.addP, E.addAll) : ""}
+    ${showDraw ? L("Less: drawings", -E.drawP, -E.drawAll) : ""}
+    ${L("Profit earned", peP, peA, "ind", "see Profit earned below")}
+    ${L("Other income", p.oinc, a.oinc)}
     ${Math.abs(a.opex) > 0.5 ? L("Less: operating expenses", -p.opex, -a.opex) : ""}
-    ${L("Retained earnings carried forward", reP, reA, "tot")}
-    ${L("Share capital (owner funds)", capP + reP, capA + reA, "gt", "paid-up capital + retained earnings carried forward")}
+    ${L("Share capital (owner funds)", capP + reP, capA + reA, "gt")}
     <tr class="ind"><td class="note">Check: total assets − investor capital − investor profit payable</td><td class="n note">${money(net)}</td><td class="n note">${Math.abs(diff) < 0.5 ? '<span class="pill ok">Agrees</span>' : `<span class="pill bad">Out by ${nf.format(diff)}</span>`}</td></tr>
     </tbody></table></div>
-    <div class="sheet-b note" style="border-top:1px solid var(--line)">Each period's retained earnings carried forward become the next period's brought forward. Profit paid out to shareholders is recorded as an owner drawing.<br>Initial paid-up capital = contributions up to <b>${E.it?fmtDate(E.it):"–"}</b>${W?` <input type="date" id="capInit" value="${h(E.it)}" style="width:auto;display:inline-block;padding:2px 6px"> <button class="btn sm" data-capinit type="button">Change</button>`:""}. Later contributions are additional capital.</div></section>
+    <div class="sheet-b note" style="border-top:1px solid var(--line)">The company started in ${fsFrom || "April 2026"}, so there is no retained earnings brought forward from earlier years. If you pick a period that starts later, the profit already earned since then shows as its own line. Profit paid out to shareholders is recorded as an owner drawing.<br>Initial paid-up capital = contributions up to <b>${E.it?fmtDate(E.it):"–"}</b>${W?` <input type="date" id="capInit" value="${h(E.it)}" style="width:auto;display:inline-block;padding:2px 6px"> <button class="btn sm" data-capinit type="button">Change</button>`:""}. Later contributions are additional capital.</div></section>
   <section class="sheet"><div class="sheet-h"><div><h2>Owner equity build-up</h2><p>Paid-up capital and retained earnings at each month end</p></div></div>
     <div class="sheet-b" style="overflow-x:auto">${areaChart(months, [{k:"cap", l:"Paid-up capital", c:"var(--accent)"}, {k:"re", l:"Retained earnings", c:"var(--pos)"}], {totalLabel:"Owner equity", aria:"Owner equity build-up"})}
-    ${donut([{l:"Profit on initial capital", v:a.onInit + a.onAdd, c:"var(--c3)"}, {l:"Profit on additional investment", v:a.onInv, c:"var(--gold)"}, {l:"Other income less expenses", v:a.other, c:"var(--c5)"}], {center:"Retained earnings", fmt:kfmt, aria:"Where retained earnings came from"})}</div></section>
-  </div>`;
+    ${donut([{l:"Profit on initial capital", v:a.onInit + a.onAdd, c:"var(--c3)"}, {l:"Profit on other income reinvested", v:a.onOi, c:"var(--c7)"}, {l:"Profit on investor money", v:a.onInv, c:"var(--gold)"}, {l:"Other income less expenses", v:a.other, c:"var(--c5)"}], {center:"Retained earnings", fmt:kfmt, aria:"Where retained earnings came from"})}</div></section>
+  </div>
+  <section class="sheet fs" id="profitEarned"><div class="sheet-h"><div><h2>Profit earned</h2><p>Where the profit in share capital came from</p></div></div><div class="tbl"><table>
+    <thead><tr><th></th><th class="n">This period</th><th class="n">Inception to date</th><th class="n">% of profit</th></tr></thead><tbody>
+    ${[["On initial paid-up capital", p.onInit, a.onInit, "full venture profit on the shareholders' money"],
+       ...(showAddP ? [["On additional paid-up capital", p.onAdd, a.onAdd, ""]] : []),
+       ["On other income reinvested", p.onOi, a.onOi, "venture profit on other income put into ventures (e.g. property income in Solar)"],
+       ["On investor money", p.onInv, a.onInv, "venture profit on investor money less the investors' agreed profit"]].map(([l, x, y, n]) => `<tr class="ind"><td>${l}${n?`<div class="note">${n}</div>`:""}</td><td class="n">${money(x)}</td><td class="n">${money(y)}</td><td class="n">${pct(div(y, peA))}</td></tr>`).join("")}
+    <tr class="tot"><td>Total profit earned</td><td class="n">${money(peP)}</td><td class="n">${money(peA)}</td><td class="n">${pct(peA?1:0)}</td></tr>
+    </tbody></table></div></section>`;
 }
 function profitCalcTip(p, ym, profit, isPosted){
   const from = ym+"-01", to = monthEnd(ym), start = p.date >= from ? addDays(p.date, 1) : from, stop = p.maturity && p.maturity < to ? p.maturity : to;
@@ -4050,7 +4258,7 @@ function openVentureWithdrawals(bid){
 }
 
 /* ---------- other income: its own tab and its own head in the financial statements ---------- */
-const OINC_CATS = ["Deal / arrangement fees","Advisory & management fees","Bank profit / interest","Exchange gain","Other"];
+const OINC_CATS = ["Property management","AI brands","Deal / arrangement fees","Advisory & management fees","Bank profit / interest","Exchange gain","Other"];
 function oincByCat(from, to){ const o = {}; for (const x of S.led) if (x.type==="Other Income" && x.date>=from && x.date<=to){ const c = x.category || "Other (uncategorised)"; o[c] = (o[c]||0) + num(x.amount); } return o; }
 function viewOtherIncome(){
   const W = S.canWrite!==false, {start, end} = S, C = VIEW();
@@ -4068,6 +4276,7 @@ function viewOtherIncome(){
   return `<div class="head"><div><span class="eyebrow">Income · ${h(C)}</span><h1>Other income</h1><p>Income outside venture profit, such as deal and arrangement fees, advisory fees, bank profit and exchange gains. It shows as its own head in the financial statements.</p></div>
     ${W?`<button class="btn primary" data-oinew type="button">Add other income</button>`:""}</div>
   <div class="stack">
+  ${prepOiSection()}
   <div class="kpis">
     ${k("This period", money(tP), `${inP.length} receipt${inP.length===1?"":"s"} · ${fmtDate(start)} to ${fmtDate(end)}`, "var(--c3)")}
     ${k("Inception to date", money(tA), `${list.filter(t=>t.date<=end).length} receipts`, "var(--c1)")}
@@ -4086,7 +4295,20 @@ function viewOtherIncome(){
     <tbody>${rows || `<tr><td colspan="8"><div class="empty"><b>No other income yet</b>Record deal fees, advisory fees, bank profit or other income here.</div></td></tr>`}</tbody></table></div></section>
   </div>`;
 }
-function openOtherIncome(id){
+/* entries Salman gave to record; each disappears once recorded */
+const PREP_OI = [
+  {key:"pm19k", cat:"Property management", source:"Property management", ref:"Property management income, reinvested in Solar as PKR 5,000,000", amt:19000, cur:"USD", rv:{ven:/solar/i, amt:5000000, cur:"PKR"}},
+  {key:"ai6k", cat:"AI brands", source:"AI Brands", ref:"AI Brands income, used to pay investor profit", amt:6000, cur:"USD", method:"Other"}];
+const prepDone = x => S.led.some(t=>t.type==="Other Income" && (t.prepKey===x.key || (t.category===x.cat && Math.abs(num(t.payAmt||t.amount) - x.amt) < 1)));
+function prepOiSection(){
+  const W = S.canWrite!==false, L = PREP_OI.filter(x=>!prepDone(x)); if (!W || !L.length) return "";
+  return `<section class="sheet" id="prepOi"><div class="sheet-h"><div><h2>Ready to record</h2><p>Filled in from what you told us. Click Record, enter the date, check and save.</p></div></div>
+    <div class="tbl"><table><thead><tr><th>Category</th><th>Description</th><th class="n">Amount</th><th>Treatment</th><th></th></tr></thead><tbody>
+    ${L.map(x=>{ const v = x.rv ? S.biz.find(b=>x.rv.ven.test(b.name)) : null; return `<tr><td>${h(x.cat)}</td><td class="note">${h(x.ref)}</td><td class="n">${h(x.cur)} ${fmt2(x.amt)}</td>
+      <td>${x.rv ? (v ? `Reinvested in ${h(v.name)} (${h(x.rv.cur)} ${fmt2(x.rv.amt)})` : `<span class="pill warn">Add the Solar venture in Master data first</span>`) : "Received; paid out as investor profit"}</td>
+      <td>${x.rv && !v ? "" : `<button class="btn sm primary" data-oiprep="${x.key}" type="button">Record</button>`}</td></tr>`; }).join("")}</tbody></table></div></section>`;
+}
+function openOtherIncome(id, pre){
   const t = id ? S.led.find(x=>x.id===id) : null, W = S.canWrite!==false, cur0 = t?.origCur || VIEW(), amt0 = t ? (t.origCur ? t.origAmount : t.amount) : "";
   const docId = id || newId(), linked = t ? S.led.find(x=>x.linkedOi===t.id) : null;
   const vens = S.biz.filter(b=>!inactive(b) || b.id===linked?.bizId);
@@ -4114,6 +4336,10 @@ function openOtherIncome(id){
       <div class="full row" style="justify-content:space-between">${W?`<button class="btn primary" type="submit">${t?"Save changes":"Add other income"}</button>`:"<span class='note'>View only</span>"}${t&&W?`<button class="btn danger" type="button" id="oi_del">Delete${linked?" (and the investment)":""}</button>`:""}</div>
     </form></div></div>`;
   wireClose(); payBlockWire("pbO"); $("#oi_pay").classList.add("form");
+  if (pre){ $("#oi_d").value = ""; $("#oi_c").value = pre.cat; $("#oi_s").value = pre.source; $("#oi_r").value = pre.ref; $("#oi_a").value = pre.amt; $("#oi_cur").value = pre.cur;
+    if (pre.method){ $("#pbOm").value = pre.method; $("#pbOm").onchange(); }
+    if (pre.rv){ const v = S.biz.find(b=>pre.rv.ven.test(b.name)); $("#oi_rv").checked = true; if (v) $("#oi_v").value = v.id; $("#oi_va").value = pre.rv.amt; $("#oi_vc").value = pre.rv.cur; $("#oi_all").checked = true; }
+    $("#oiF").dataset.prep = pre.key; setTimeout(()=>$("#oi_d").focus(), 50); }
   if (t?.bankId) $("#pbOb").value = t.bankId; if (t?.payBank) $("#pbOn").value = t.payBank;
   const incV = () => { const c = $("#oi_cur").value, a = num($("#oi_a").value), d = $("#oi_d").value; return c===VIEW() ? a : fxConv(a, c, VIEW(), d); };
   const invV = () => { const d = $("#oi_d").value, c = $("#oi_vc").value, a = num($("#oi_va").value); return $("#oi_all").checked ? incV() : (c===VIEW() ? a : fxConv(a, c, VIEW(), d)); };
@@ -4135,7 +4361,7 @@ function openOtherIncome(id){
       if (iv==null){ $("#oi_err").textContent = `Add a ${vc} rate in Settings → Currencies first, or tick "Whole income reinvested".`; return; } }
     try { const pd = rv ? {method:"Reinvested directly", bankId:"", payBank:"", payRef:$("#pbOr").value.trim(), receipts: [...($("#pbOf").files||[])].length ? await uploadReceipts("ledger", docId, [...$("#pbOf").files]) : []} : await payBlockRead("pbO", "ledger", docId);
       const now = new Date().toISOString(), {id:_, ...old} = t || {};
-      await S.db.collection("ledger").doc(docId).set({...old, ...pd, receipts:[...(t?.receipts||[]), ...pd.receipts], date:d, type:"Other Income", bizId:"", placementId:"", amount:+v.toFixed(2), category:$("#oi_c").value, source:$("#oi_s").value.trim(), ref:$("#oi_r").value.trim(),
+      await S.db.collection("ledger").doc(docId).set({...old, ...pd, receipts:[...(t?.receipts||[]), ...pd.receipts], date:d, type:"Other Income", bizId:"", placementId:"", amount:+v.toFixed(2), ...($("#oiF").dataset.prep ? {prepKey:$("#oiF").dataset.prep} : {}), category:$("#oi_c").value, source:$("#oi_s").value.trim(), ref:$("#oi_r").value.trim(),
         origAmount: c===VIEW() ? "" : a, origCur: c===VIEW() ? "" : c, payCur:c, payAmt:a, ...(c!=="USD" && c!==VIEW() ? {fxCur:c, fxAmount:a, fxRate:rateOn(c, d)} : {}), reinvestedIn: rv ? bid : "", createdAt: t?.createdAt || now, updatedAt: now});
       const lid = linked?.id || `oir-${docId}`;
       if (rv){ const usd = VIEW()==="USD" ? iv : iv / rateOn("AED", d), rate = vc==="USD" ? 1 : (usd ? va / usd : 0), b = S.biz.find(x=>x.id===bid);
@@ -4161,7 +4387,7 @@ function ownerRecon(){
     ${L("In ventures", Y, "ind", "venture positions less investor capital (as on Portfolio)")}${L("Cash and bank", B.cash, "ind", B.cash < -0.5 ? "negative: receipts such as venture withdrawals are not recorded yet" : "")}${L("Profit receivable from ventures", B.rec)}${L("Less: investor profit payable", -B.pay)}
     ${L("Share capital (owner funds)", Y + out, "tot")}
     <tr class="sub"><td colspan="2">Made up of</td></tr>
-    ${L("Paid-up capital", B.owner)}${L("Retained earnings", B.re, "ind", "all profit kept: on own capital, on investor money, other income less expenses")}${L("Share capital (owner funds)", B.eq, "tot")}
+    ${(()=>{ const A = equityStatement(ORIGIN, S.end).a, pe = A.onInit + A.onAdd + A.onOi + A.onInv; return L("Paid-up capital", B.owner) + L("Profit earned", pe, "ind", "on initial capital, other income reinvested and investor money") + L("Other income", A.oinc) + (Math.abs(A.opex) > 0.5 ? L("Less: operating expenses", -A.opex) : ""); })()}${L("Share capital (owner funds)", B.eq, "tot")}
     </tbody></table></div></section>`;
 }
 /* ---------- cash: where book cash came from, bank comparison, reinvest ---------- */
@@ -4309,7 +4535,14 @@ function syncCur(){ const sel = $("#viewCur"); if (!sel) return; sel.innerHTML =
 function renderTabs(){
   syncCur();
   const pend = (S.members||[]).filter(m=>m.status==="pending").length;
-  $("#tabs").innerHTML = TABS.filter(t => (t[0]!=="users" || S.isAdmin) && (t[0]!=="import" || S.canWrite) && (!["logs","backups"].includes(t[0]) || S.isFull)).map(t => t[0]==="|" ? '<span class="sep" aria-hidden="true"></span>' : `<button role="tab" data-tab="${t[0]}" aria-selected="${S.tab===t[0] || (t[0]==="settings" && ["users","import","logs","backups","fx"].includes(S.tab))}">${t[1]}${t[0]==="settings"&&pend&&S.isAdmin?` <span class="pill warn">${pend}</span>`:""}</button>`).join("");
+  const sel = k => S.tab===k || (k==="settings" && ["users","import","logs","backups","fx"].includes(S.tab));
+  const btn = ([k, l, ic], cls="") => `<button role="tab" class="${cls}" data-tab="${k}" aria-selected="${sel(k)}">${nico(ic)}<span>${l}</span>${k==="settings"&&pend&&S.isAdmin?` <span class="pill warn">${pend}</span>`:""}</button>`;
+  const moreOn = NAV_MORE.some(([,L])=>L.some(([k])=>sel(k)));
+  $("#tabs").innerHTML = `<div class="navlbl">Overview</div>${NAV_MAIN.map(t=>btn(t,"pri")).join("")}
+    <button type="button" class="morebtn${moreOn?" on":""}" data-navmore aria-expanded="${$("#side").classList.contains("open")}">${nico("more")}<span>More</span></button>
+    <div class="navmore">${NAV_MORE.map(([g, L])=>`<div class="navlbl">${g}</div>${L.map(t=>btn(t,"sec")).join("")}`).join("")}</div>`;
+  const cur = [...NAV_MAIN, ...NAV_MORE.flatMap(g=>g[1])].find(t=>sel(t[0]));
+  $("#crumb").innerHTML = cur ? `<span class="cic">${nico(cur[2], 17)}</span><b>${h(cur[1])}</b><span class="mut">· ${h(S.cfg.entity || "Future Axis Holdings")}</span>` : "";
 }
 function render(){
   if (window.hideTip) hideTip();
@@ -4318,6 +4551,7 @@ function render(){
   if (!S.db){ return; }
   if (!(S.loaded.biz && S.loaded.pl && S.loaded.led)) return;
   if (S.start > S.end){ $("#main").innerHTML = `<div class="banner">The period start is after its end. Adjust the dates at the top.</div>`; return; }
+  if (S.tab==="portfolio") S.tab = "dashboard";
   if ((S.tab==="users" && !S.isAdmin) || (S.tab==="import" && !S.canWrite) || (["logs","backups"].includes(S.tab) && !S.isFull)) S.tab = "dashboard";
   S.csv = {};
   const V = {dashboard:viewDashboard, ventures:viewVentures, investors:viewInvestors, ledger:viewLedger, returns:viewReturns, monthly:viewMonthly, statements:viewStatements, reports:viewReports, expenses:viewExpenses, capital:viewCapital, bank:viewBank, import:viewImport, users:viewUsers, settings:viewSettings, logs:viewLogs, backups:viewBackups, master:viewMaster, fx:viewFx, portfolio:viewPortfolio, income:viewOtherIncome}[S.tab] || viewDashboard;
@@ -4418,6 +4652,8 @@ function wireView(){
   };
 }
 document.addEventListener("click", e => {
+  if (e.target.closest("[data-navmore]")){ $("#side").classList.toggle("open"); renderTabs(); return; }
+  if (e.target.closest("#tabs [data-tab]")) $("#side").classList.remove("open");
   const u = e.target.closest("[data-uact]"); if (u){ userAction(u); return; }
   const bk = e.target.closest("[data-bact]"); if (bk){ bankAction(bk); return; }
   const bf = e.target.closest("[data-blf]"); if (bf){ S.blf = bf.dataset.blf; render(); return; }
@@ -4433,8 +4669,11 @@ document.addEventListener("click", e => {
   const rb = e.target.closest("[data-rcpt]"); if (rb){ const [c,i] = rb.dataset.rcpt.split(":"); openReceipts(c, i); return; }
   const rcb = e.target.closest("[data-rcash]"); if (rcb){ openReinvestCash(); return; }
   const oin = e.target.closest("[data-oinew]"); if (oin){ openOtherIncome(); return; }
+  const opr = e.target.closest("[data-oiprep]"); if (opr){ openOtherIncome(null, PREP_OI.find(x=>x.key===opr.dataset.oiprep)); return; }
   const oie = e.target.closest("[data-oiedit]"); if (oie){ openOtherIncome(oie.dataset.oiedit); return; }
   const vs = e.target.closest("[data-vsel]"); if (vs){ S.vsel = vs.dataset.vsel; render(); return; }
+  const sb = e.target.closest("[data-sub]"); if (sb){ const [k, v] = sb.dataset.sub.split(":"); S.sub[k] = v; render(); return; }
+  const vo = e.target.closest("[data-vopen]"); if (vo){ S.vsel = vo.dataset.vopen; S.sub.ven = "monthly"; render(); window.scrollTo(0,0); return; }
   const vw = e.target.closest("[data-vwd]"); if (vw){ openVentureWithdrawals(vw.dataset.vwd); return; }
   const vi = e.target.closest("[data-vinv]"); if (vi){ openVentureInvest(vi.dataset.vinv); return; }
   const pfv = e.target.closest("[data-pfv]"); if (pfv){ S.pf.view = pfv.dataset.pfv; render(); return; }
@@ -4467,7 +4706,7 @@ document.addEventListener("click", e => {
   const op = e.target.closest("[data-ownplace]"); if (op){ openForm("led", null, {prefill:{type:"Investment Addition", bizId:"", ref:"Own money placed"}, note:"Placing Future Axis's own money in a venture. Investor money is placed automatically when you add a placement."}); return; }
   if (e.target.closest("[data-initcap]")){ openInitialCapital(); return; }
   const nc = e.target.closest("[data-newcap]"); if (nc){ openForm("led", null, {prefill:{type:nc.dataset.newcap, bizId:"", shareholderId:S.sh.length===1?S.sh[0].id:""}}); return; }
-  if (e.target.closest("[data-initcap],[data-vinv],[data-rcash],[data-oinew],[data-oiedit],[data-ownplace],[data-vsel],[data-vwd],[data-ivpay],[data-ivedit],[data-iesave],[data-ivcur],[data-ivbulk],.ieditor,.paybar,[data-ipsel]")) return;
+  if (e.target.closest("[data-sub],[data-vopen],[data-oiprep],[data-initcap],[data-vinv],[data-rcash],[data-oinew],[data-oiedit],[data-ownplace],[data-vsel],[data-vwd],[data-ivpay],[data-ivedit],[data-iesave],[data-ivcur],[data-ivbulk],.ieditor,.paybar,[data-ipsel]")) return;
   if (e.target.closest("[data-rcpt],[data-rview],[data-rrm],[data-ivsel],[data-ivact],[data-mdtog],[data-mdpl],[data-mdk],[data-mdact],[data-fx],[data-fxdel],[data-ownfix]")) return;
   const t = e.target.closest("[data-tab],[data-go],[data-new],[data-edit],[data-csv],[data-goledger]"); if (!t) return;
   if (t.dataset.tab || t.dataset.go){ S.tab = t.dataset.tab || t.dataset.go; if (S.tab==="logs") S.lg.rows = null; if (S.tab==="backups") S.bk.rows = null; store.set("fa.tab", S.tab); render(); window.scrollTo(0,0); }
@@ -4586,7 +4825,7 @@ let started = false;
 async function start(session, force){
   if (started && !force) return; started = true;
   S.user = session.user;
-  $("#whoEmail").textContent = session.user.email || ""; $("#whoEmail").title = "App version " + APP_VERSION; $("#who").hidden = false;
+  $("#whoEmail").textContent = session.user.email || ""; $("#whoEmail").title = "App version " + APP_VERSION; $("#who").hidden = false; $("#whoAv").textContent = (session.user.email || "?").slice(0,1).toUpperCase();
   const {data:m, error} = await SB.from("members").select("role,status,must_reset,full_name").eq("user_id", session.user.id).maybeSingle();
   if (error || !m){ gate("Access not set up", `${h(session.user.email)} has no access record. Ask the administrator to add you.`); return; }
   if (m.status === "pending"){

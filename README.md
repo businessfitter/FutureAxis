@@ -263,3 +263,22 @@ If cash shows negative, receipts such as venture withdrawals aren't recorded yet
 - It replaces the FAMCON paid-up capital entries (the same money) with one entry per shareholder per venture, so the shareholder table shows each shareholder's % and share of equity.
 - The preview compares the amounts with the owner money recorded as placed in each venture. Ticking the box records any shortfall as owner money invested, so cash per books stays at 0.
 - Running it again replaces the earlier entries, so nothing is counted twice.
+- **Other income → Ready to record**: Property management USD 19,000, reinvested in Solar as PKR 5,000,000 (needs the Solar venture), and AI Brands USD 6,000, used to pay investor profit. Click Record, enter the date and save. Each line disappears once it is recorded.
+- New other income categories: Property management, AI brands.
+- **Share capital**: there are no "brought forward" lines, because the company started in April 2026. If you pick a period that starts later, the capital and profit from before it show as "Apr 2026 to …" lines.
+- **Share capital statement**: Initial paid-up capital + Profit earned + Other income = Share capital, checked against the balance sheet. Below it, a separate **Profit earned** table splits profit into: on initial paid-up capital, on other income reinvested, and on investor money, with the % of each. Portfolio's "Made up of" uses the same lines.
+
+## New layout (6 Oct 2026)
+- **Sidebar with 5 main sections**: Dashboard, Shareholders, Investors, Ventures, Other income. Everything else sits under Accounts (Financial statements, Ledger, Bank, Expenses), Analysis (Returns, Monthly, Reports) and Setup (Master data, Settings). On a phone the 5 sections become a bottom bar, and the rest are under **More**.
+- **The Portfolio tab is removed.** Its content moved:
+  - allocation → Dashboard
+  - investor/owner split and position → Ventures
+  - share capital breakdown → Shareholders → Where it is invested
+  - cash per books → Shareholders
+  - raised & placed → Investors
+- **Dashboard** shows only: total capital deployed (share capital vs investors), share capital, investor capital, net profit % p.a., portfolio allocation by venture, and who funds each venture. At most one alert is shown.
+- **Views inside each section** instead of long pages of tables:
+  - Shareholders: Share capital · Shareholders · Where it is invested · Capital trail
+  - Investors: Monthly profit & payments · Placements · Raised & placed
+  - Ventures: Overview (one card per venture, including those at 0) · Monthly position · Accounts
+- New look: indigo/violet theme, line icons, and dark mode follows the device setting.
