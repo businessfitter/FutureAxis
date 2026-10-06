@@ -1820,7 +1820,7 @@ function viewCapital(){
   csvReg("shareholders",["Shareholder ID","Name","Contributed","Drawn","Net capital","% of capital","Share of net profit (period)","Share of equity"], shRows.map(x=>[x.code,x.name,r0(x.c),r0(x.d),r0(x.net),p2(div(Math.max(0,x.net),totNet)),r0(P.net*div(Math.max(0,x.net),totNet)),r0(B.eq*div(Math.max(0,x.net),totNet))]));
   const shTable = shRows.map(x => { const w = div(Math.max(0,x.net), totNet);
     return `<tr ${x.id?`class="click" data-edit="sh:${x.id}"`:""}><td>${x.code?`<span class="note">${h(x.code)}</span> `:""}<b style="font-weight:600">${h(x.name)}</b>${x.shares?`<div class="note">${nf.format(num(x.shares))} shares</div>`:""}</td>
-      <td class="n">${money(x.c)}</td><td class="n">${money(-x.d)}</td><td class="n">${money(x.net)}</td><td class="n">${pct(w)}</td><td class="n">${money(P.net*w)}</td><td class="n">${money(B.eq*w)}</td></tr>`; }).join("");
+      <td class="n">${money(x.c)}${(()=>{ const ic = S.led.filter(t=>t.initialCap && t.shareholderId===x.id && x.id); return ic.length ? `<div class="note">${ic.map(t=>`${h(S.biz.find(b=>b.id===t.capVenture)?.name||"")} ${h(t.payCur||"")} ${fmt2(t.payAmt)}`).join(" · ")}</div>` : ""; })()}</td><td class="n">${money(-x.d)}</td><td class="n">${money(x.net)}</td><td class="n">${pct(w)}</td><td class="n">${money(P.net*w)}</td><td class="n">${money(B.eq*w)}</td></tr>`; }).join("");
   // allocation to ventures
   const alloc = sp.rows.filter(r => r.ownCap > 0 || r.own);
   csvReg("owner-allocation",["Venture","Own capital deployed","% of own deployed","Owner income (period)","Return p.a."], alloc.map(r=>[r.b.name,r0(r.ownCap),p2(div(r.ownCap,ownDep)),r0(r.own),p2(div(r.own,r.ownCap)*an)]));
@@ -1830,7 +1830,7 @@ function viewCapital(){
   const mv = S.led.filter(t => OWNER_TYPES.includes(t.type)).sort((a,b)=>b.date.localeCompare(a.date));
   const mTable = mv.slice(0,200).map(t => `<tr class="click" data-edit="led:${t.id}"><td class="n" style="text-align:left">${fmtDate(t.date)}</td><td>${h(shName(t.shareholderId)||"–")}</td><td><span class="pill ${t.type==="Owner Drawing"?"warn":"ok"}">${t.type==="Owner Drawing"?"Drawing":"Contribution"}</span></td><td class="note">${h(t.ref||"")}</td><td class="note">${h([t.method, bankCode(t.bankId)].filter(Boolean).join(" · "))}</td><td class="n">${money(t.type==="Owner Drawing"?-num(t.amount):num(t.amount))}</td></tr>`).join("");
   return `<div class="head"><div><span class="eyebrow">Owner investment</span><h1>Share capital</h1><p>Capital put in by the shareholders, where it is invested, and what it earned from ${fmtDate(start)} to ${fmtDate(end)}.</p></div>
-    ${W?`<div class="row"><button class="btn" data-new="sh">Add shareholder</button><button class="btn" data-newcap="Owner Drawing">Record drawing</button><button class="btn primary" data-newcap="Owner Capital Contribution">Record contribution</button></div>`:""}</div>
+    ${W?`<div class="row"><button class="btn" data-initcap type="button">Initial paid-up capital</button><button class="btn" data-new="sh">Add shareholder</button><button class="btn" data-newcap="Owner Drawing">Record drawing</button><button class="btn primary" data-newcap="Owner Capital Contribution">Record contribution</button></div>`:""}</div>
   <div class="stack">${flashHtml("ownNote")}
   ${equitySection()}
   <div class="kpis">
@@ -1951,7 +1951,7 @@ function openAccruals(){
 
 /* ---------- one-time investor sheet import: Sr. # · Investor · Rate · Placement date · Investment · one column per venture ---------- */
 const OWNER_HINT = {test: n => /famcon|futureaxis/i.test(String(n||"").replace(/[^a-z]/gi,""))};
-const APP_VERSION = "5 Oct 2026 · 22:55";
+const APP_VERSION = "6 Oct 2026 · 20:30";
 function findSimpleSheet(wb){
   for (const name of wb.SheetNames){
     const rows = sheetRows(wb.Sheets[name]);
@@ -3852,6 +3852,7 @@ function viewPortfolio(){
 /* ---------- share capital: owner equity statement ---------- */
 function initialTo(){
   if (S.cfg.initialTo) return S.cfg.initialTo;
+  const ic = S.led.filter(t=>t.type==="Owner Capital Contribution" && t.initialCap).map(t=>t.date).sort(); if (ic.length) return ic[ic.length-1];
   const c = S.led.filter(t=>t.type==="Owner Capital Contribution").map(t=>t.date).sort();
   const imp = S.led.filter(t=>t.type==="Owner Capital Contribution" && String(t.id).startsWith("imp-own-")).map(t=>t.date).sort();
   return imp.length ? imp[imp.length-1] : (c[0] || "");
@@ -4255,6 +4256,54 @@ function openVentureInvest(bid){
   ["#viPA","#viD"].forEach(k=>$(k).addEventListener("input", conv)); $("#viPC").addEventListener("change", conv); $("#viS").addEventListener("change", note); note();
 }
 
+/* ---------- initial paid-up capital by shareholder and venture ---------- */
+function openInitialCapital(){
+  const vens = S.biz.filter(b=>!inactive(b)), people = S.sh.filter(x=>!OWNER_HINT.test(x.name)), prev = S.led.filter(t=>t.initialCap);
+  const ownAdd = bid => S.led.filter(t=>t.type==="Investment Addition" && t.bizId===bid && !isInvestorAdd(t) && !t.linkedOi && t.method!=="Reinvested directly" && !String(t.id).startsWith("capadj-"));
+  const firstDate = bid => (prev.find(t=>t.capVenture===bid)?.date) || ownAdd(bid).map(t=>t.date).sort()[0] || "";
+  const pre = b => { const p = prev.filter(t=>t.capVenture===b.id); if (p.length) return {a:num(p[0].payAmt), c:p[0].payCur||"USD"};
+    return /livestock|\bsk\b/i.test(b.name) ? {a:35000, c:"AED"} : /empyrean/i.test(b.name) ? {a:16666, c:"USD"} : {a:0, c:"USD"}; };
+  const n0 = Math.max(2, people.length);
+  ivDialog("ic", "Initial paid-up capital", `
+    <div class="full banner" style="margin:0">Enter what <b>each shareholder</b> put into each venture. It replaces the paid-up capital now recorded under ${h(S.sh.filter(x=>OWNER_HINT.test(x.name)).map(x=>x.name).join(", ") || "the company")} (the same money), split by shareholder. Venture investments are not changed.</div>
+    <label>Number of shareholders<select id="icN">${[1,2,3,4,5].map(n=>`<option ${n===n0?"selected":""}>${n}</option>`).join("")}</select></label><span></span>
+    <div class="full" id="icNames"></div>
+    <div class="full tbl"><table><thead><tr><th>Venture</th><th class="n">Per shareholder</th><th>Currency</th><th>Date</th></tr></thead><tbody>
+      ${vens.map(b=>{ const v = pre(b); return `<tr><td><i class="sw" style="display:inline-block;margin-right:8px;background:${vcol(b.id)}"></i>${h(b.name)}</td><td class="n"><input data-ica="${b.id}" type="number" step="any" min="0" value="${v.a||""}" style="max-width:140px"></td>
+        <td><select data-icc="${b.id}">${PAY_CURS.filter(c=>c!=="Other").map(c=>`<option ${c===v.c?"selected":""}>${c}</option>`).join("")}</select></td><td><input data-icd="${b.id}" type="date" value="${h(firstDate(b.id))}"></td></tr>`; }).join("")}</tbody></table></div>
+    <div class="full" id="icPrev"></div>
+    <label class="full chk" id="icAdjL"><input type="checkbox" id="icAdj" checked> Where the venture shows less owner money placed than this, record the difference as owner money invested in that venture (so cash per books stays at 0)</label>`,
+    async () => { const X = calc(); if (X.err) throw new Error(X.err);
+      const now = new Date().toISOString(); let nC = Math.max(0, ...S.sh.map(x=>parseInt(String(x.code||"").replace(/\D/g,""))||0)); const shIds = [];
+      for (const nm of X.names){ let sh = S.sh.find(x=>normName(x.name)===normName(nm)); if (!sh){ sh = {id:newId(), code:"S"+String(++nC).padStart(3,"0"), name:nm}; await S.db.collection("shareholders").doc(sh.id).set({code:sh.code, name:nm, createdAt:now}); } shIds.push(sh.id); }
+      const ownCo = new Set(S.sh.filter(x=>OWNER_HINT.test(x.name)).map(x=>x.id));
+      const old = S.led.filter(t=>t.type==="Owner Capital Contribution" && (t.initialCap || ownCo.has(t.shareholderId) || !t.shareholderId));
+      for (const t of old) await S.db.collection("ledger").doc(t.id).delete();
+      const docs = []; X.rows.filter(r=>r.a>0).forEach(r => shIds.forEach((sid, i) => docs.push({id:`cap-${sid}-${r.b.id}`, data:{date:r.d, type:"Owner Capital Contribution", bizId:"", placementId:"", shareholderId:sid, amount:+r.usd.toFixed(2),
+        method:"Bank transfer", bankId:"", payCur:r.c, payAmt:r.a, ...(r.c!=="USD" ? {fxRate:+(r.a/r.usd).toFixed(6)} : {}), initialCap:true, capVenture:r.b.id, ref:`Initial paid-up capital: ${X.names[i]} in ${r.b.name}`, createdAt:now}})));
+      for (const t of S.led.filter(t=>String(t.id).startsWith("capadj-"))) await S.db.collection("ledger").doc(t.id).delete();
+      if ($("#icAdj").checked) X.rows.forEach(r => { const d = (r.view||0) - r.rec; if (r.a>0 && d > 1)
+        docs.push({id:`capadj-${r.b.id}`, data:{date:r.d, type:"Investment Addition", bizId:r.b.id, placementId:"", shareholderId:"", amount:+d.toFixed(2), method:"Bank transfer", bankId:"", ownMoney:true, ref:`Initial paid-up capital placed in ${r.b.name} (difference to records)`, createdAt:now}}); });
+      await S.db.bulk("ledger", docs);
+      logEvent("Initial paid-up capital set", `${X.names.join(", ")}: ` + X.rows.filter(r=>r.a>0).map(r=>`${r.b.name} ${r.c} ${fmt2(r.a)} each`).join("; ") + ` · replaced ${old.length} earlier entr${old.length===1?"y":"ies"}`);
+      return `Initial paid-up capital recorded: ${VIEW()} ${fmt2(X.total)} from ${X.names.length} shareholder${X.names.length===1?"":"s"}.`; }, "Save paid-up capital");
+  const names = () => { const n = +$("#icN").value, cur = [...document.querySelectorAll("[data-icn]")].map(i=>i.value);
+    $("#icNames").innerHTML = `<div class="row" style="flex-wrap:wrap;gap:10px">${Array.from({length:n}, (_, i) => `<label style="flex:1;min-width:180px">Shareholder ${i+1}<input data-icn="${i}" required value="${h(cur[i] ?? people[i]?.name ?? "")}" placeholder="Full name"></label>`).join("")}</div>`;
+    document.querySelectorAll("[data-icn]").forEach(i=>i.addEventListener("input", prevw)); prevw(); };
+  const calc = () => { const n = +$("#icN").value, nm = [...document.querySelectorAll("[data-icn]")].map(i=>i.value.trim().replace(/\s+/g," "));
+    const rows = vens.map(b => { const a = num(document.querySelector(`[data-ica="${b.id}"]`).value), c = document.querySelector(`[data-icc="${b.id}"]`).value, d = document.querySelector(`[data-icd="${b.id}"]`).value;
+      const u1 = c==="USD" ? a : fxConv(a, c, "USD", d || todayIso()), usd = u1==null ? null : u1 * n, view = usd==null ? null : (VIEW()==="USD" ? usd : fxConv(usd, "USD", VIEW(), d || todayIso()));
+      const rec = ownAdd(b.id).reduce((s,t)=>s+num(t.amount),0); return {b, a, c, d, n, usd: u1, view, rec}; });
+    const err = nm.some(x=>!x) ? "Enter every shareholder's name" : new Set(nm.map(normName)).size < nm.length ? "Shareholder names must be different" : rows.some(r=>r.a>0 && !r.d) ? "Enter the date for each venture" : rows.some(r=>r.a>0 && r.usd==null) ? "Add the missing currency rate in Settings → Currencies" : !rows.some(r=>r.a>0) ? "Enter at least one amount" : "";
+    return {names:nm, rows, err, total: rows.reduce((s,r)=>s+(r.view||0),0)}; };
+  const prevw = () => { const X = calc(), cur = S.led.filter(t=>t.type==="Owner Capital Contribution").reduce((s,t)=>s+num(t.amount),0), n = X.names.length;
+    $("#icPrev").innerHTML = `<div class="tbl"><table><thead><tr><th>Venture</th><th class="n">Per shareholder</th><th class="n">× ${n} = ${h(VIEW())}</th><th class="n">Owner money placed (recorded)</th><th class="n">Difference</th></tr></thead><tbody>
+      ${X.rows.filter(r=>r.a>0 || r.rec>0.5).map(r=>{ const d = (r.view||0) - r.rec; return `<tr><td>${h(r.b.name)}</td><td class="n">${r.a?`${h(r.c)} ${fmt2(r.a)}`:"–"}</td><td class="n">${r.view==null?"no rate":money(r.view)}</td><td class="n">${money(r.rec)}</td><td class="n" ${Math.abs(d)>1?'style="color:var(--neg);font-weight:600"':""}>${Math.abs(d)>1?money(d):"matches"}</td></tr>`; }).join("")}</tbody>
+      <tfoot><tr><td>Total paid-up capital</td><td></td><td class="n">${money(X.total)}</td><td class="n">${money(X.rows.reduce((s,r)=>s+r.rec,0))}</td><td></td></tr></tfoot></table></div>
+      <p class="note">Paid-up capital recorded now: ${money(cur)}. After saving: ${money(X.total)} (${pct(n?1/n:0)} each).${Math.abs(X.total - cur) > 1 ? " Cash per books will show the difference until the venture investments match." : ""}</p>${X.err?`<div class="err">${h(X.err)}</div>`:""}`; };
+  $("#icN").onchange = names; document.querySelectorAll("[data-ica],[data-icc],[data-icd]").forEach(i=>{ i.addEventListener("input", prevw); i.addEventListener("change", prevw); }); names();
+}
+
 /* ---------- render ---------- */
 function syncCur(){ const sel = $("#viewCur"); if (!sel) return; sel.innerHTML = CURS.map(c=>`<option ${c===VIEW()?"selected":""}>${c}</option>`).join(""); }
 function renderTabs(){
@@ -4416,8 +4465,9 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-iradd]")){ const n = Math.max(0, ...S.imp.recs.map(x=>parseInt(x.sr)||0)) + 1; S.imp.recs.push({sr:String(n), inv:"", rate:"", date:"", amt:0, alloc:Object.fromEntries(S.imp.ventures.map(v=>[v,0])), owner:false}); render(); return; }
   if (e.target.closest("[data-acc]")){ openAccruals(); return; }
   const op = e.target.closest("[data-ownplace]"); if (op){ openForm("led", null, {prefill:{type:"Investment Addition", bizId:"", ref:"Own money placed"}, note:"Placing Future Axis's own money in a venture. Investor money is placed automatically when you add a placement."}); return; }
+  if (e.target.closest("[data-initcap]")){ openInitialCapital(); return; }
   const nc = e.target.closest("[data-newcap]"); if (nc){ openForm("led", null, {prefill:{type:nc.dataset.newcap, bizId:"", shareholderId:S.sh.length===1?S.sh[0].id:""}}); return; }
-  if (e.target.closest("[data-vinv],[data-rcash],[data-oinew],[data-oiedit],[data-ownplace],[data-vsel],[data-vwd],[data-ivpay],[data-ivedit],[data-iesave],[data-ivcur],[data-ivbulk],.ieditor,.paybar,[data-ipsel]")) return;
+  if (e.target.closest("[data-initcap],[data-vinv],[data-rcash],[data-oinew],[data-oiedit],[data-ownplace],[data-vsel],[data-vwd],[data-ivpay],[data-ivedit],[data-iesave],[data-ivcur],[data-ivbulk],.ieditor,.paybar,[data-ipsel]")) return;
   if (e.target.closest("[data-rcpt],[data-rview],[data-rrm],[data-ivsel],[data-ivact],[data-mdtog],[data-mdpl],[data-mdk],[data-mdact],[data-fx],[data-fxdel],[data-ownfix]")) return;
   const t = e.target.closest("[data-tab],[data-go],[data-new],[data-edit],[data-csv],[data-goledger]"); if (!t) return;
   if (t.dataset.tab || t.dataset.go){ S.tab = t.dataset.tab || t.dataset.go; if (S.tab==="logs") S.lg.rows = null; if (S.tab==="backups") S.bk.rows = null; store.set("fa.tab", S.tab); render(); window.scrollTo(0,0); }
