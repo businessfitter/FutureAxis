@@ -562,6 +562,9 @@ header.top .btn:hover{background:var(--sunk);color:var(--accent)}
 }
 @media (max-width:380px){ .icards{grid-template-columns:1fr} }
 @media (hover:none){nav.tabs button:hover{background:none;color:var(--side-mut)} nav.tabs button[aria-selected="true"]:hover{background:linear-gradient(90deg,rgba(129,140,248,.26),rgba(129,140,248,.06));color:#fff}}
+
+.mme{display:flex;gap:10px;align-items:center;padding:6px 12px 8px;color:#dfe4fb;font-size:12.5px}.mme .mmail{min-width:0;overflow:hidden;text-overflow:ellipsis}.mme .mmail span{color:var(--side-mut);font-size:11px}
+nav.tabs button.signout{color:#fda4af}
 </style>
 </head>
 <body class="authmode">
@@ -634,6 +637,7 @@ const VEN_TYPES = ["Investment Addition","Investment Withdrawal","Profit Accrued
 const NAV_MAIN = [["quick","Quick entry","plus","mob"],["dashboard","Dashboard","dash"],["capital","Shareholders","sh","dsk"],["investors","Investors","inv"],["ventures","Ventures","ven"],["income","Other income","oinc","dsk"]];
 const NAV_MORE = [["Accounts",[["statements","Financial statements","stmt"],["ledger","Ledger","book"],["bank","Bank","bank"],["expenses","Expenses","exp"]]],["Reports",[["reports","Reports & email","rep"]]],["Setup",[["master","Master data","db"],["settings","Settings","gear"]]]];
 const NICON = {
+  out:'<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/>',
   plus:'<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
   cam:'<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
   wd:'<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/>',
@@ -2239,7 +2243,7 @@ function openAccruals(){
 
 /* ---------- one-time investor sheet import: Sr. # · Investor · Rate · Placement date · Investment · one column per venture ---------- */
 const OWNER_HINT = {test: n => /famcon|futureaxis/i.test(String(n||"").replace(/[^a-z]/gi,""))};
-const APP_VERSION = "7 Oct 2026 · 23:30";
+const APP_VERSION = "7 Oct 2026 · 23:45";
 function findSimpleSheet(wb){
   for (const name of wb.SheetNames){
     const rows = sheetRows(wb.Sheets[name]);
@@ -5292,7 +5296,9 @@ function renderTabs(){
   const moreOn = NAV_MORE.some(([,L])=>L.some(([k])=>sel(k)));
   $("#tabs").innerHTML = `<div class="navlbl">Overview</div>${NAV_MAIN.map(t=>btn(t,"pri")).join("")}
     <button type="button" class="morebtn${moreOn?" on":""}" data-navmore aria-expanded="${$("#side").classList.contains("open")}">${nico("more")}<span>More</span></button>
-    <div class="navmore"><div class="mobx"><div class="navlbl">Overview</div>${btn(["capital","Shareholders","sh"],"sec")}${btn(["income","Other income","oinc"],"sec")}</div>${NAV_MORE.map(([g, L])=>`<div class="navlbl">${g}</div>${L.map(t=>btn(t,"sec")).join("")}`).join("")}</div>`;
+    <div class="navmore"><div class="mobx"><div class="navlbl">Overview</div>${btn(["capital","Shareholders","sh"],"sec")}${btn(["income","Other income","oinc"],"sec")}</div>${NAV_MORE.map(([g, L])=>`<div class="navlbl">${g}</div>${L.map(t=>btn(t,"sec")).join("")}`).join("")}
+      <div class="mobx mobme"><div class="navlbl">Signed in</div><div class="mme"><span class="avatar">${h(($("#whoEmail")?.textContent||"?").slice(0,1).toUpperCase())}</span><span class="mmail">${h($("#whoEmail")?.textContent||"")}<br><span>${h(S.role||"")} · ${h(APP_VERSION)}</span></span></div>
+        <button type="button" class="sec signout" data-signout>${nico("out")}<span>Sign out</span></button></div></div>`;
   const cur = [...NAV_MAIN, ...NAV_MORE.flatMap(g=>g[1])].find(t=>sel(t[0]));
   $("#crumb").innerHTML = cur ? `<span class="cic">${nico(cur[2], 17)}</span><b>${h(cur[1])}</b><span class="mut">· ${h(S.cfg.entity || "Future Axis Holdings")}</span>` : "";
 }
@@ -5749,6 +5755,7 @@ const AUTH_HASH = location.hash;
   S.view = store.get("fa.view") || "";
   $("#viewCur").onchange = e => { S.view = e.target.value; store.set("fa.view", S.view); applyView(); render(); toast(`Showing amounts in ${S.view}`); };
   $("#signOut").onclick = async () => { await SB.auth.signOut(); location.reload(); };
+  document.addEventListener("click", async e => { if (e.target.closest("[data-signout]")){ if (!confirm("Sign out of Future Axis?")) return; await SB.auth.signOut(); location.reload(); } });
   SB.auth.onAuthStateChange((ev, session) => {
     if (ev === "PASSWORD_RECOVERY") { started = true; authView("newpw"); return; }
     if (ev === "SIGNED_IN" && session && !started) setTimeout(() => start(session), 0);
