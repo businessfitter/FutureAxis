@@ -488,6 +488,23 @@ input,select,textarea{border-radius:11px}
   header.top .row{flex-wrap:nowrap;gap:6px!important}
 }
 .chartbox .legend.pct div{grid-template-columns:10px 1fr auto}
+@media (max-width:640px){#expBar .btn{padding:6px 8px;font-size:11px}}
+
+.isum{margin-bottom:18px}
+.isum-h{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px}.isum-h p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.icards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.icard{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:8px;padding:14px 16px;border-radius:16px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);transition:transform .12s,box-shadow .12s,border-color .12s;min-width:0}
+.icard:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);border-color:color-mix(in srgb,var(--accent) 35%,var(--line))}
+.icard:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.icard.on{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent),var(--shadow-lg)}
+.ic-top{display:flex;gap:10px;align-items:center;min-width:0}
+.ic-av{width:36px;height:36px;flex:0 0 36px;border-radius:12px;display:grid;place-items:center;font:800 13px var(--f-body);color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent-2))}
+.ic-nm{display:flex;flex-direction:column;min-width:0}.ic-nm b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ic-nm span{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ic-v{font:800 22px/1.1 var(--f-num);letter-spacing:-.02em}
+.ic-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ic-bar{height:5px;border-radius:99px;background:var(--sunk);overflow:hidden}.ic-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent-2))}
+.idetail{margin-bottom:18px;animation:idIn .2s ease}
+@keyframes idIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 </style>
 </head>
 <body class="authmode">
@@ -519,6 +536,7 @@ input,select,textarea{border-radius:11px}
         <span class="mut">to</span>
         <input type="date" id="pEnd" aria-label="Period end">
       </div>
+      <div class="row" id="expBar" hidden style="gap:6px"><button class="btn sm" data-export="xlsx" type="button" title="Download this page as Excel">⤓ Excel</button><button class="btn sm" data-export="pdf" type="button" title="Download this page as PDF">⤓ PDF</button></div>
       <label class="period" id="curBar" hidden><span class="sr">Show in</span><select id="viewCur" aria-label="Display currency"></select></label>
     </div>
   </div>
@@ -557,7 +575,7 @@ const TYPES = {
 const INV_TYPES = ["Investor Profit Accrued","Investor Profit Paid","Investor Capital Repaid"];
 const VEN_TYPES = ["Investment Addition","Investment Withdrawal","Profit Accrued","Profit Received","Profit Reinvested"];
 const NAV_MAIN = [["dashboard","Dashboard","dash"],["capital","Shareholders","sh"],["investors","Investors","inv"],["ventures","Ventures","ven"],["income","Other income","oinc"]];
-const NAV_MORE = [["Accounts",[["statements","Financial statements","stmt"],["ledger","Ledger","book"],["bank","Bank","bank"],["expenses","Expenses","exp"]]],["Analysis",[["returns","Returns","ret"],["monthly","Monthly","cal"],["reports","Reports","rep"]]],["Setup",[["master","Master data","db"],["settings","Settings","gear"]]]];
+const NAV_MORE = [["Accounts",[["statements","Financial statements","stmt"],["ledger","Ledger","book"],["bank","Bank","bank"],["expenses","Expenses","exp"]]],["Reports",[["reports","Reports & email","rep"]]],["Setup",[["master","Master data","db"],["settings","Settings","gear"]]]];
 const NICON = {
   dash:'<rect x="3" y="3" width="7.5" height="9" rx="2"/><rect x="13.5" y="3" width="7.5" height="5.5" rx="2"/><rect x="13.5" y="11.5" width="7.5" height="9.5" rx="2"/><rect x="3" y="15" width="7.5" height="6" rx="2"/>',
   sh:'<path d="M21 12.5A9 9 0 1 1 11.5 3v9.5z"/><path d="M15 3.4A9 9 0 0 1 20.6 9H15z"/>',
@@ -2160,7 +2178,7 @@ function openAccruals(){
 
 /* ---------- one-time investor sheet import: Sr. # · Investor · Rate · Placement date · Investment · one column per venture ---------- */
 const OWNER_HINT = {test: n => /famcon|futureaxis/i.test(String(n||"").replace(/[^a-z]/gi,""))};
-const APP_VERSION = "7 Oct 2026 · 21:00";
+const APP_VERSION = "7 Oct 2026 · 22:15";
 function findSimpleSheet(wb){
   for (const name of wb.SheetNames){
     const rows = sheetRows(wb.Sheets[name]);
@@ -3350,6 +3368,7 @@ function viewInvestors(){
   const k = (l,v,s) => `<div class="kpi"><span class="eyebrow">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`;
   return `<div class="head"><div><span class="eyebrow">Investors · ${h(C)}</span><h1>Investors</h1><p>Investor money only (the shareholders' money is under Shareholders). Monthly profit and payments, every placement, and how investor money was raised and placed.</p></div>
     <div class="row">${W?`<button class="btn primary" data-acc="1" type="button">Run profit accruals</button><button class="btn" data-ivact="withdraw" type="button">Add withdrawal</button><button class="btn" data-new="pl">Add placement</button>`:""}</div></div>
+  ${investorCardsSection()}
   ${IVSEG}
   <div class="stack">
   ${flashHtml("ownNote")}${ownBanner()}
@@ -3392,13 +3411,15 @@ function placementRegister(){
   csvReg("placements",["Placement ID","Investor","Contact","Venture","Amount","Agreed rate","Placement date","Maturity","Payout","Mode of investment","Payment method","Bank account","Status","Notes"], PL.map(p=>[p.code,p.investor,p.contact,bizName(p.bizId),r0(p.amount),p2(num(p.rate)),p.date,p.maturity||"",p.frequency||"",p.mode||"",p.method||"",bankCode(p.bankId),p.status||"",p.notes||""]));
   const pls = [...PL].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
   const rep = id => S.led.filter(t=>t.placementId===id && t.type==="Investor Capital Repaid" && t.date<=S.end).reduce((s,t)=>s+num(t.amount),0);
-  const rows = pls.map(p=>{ const w = rep(p.id); return `<tr class="click" data-edit="pl:${p.id}"><td>${h(p.code)}</td><td><b style="font-weight:600">${h(p.investor)}</b><div class="note">${h(p.contact||"")}</div></td><td>${h(bizName(p.bizId))}</td>
-    <td class="n">${money(p.amount)}</td><td class="n">${w?`<span class="neg">(${nf.format(Math.round(w))})</span>`:'<span class="mut">–</span>'}</td><td class="n">${money(num(p.amount)-w)}</td><td class="n">${pct(num(p.rate),2)}</td><td class="n">${fmtDate(p.date)}</td><td class="n">${p.maturity?fmtDate(p.maturity):'<span class="mut">–</span>'}</td><td>${h(p.frequency||"")}</td><td>${h(p.mode||"")}</td><td>${p.status==="Exited"?'<span class="pill">Exited</span>':'<span class="pill ok">Active</span>'}${rcptBadge("placements", p)}</td></tr>`; }).join("");
+  const IR = Object.fromEntries(investorReturns().map(x=>[x.p.id, x]));
+  const chk = x => !x ? "" : Math.abs(x.varr) < 1 ? '<span class="pill ok">On track</span>' : x.varr>0 ? `<span class="pill warn" title="Accrued ${nf.format(x.varr)} less than the agreed rate gives to ${fmtDate(S.end)}">Under ${nf.format(x.varr)}</span>` : `<span class="pill bad" title="Accrued more than the agreed rate gives">Over ${nf.format(-x.varr)}</span>`;
+  const rows = pls.map(p=>{ const w = rep(p.id), x = IR[p.id]; return `<tr class="click" data-edit="pl:${p.id}"><td>${h(p.code)}</td><td><b style="font-weight:600">${h(p.investor)}</b><div class="note">${h(p.contact||"")}</div></td><td>${h(bizName(p.bizId))}</td>
+    <td class="n">${money(p.amount)}</td><td class="n">${w?`<span class="neg">(${nf.format(Math.round(w))})</span>`:'<span class="mut">–</span>'}</td><td class="n">${money(num(p.amount)-w)}</td><td class="n">${pct(num(p.rate),2)}</td><td class="n">${fmtDate(p.date)}</td><td class="n">${x?money(x.accrued):"–"}</td><td class="n">${x?money(x.paid):"–"}</td><td class="n"><b>${x?money(x.payable):"–"}</b></td><td>${chk(x)}</td><td>${h(p.frequency||"")}</td><td>${p.status==="Exited"?'<span class="pill">Exited</span>':'<span class="pill ok">Active</span>'}${rcptBadge("placements", p)}</td></tr>`; }).join("");
   const tot = PL.reduce((s,p)=>s+num(p.amount),0), wt = PL.reduce((s,p)=>s+rep(p.id),0), wr = div(PL.reduce((s,p)=>s+num(p.amount)*num(p.rate),0), tot);
   return `<section class="sheet"><div class="sheet-h"><div><h2>Placements register</h2><p>One row per placement: who invested, how much, in which venture, at what agreed rate. ${PL.length} placements · ${nf.format(tot)} placed · ${nf.format(wt)} withdrawn by ${fmtDate(S.end)} · weighted agreed rate ${pct(wr)}</p></div>${csvBtn("placements")}</div>
-   <div class="tbl"><table><thead><tr><th>ID</th><th>Investor</th><th>Venture</th><th class="n">Placed</th><th class="n">Withdrawn</th><th class="n">Closing</th><th class="n">Agreed p.a.</th><th class="n">Date</th><th class="n">Maturity</th><th>Payout</th><th>Mode</th><th>Status</th></tr></thead>
-   <tbody>${rows || `<tr><td colspan="12"><div class="empty"><b>No placements yet</b>${S.biz.length?"Record the first investor placement.":"Add a venture first, then record placements against it."}</div></td></tr>`}</tbody>
-   ${rows?`<tfoot><tr><td colspan="3">Total</td><td class="n">${money(tot)}</td><td class="n">${wt?`(${nf.format(Math.round(wt))})`:""}</td><td class="n">${money(tot-wt)}</td><td class="n">${pct(wr)}</td><td colspan="5"></td></tr></tfoot>`:""}</table></div></section>`;
+   <div class="tbl"><table><thead><tr><th>ID</th><th>Investor</th><th>Venture</th><th class="n">Placed</th><th class="n">Withdrawn</th><th class="n">Closing</th><th class="n">Agreed p.a.</th><th class="n">Date</th><th class="n">Profit accrued to date</th><th class="n">Paid to date</th><th class="n">Payable</th><th title="Accrued to date compared with the agreed rate on the amount for the days held">Accrual check</th><th>Payout</th><th>Status</th></tr></thead>
+   <tbody>${rows || `<tr><td colspan="14"><div class="empty"><b>No placements yet</b>${S.biz.length?"Record the first investor placement.":"Add a venture first, then record placements against it."}</div></td></tr>`}</tbody>
+   ${rows?`<tfoot><tr><td colspan="3">Total</td><td class="n">${money(tot)}</td><td class="n">${wt?`(${nf.format(Math.round(wt))})`:""}</td><td class="n">${money(tot-wt)}</td><td class="n">${pct(wr)}</td><td></td><td class="n">${money(PL.reduce((s,p)=>s+num(IR[p.id]?.accrued),0))}</td><td class="n">${money(PL.reduce((s,p)=>s+num(IR[p.id]?.paid),0))}</td><td class="n">${money(PL.reduce((s,p)=>s+num(IR[p.id]?.payable),0))}</td><td colspan="3"></td></tr></tfoot>`:""}</table></div></section>`;
 }
 function ivDialog(id, title, body, go, goLabel){
   $("#ovHost").innerHTML = `<div class="ov" id="ov"><div class="panel" role="dialog" aria-modal="true" aria-labelledby="${id}T" style="width:min(640px,100%)">
@@ -3684,8 +3705,9 @@ function fsMonths(){
     const from = [S.start, ym+"-01"].sort()[1], to = [S.end, monthEnd(ym)].sort()[0];
     const P = pnl(from,to), sp = incomeSplit(from,to), cats = {};
     for (const x of S.led) if ((x.type==="Operating Expense"||x.type==="Expense Accrued") && x.date>=from && x.date<=to){ const c = x.category||"Uncategorised"; cats[c] = (cats[c]||0) + num(x.amount); }
-    return {ym, from, to, label: monthLabel(ym), short: monthLabel(ym).slice(0,3), P, sp, cats, ocats: oincByCat(from, to), cf: cashFlow(from,to), B: balanceSheet(to), O: balanceSheet(addDays(from,-1))};
-  });
+    return {ym, from, to, label: monthLabel(ym), short: monthLabel(ym).slice(0,3), P, sp, cats, ocats: oincByCat(from, to), cf: cashFlow(from,to), B: balanceSheet(to), O: balanceSheet(addDays(from,-1)),
+      recd: tsum("Profit Received",from,to) + tsum("Other Income",from,to)};
+  }).map((m, i, A) => ({...m, cum: A.slice(0, i+1).reduce((s,x)=>s+x.P.net, 0)}));
 }
 S.fsView = "period";
 function viewStatements(){
@@ -3723,6 +3745,8 @@ function fsMonthly(bar){
     ${sub("Operating expenses")}${row("Less: operating expenses", m=>-m.P.opex)}
     ${cats.map(c=>`<tr class="ind"><td class="note" style="padding-left:44px">${h(c)}</td>${M.map(m=>`<td class="n note">${money(-(m.cats[c]||0))}</td>`).join("")}<td class="n note tc">${money(-tot(m=>m.cats[c]||0))}</td></tr>`).join("")}
     ${row("Net profit", m=>m.P.net, "gt")}
+    ${row("Cumulative net profit (from period start)", m=>m.cum, "ind", false)}
+    ${row("Cash received (venture profit + other income)", m=>m.recd, "ind")}
     <tr class="ind"><td class="note">Net profit ratio</td>${M.map(m=>`<td class="n note">${pct(div(m.P.net,m.P.inc))}</td>`).join("")}<td class="n note tc">${pct(div(tot(m=>m.P.net), tot(m=>m.P.inc)))}</td></tr></tbody></table></div></section>
   <section class="sheet fs"><div class="sheet-h"><h2>Statement of financial position · month end</h2><span class="chk">${bad.length?`<span class="pill bad">${bad.length} month${bad.length===1?"":"s"} out</span>`:'<span class="pill ok">Balanced every month</span>'}</span></div><div class="tbl mtbl"><table>${head(fmtDate(S.end))}<tbody>
     ${sub("Assets")}${row("Cash and bank", m=>m.B.cash, "ind", false)}${row("Investment in ventures", m=>m.B.inv, "ind", false)}${row("Profit receivable from ventures", m=>m.B.rec, "ind", false)}${row("Total assets", m=>m.B.assets, "tot", false)}
@@ -5068,6 +5092,89 @@ function ventPlacementsSection(){
     <tbody>${rows || `<tr><td colspan="9" class="empty">Nothing recorded.</td></tr>`}</tbody></table></div></section>`;
 }
 
+/* ---------- export the page on screen to Excel or PDF ---------- */
+function pageTables(){
+  const main = $("#main"), title = main.querySelector("h1")?.textContent.trim() || "Report", out = [];
+  const cellTxt = td => { const i = td.querySelector("input,select"); return (i ? (i.tagName==="SELECT" ? i.options[i.selectedIndex]?.text : i.value) : td.innerText).replace(/\s+\n/g,"\n").replace(/\n+/g," · ").trim(); };
+  const stats = [...main.querySelectorAll(".stat, .kpi, .hero")].filter(x=>!x.closest("table")).map(x => { const l = x.querySelector(".lb, .eyebrow")?.textContent.trim() || "", v = x.querySelector(".v, .hv")?.textContent.trim() || "", sub = x.querySelector(".s, .hs")?.textContent.trim() || ""; return [l, v, sub]; }).filter(r=>r[0]||r[1]);
+  if (stats.length) out.push({name:"Summary", head:["Figure","Value","Detail"], rows:stats});
+  const cards = [...main.querySelectorAll(".vcard")]; if (cards.length){ const lab = [...cards[0].querySelectorAll(".vgrid span")].map(x=>x.textContent.trim());
+    out.push({name:"Ventures", head:["Venture","Share of portfolio","Invested", ...lab], rows: cards.map(c => [c.querySelector(".vt b")?.textContent.trim()||"", c.querySelector(".chip")?.textContent.trim()||"", c.querySelector(".vv")?.textContent.trim()||"", ...[...c.querySelectorAll(".vgrid b")].map(x=>x.textContent.trim())])}); }
+  for (const lg of main.querySelectorAll(".chartbox .legend")){ const sec = lg.closest("section, .cbox"), name = (sec?.querySelector("h2, h3")?.textContent || "Chart").trim();
+    const rows = [...lg.children].map(d => [...d.querySelectorAll("span")].map(x=>x.textContent.trim())).filter(r=>r.length); if (rows.length) out.push({name, head: rows[0].length > 2 ? ["Item","Value","%"] : ["Item","%"], rows}); }
+  const vl = main.querySelector(".vlist"); if (vl){ const sec = vl.closest("section"); out.push({name:(sec?.querySelector("h2")?.textContent||"Breakdown").trim(), head:["Venture","Amount","%"], rows:[...vl.querySelectorAll(".vrow")].map(r=>{ const am = r.querySelector(".am"), sm = am?.querySelector("small")?.textContent.trim()||""; return [r.querySelector(".nm")?.textContent.trim()||"", (am?.textContent||"").replace(sm,"").trim(), sm]; })}); }
+  for (const tb of main.querySelectorAll("table")){ if (tb.parentElement.closest("table")) continue;
+    const sec = tb.closest("section, .cbox"), name = (sec?.querySelector("h2, h3")?.textContent || "Table").trim();
+    const hr = tb.querySelector("thead tr"), head = hr ? [...hr.children].map(th=>th.textContent.trim()) : [];
+    const rows = [...tb.querySelectorAll(":scope > tbody > tr, :scope > tfoot > tr")].filter(tr=>!tr.querySelector("table")).map(tr => [...tr.children].map(cellTxt)).filter(r=>r.some(c=>c && c!=="–"));
+    if (rows.length) out.push({name, head, rows}); }
+  return {title, period:`${fmtDate(S.start)} to ${fmtDate(S.end)}`, cur:VIEW(), tables:out};
+}
+const numOf = v => { const s = String(v||"").trim(); if (!/^[(\-−]?\s*[\d,]+(\.\d+)?\)?%?$/.test(s.split(" · ")[0])) return null; const t = s.split(" · ")[0], neg = /^\(|^[-−]/.test(t), n = parseFloat(t.replace(/[^\d.]/g,"")); return isFinite(n) ? (t.endsWith("%") ? (neg?-n:n)/100 : (neg?-n:n)) : null; };
+async function exportPage(kind){
+  const T = pageTables(); if (!T.tables.length) return toast("Nothing on this page to export");
+  const base = `future-axis-${T.title.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-${S.end}`;
+  if (kind==="xlsx"){
+    const wb = XLSX.utils.book_new(), used = new Set();
+    T.tables.forEach(t => { const aoa = [[`${S.cfg.entity||"Future Axis Holdings"} · ${T.title} · ${t.name}`], [`${T.period} · amounts in ${T.cur}`], [], t.head, ...t.rows.map(r=>r.map(c=>{ const n = numOf(c); return n==null ? c : {t:"n", v:n, z: String(c).split(" · ")[0].trim().endsWith("%") ? "0.00%" : "#,##0;(#,##0)"}; }))];
+      const ws = XLSX.utils.aoa_to_sheet(aoa); ws["!cols"] = (t.head.length ? t.head : t.rows[0]).map((_,i)=>({wch: i===0 ? 34 : 16}));
+      let nm = t.name.replace(/[\\/?*\[\]:]/g,"").slice(0,28) || "Sheet", k = 2; while (used.has(nm)) nm = nm.slice(0,25) + " " + k++; used.add(nm);
+      XLSX.utils.book_append_sheet(wb, ws, nm); });
+    XLSX.writeFile(wb, base + ".xlsx"); logEvent("Exported to Excel", T.title); return toast("Excel file downloaded"); }
+  const jsPDF = await ensureJsPdf(), doc = new jsPDF({unit:"mm", format:"a4", orientation:"landscape"});
+  let y = pdfFrame(doc, T.title, `${T.period} · amounts in ${T.cur}`);
+  for (const t of T.tables){ const Hh = doc.internal.pageSize.getHeight(); if (y > Hh - 40){ doc.addPage(); y = 20; }
+    doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(14,23,48); doc.text(t.name, 14, y); y += 3;
+    const ncol = Math.max(t.head.length, ...t.rows.map(r=>r.length)), cols = {}; for (let i=1;i<ncol;i++) if (t.rows.some(r=>numOf(r[i])!=null)) cols[i] = {halign:"right"};
+    doc.autoTable({startY:y, head: t.head.length ? [t.head] : undefined, body:t.rows, theme:"grid", styles:{font:"helvetica", fontSize:7.5, cellPadding:1.6, overflow:"linebreak"}, headStyles:{fillColor:[79,70,229], textColor:255, fontSize:7.5}, columnStyles:cols, margin:{left:14, right:14}});
+    y = doc.lastAutoTable.finalY + 8; }
+  doc.save(base + ".pdf"); logEvent("Exported to PDF", T.title); toast("PDF downloaded");
+}
+
+/* ---------- investors: summary cards with a month-wise chart on click ---------- */
+function investorSummaries(){
+  const by = new Map();
+  for (const p of S.pl.filter(p=>p.date && p.date<=S.end && !isOwnName(p.investor))){ const k = p.investorId || normName(p.investor); const o = by.get(k) || {key:k, name:p.investor, pls:[]}; o.pls.push(p); by.set(k, o); }
+  return [...by.values()].map(o => { const ids = new Set(o.pls.map(p=>p.id)), L = S.led.filter(t=>ids.has(t.placementId) && t.date<=S.end);
+    const placed = o.pls.reduce((s,p)=>s+num(p.amount),0), rep = L.filter(t=>t.type==="Investor Capital Repaid").reduce((s,t)=>s+num(t.amount),0), closing = placed - rep;
+    const rate = div(o.pls.reduce((s,p)=>s+plClosing(p)*num(p.rate),0), o.pls.reduce((s,p)=>s+plClosing(p),0)) || div(o.pls.reduce((s,p)=>s+num(p.amount)*num(p.rate),0), placed);
+    const acc = L.filter(t=>t.type==="Investor Profit Accrued").reduce((s,t)=>s+num(t.amount),0), paid = L.filter(t=>t.type==="Investor Profit Paid").reduce((s,t)=>s+num(t.amount),0);
+    const first = o.pls.map(p=>p.date).sort()[0], vens = [...new Set(o.pls.map(p=>bizName(p.bizId)))];
+    return {...o, placed, closing, rate, acc, paid, payable: acc - paid, first, vens, L, ids}; }).sort((a,b)=>b.closing-a.closing);
+}
+S.ivCard = "";
+function investorCardsSection(){
+  const X = investorSummaries(); if (!X.length) return "";
+  const tot = X.reduce((s,x)=>s+x.closing,0), avg = div(X.reduce((s,x)=>s+x.closing*x.rate,0), tot), sel = X.find(x=>x.key===S.ivCard);
+  const ini = n => String(n||"?").split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase();
+  const card = x => `<button type="button" class="icard${x.key===S.ivCard?" on":""}" data-ivcard="${h(x.key)}" aria-expanded="${x.key===S.ivCard}">
+      <span class="ic-top"><span class="ic-av">${h(ini(x.name))}</span><span class="ic-nm"><b>${h(x.name)}</b><span>${x.pls.length} placement${x.pls.length===1?"":"s"} · ${h(x.vens.join(", "))}</span></span></span>
+      <span class="ic-v">${money(x.closing)}</span>
+      <span class="ic-row"><span class="chip" style="--kc:var(--accent)">${pc1(x.rate)} avg</span><span class="note">profit ${nf.format(x.acc)}${x.payable>0.5?` · due ${nf.format(x.payable)}`:""}</span></span>
+      <span class="ic-bar"><i style="width:${Math.max(2, div(x.closing, X[0].closing)*100)}%"></i></span></button>`;
+  let detail = "";
+  if (sel){ const months = monthsBetween(sel.first.slice(0,7), S.end.slice(0,7));
+    const M = months.map(ym => { const f = ym+"-01", t = monthEnd(ym) < S.end ? monthEnd(ym) : S.end;
+      const acc = sel.L.filter(e=>e.type==="Investor Profit Accrued" && e.date>=f && e.date<=t).reduce((s,e)=>s+num(e.amount),0);
+      const paid = sel.L.filter(e=>e.type==="Investor Profit Paid" && (e.payMonth ? e.payMonth===ym : e.date>=f && e.date<=t)).reduce((s,e)=>s+num(e.amount),0);
+      const cap = sel.pls.filter(p=>p.date<=t).reduce((s,p)=>s+num(p.amount),0) - sel.L.filter(e=>e.type==="Investor Capital Repaid" && e.date<=t).reduce((s,e)=>s+num(e.amount),0);
+      const newIn = sel.pls.filter(p=>p.date>=f && p.date<=t).reduce((s,p)=>s+num(p.amount),0);
+      return {ym, label:monthLabel(ym).slice(0,3)+(months.length>12?" "+ym.slice(2,4):""), title:monthLabel(ym), acc, paid, cap, newIn}; });
+    const prof = colChart(M.map(m=>({label:m.label, title:m.title, v:{acc:m.acc, paid:m.paid}, tip:[["Return on capital", pc1(div(m.acc*12, m.cap))+" p.a."], ["Capital at month end", fmtV(m.cap)]]})),
+      [{k:"acc", l:"Profit accrued", c:"var(--accent)"}, {k:"paid", l:"Profit paid", c:"var(--pos)", type:"line"}], {aria:`${sel.name} monthly profit`, h:240});
+    const capC = colChart(M.map(m=>({label:m.label, title:m.title, v:{cap:m.cap - m.newIn, add:m.newIn}})), [{k:"cap", l:"Capital brought forward", c:"var(--c6)"}, {k:"add", l:"New placements", c:"var(--gold)"}], {aria:`${sel.name} capital`, h:240, total:true, totalLabel:"Capital at month end"});
+    detail = `<section class="sheet idetail"><div class="sheet-h"><div><h2>${h(sel.name)}</h2><p>Since ${fmtDate(sel.first)} · ${sel.pls.length} placement${sel.pls.length===1?"":"s"} in ${h(sel.vens.join(", "))}. Hover or tap a month for figures.</p></div>
+      <div class="row"><button class="btn sm" data-ivq="${h(sel.name)}" type="button">Show placements</button><button class="btn sm ghost" data-ivcard="${h(sel.key)}" type="button">Close</button></div></div>
+      <div class="kpis" style="padding:16px 20px 0"><div class="kpi"><span class="eyebrow">Capital placed</span><span class="v">${money(sel.closing)}</span><span class="s">placed ${nf.format(sel.placed)}${sel.placed-sel.closing>0.5?` · repaid ${nf.format(sel.placed-sel.closing)}`:""}</span></div>
+        <div class="kpi"><span class="eyebrow">Average agreed rate</span><span class="v">${pc1(sel.rate)}</span><span class="s">weighted by capital</span></div>
+        <div class="kpi"><span class="eyebrow">Profit to date</span><span class="v">${money(sel.acc)}</span><span class="s">paid ${nf.format(sel.paid)}</span></div>
+        <div class="kpi"><span class="eyebrow">Payable now</span><span class="v">${money(sel.payable)}</span><span class="s">${sel.payable>0.5?"due to the investor":"fully paid"}</span></div></div>
+      <div class="grid4" style="padding:16px 20px 18px"><div class="cbox"><h3>Monthly profit: accrued vs paid</h3>${prof}</div><div class="cbox"><h3>Capital by month</h3>${capC}</div></div></section>`; }
+  return `<section class="isum"><div class="isum-h"><div><h2>Investors at a glance</h2><p>${X.length} investors · ${money(tot)} placed · ${pc1(avg)} average agreed rate. Click an investor for the month-by-month view.</p></div></div>
+    <div class="icards">${(S.ivAll || X.length <= 8 ? X : X.slice(0,8).concat(sel && X.indexOf(sel) >= 8 ? [sel] : [])).map(card).join("")}</div>
+    ${X.length > 8 ? `<div class="row" style="justify-content:center;margin-top:10px"><button class="btn sm" data-ivall type="button">${S.ivAll ? "Show top 8" : `Show all ${X.length} investors`}</button></div>` : ""}</section>${detail}`;
+}
+
 /* ---------- render ---------- */
 function syncCur(){ const sel = $("#viewCur"); if (!sel) return; sel.innerHTML = CURS.map(c=>`<option ${c===VIEW()?"selected":""}>${c}</option>`).join(""); }
 function renderTabs(){
@@ -5090,6 +5197,7 @@ function render(){
   if (!(S.loaded.biz && S.loaded.pl && S.loaded.led)) return;
   if (S.start > S.end){ $("#main").innerHTML = `<div class="banner">The period start is after its end. Adjust the dates at the top.</div>`; return; }
   if (S.tab==="portfolio") S.tab = "dashboard";
+  if (S.tab==="returns"){ S.tab = "investors"; S.sub.iv = "pl"; } if (S.tab==="monthly") S.tab = "statements";
   if ((S.tab==="users" && !S.isAdmin) || (S.tab==="import" && !S.canWrite) || (["logs","backups"].includes(S.tab) && !S.isFull)) S.tab = "dashboard";
   S.csv = {};
   const V = {dashboard:viewDashboard, ventures:viewVentures, investors:viewInvestors, ledger:viewLedger, returns:viewReturns, monthly:viewMonthly, statements:viewStatements, reports:viewReports, expenses:viewExpenses, capital:viewCapital, bank:viewBank, import:viewImport, users:viewUsers, settings:viewSettings, logs:viewLogs, backups:viewBackups, master:viewMaster, fx:viewFx, portfolio:viewPortfolio, income:viewOtherIncome}[S.tab] || viewDashboard;
@@ -5192,6 +5300,9 @@ function wireView(){
   };
 }
 document.addEventListener("click", e => {
+  if (e.target.closest("[data-ivall]")){ S.ivAll = !S.ivAll; render(); return; }
+  const ic = e.target.closest("[data-ivcard]"); if (ic){ S.ivCard = S.ivCard===ic.dataset.ivcard ? "" : ic.dataset.ivcard; render(); if (S.ivCard) setTimeout(()=>document.querySelector(".idetail")?.scrollIntoView({behavior:"smooth", block:"nearest"}), 50); return; }
+  const ex = e.target.closest("[data-export]"); if (ex){ exportPage(ex.dataset.export).catch(x=>toast("Export failed: " + (x.message||""))); return; }
   if (e.target.closest("[data-navmore]")){ $("#side").classList.toggle("open"); renderTabs(); return; }
   if (e.target.closest("#tabs [data-tab]")) $("#side").classList.remove("open");
   const u = e.target.closest("[data-uact]"); if (u){ userAction(u); return; }
@@ -5250,7 +5361,7 @@ document.addEventListener("click", e => {
     S.iv.psel = new Set(c==="" ? [] : due.filter(n => c==="*" || invCur(invMonthRows(ym).find(r=>r.p.investor===n).p)===c)); render(); return; }
   const ivb = e.target.closest("[data-ivbulk]"); if (ivb){ ivBulkPay(ivb); return; }
   if (e.target.closest(".ieditor,.paybar,[data-ipsel]")) return;
-  const ivq = e.target.closest("[data-ivq]"); if (ivq){ S.iv.q = ivq.dataset.ivq; render(); $("#ivPay")?.scrollIntoView({behavior:"smooth", block:"start"}); return; }
+  const ivq = e.target.closest("[data-ivq]"); if (ivq){ S.iv.q = ivq.dataset.ivq; S.sub.iv = "month"; render(); $("#ivPay")?.scrollIntoView({behavior:"smooth", block:"start"}); return; }
   const fv = e.target.closest("[data-fsv]"); if (fv){ S.fsView = fv.dataset.fsv; render(); return; }
   const mrb = e.target.closest("[data-mr]"); if (mrb){ e.preventDefault(); monthlyAction(mrb); return; }
   const lr = e.target.closest("[data-logrow]"); if (lr){ openLogRow(lr.dataset.logrow); return; }
@@ -5337,7 +5448,7 @@ const fileSaver = { async save({filename, data}){
 const ROLE_LABEL = {admin:"Admin", cfo:"CFO", editor:"Editor", viewer:"Viewer"};
 function authView(mode, msg){
   document.body.classList.add("authmode"); if ($("#curBar")) $("#curBar").hidden = true;
-  $("#tabs").hidden = true; $("#periodBar").hidden = true;
+  $("#tabs").hidden = true; $("#periodBar").hidden = true; if ($("#expBar")) $("#expBar").hidden = true;
   if (mode!=="newpw") $("#who").hidden = true;
   const title = {reset:"Reset your password", newpw:"Choose a new password", request:"Request access"}[mode] || "Sign in";
   const lead = mode==="request" ? "Your request goes to the administrator. You can sign in once it is approved."
@@ -5378,7 +5489,7 @@ function authView(mode, msg){
 }
 
 function gate(title, text){
-  $("#tabs").hidden = true; $("#periodBar").hidden = true;
+  $("#tabs").hidden = true; $("#periodBar").hidden = true; if ($("#expBar")) $("#expBar").hidden = true;
   $("#main").innerHTML = `<div class="auth"><div class="sheet"><div class="empty"><b>${title}</b>${text}<div class="row" style="justify-content:center;margin-top:14px"><button class="btn" type="button" onclick="location.reload()">Check again</button><button class="btn" type="button" onclick="SB.auth.signOut().then(()=>location.reload())">Sign out</button></div></div></div></div>`;
 }
 
@@ -5399,7 +5510,7 @@ async function start(session, force){
   document.body.classList.remove("authmode"); S.tab = "dashboard";
   S.role = m.role; S.isAdmin = m.role === "admin"; S.isFull = m.role === "admin" || m.role === "cfo"; S.canWrite = S.isFull || m.role === "editor";
   S.db = DB; S.dl = fileSaver;
-  $("#tabs").hidden = false; $("#periodBar").hidden = false; $("#curBar").hidden = false;
+  $("#tabs").hidden = false; $("#periodBar").hidden = false; $("#curBar").hidden = false; $("#expBar").hidden = false;
   try { await loadAll(); if (S.isAdmin) await loadMembers(); }
   catch(x){ $("#main").innerHTML = `<div class="banner">Could not load the ledger: ${h(x.message||x)}. Check that schema.sql has been run in Supabase.</div>`; return; }
   try { if (!sessionStorage.getItem("fa.in")){ sessionStorage.setItem("fa.in","1"); logEvent("Signed in", ROLE_LABEL[S.role], "auth"); } } catch(e){}
