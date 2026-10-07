@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <title>Future Axis Investor Ledger</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0b1022">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Future Axis">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="/icons/favicon-64.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
@@ -505,6 +513,23 @@ input,select,textarea{border-radius:11px}
 .ic-bar{height:5px;border-radius:99px;background:var(--sunk);overflow:hidden}.ic-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent-2))}
 .idetail{margin-bottom:18px;animation:idIn .2s ease}
 @keyframes idIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+nav.tabs button.mob,nav.tabs .mobx{display:none}
+@media (max-width:960px){ nav.tabs button.mob{display:flex} nav.tabs button.dsk{display:none!important} nav.tabs .mobx{display:block} }
+.qgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:960px){.qgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.qtile{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:4px;padding:16px;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);min-height:118px;-webkit-tap-highlight-color:transparent;transition:transform .1s}
+.qtile:active{transform:scale(.97)}.qtile:disabled{opacity:.5}
+.qtile .qic{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;color:var(--kc);background:color-mix(in srgb,var(--kc) 14%,transparent);margin-bottom:6px}
+.qtile b{font-size:15px}.qtile span:last-child{font-size:12px;color:var(--muted)}
+.qtodos,.qrecent{display:flex;flex-direction:column}
+.qtodo,.qrow{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:12px;padding:14px 20px;border-top:1px solid var(--line);font-size:14px}
+.qtodo:first-child,.qrow:first-child{border-top:0}.qtodo>span:nth-child(2){flex:1}.qtodo .dot{width:10px;height:10px;border-radius:50%;flex:0 0 10px}
+.qrow{justify-content:space-between}.qrow>span{display:flex;flex-direction:column;min-width:0}.qrow .note{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (display-mode: standalone){ header.top{padding-top:env(safe-area-inset-top,0px)} }
+header.top .btn{background:var(--surface);color:var(--ink);border-color:var(--line)}
+header.top .btn:hover{background:var(--sunk);color:var(--accent)}
+@media (max-width:640px){#expBar{display:none!important}}
 </style>
 </head>
 <body class="authmode">
@@ -574,9 +599,13 @@ const TYPES = {
 };
 const INV_TYPES = ["Investor Profit Accrued","Investor Profit Paid","Investor Capital Repaid"];
 const VEN_TYPES = ["Investment Addition","Investment Withdrawal","Profit Accrued","Profit Received","Profit Reinvested"];
-const NAV_MAIN = [["dashboard","Dashboard","dash"],["capital","Shareholders","sh"],["investors","Investors","inv"],["ventures","Ventures","ven"],["income","Other income","oinc"]];
+const NAV_MAIN = [["quick","Quick entry","plus","mob"],["dashboard","Dashboard","dash"],["capital","Shareholders","sh","dsk"],["investors","Investors","inv"],["ventures","Ventures","ven"],["income","Other income","oinc","dsk"]];
 const NAV_MORE = [["Accounts",[["statements","Financial statements","stmt"],["ledger","Ledger","book"],["bank","Bank","bank"],["expenses","Expenses","exp"]]],["Reports",[["reports","Reports & email","rep"]]],["Setup",[["master","Master data","db"],["settings","Settings","gear"]]]];
 const NICON = {
+  plus:'<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
+  cam:'<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+  wd:'<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/>',
+  bankup:'<path d="M3 10 12 4l9 6"/><path d="M5.5 10v7.5M10 10v7.5M14 10v7.5M18.5 10v7.5"/><path d="M3 21h18"/>',
   dash:'<rect x="3" y="3" width="7.5" height="9" rx="2"/><rect x="13.5" y="3" width="7.5" height="5.5" rx="2"/><rect x="13.5" y="11.5" width="7.5" height="9.5" rx="2"/><rect x="3" y="15" width="7.5" height="6" rx="2"/>',
   sh:'<path d="M21 12.5A9 9 0 1 1 11.5 3v9.5z"/><path d="M15 3.4A9 9 0 0 1 20.6 9H15z"/>',
   inv:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-5.6 6.5-5.6s6.5 2 6.5 5.6"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.2 14.7c2 .7 3.3 2.4 3.3 5.3"/>',
@@ -2178,7 +2207,7 @@ function openAccruals(){
 
 /* ---------- one-time investor sheet import: Sr. # · Investor · Rate · Placement date · Investment · one column per venture ---------- */
 const OWNER_HINT = {test: n => /famcon|futureaxis/i.test(String(n||"").replace(/[^a-z]/gi,""))};
-const APP_VERSION = "7 Oct 2026 · 22:15";
+const APP_VERSION = "7 Oct 2026 · 23:10";
 function findSimpleSheet(wb){
   for (const name of wb.SheetNames){
     const rows = sheetRows(wb.Sheets[name]);
@@ -2711,6 +2740,7 @@ function openExpense(id){
       <label>Invoice / reference no.<input id="e_inv" value="${h(t?.invoiceNo||"")}"></label>
       <label>Paid from<select id="e_bank"><option value="">Cash / not from a bank account</option>${S.bank.map(a=>`<option value="${a.id}" ${a.id===(t ? t.bankId : (S.bank.length===1?S.bank[0].id:""))?"selected":""}>${h(a.code)} · ${h(a.name)}</option>`).join("")}</select></label>
       <label>Method<select id="e_method">${METHODS.map(m=>`<option ${m===(t?.method||"Bank transfer")?"selected":""}>${m}</option>`).join("")}</select></label>
+      <label class="full">Receipt (photo or PDF)<input id="e_rc" type="file" multiple accept="image/*,.pdf,.heic">${t?.receipts?.length ? `<span class="note">${t.receipts.length} on file</span>` : `<span class="note">On a phone this opens the camera or your photos.</span>`}</label>
       <div class="full err" id="eErr"></div>
       <div class="full row" style="justify-content:space-between">${W?`<button class="btn primary" type="submit">${t?"Save changes":"Add expense"}</button>${t?'<button class="btn danger" id="eDel" type="button">Delete</button>':""}`:"<span class='note'>View only</span>"}</div>
     </form></div></div>`;
@@ -2727,7 +2757,9 @@ function openExpense(id){
       amount:conv(amt, cur, VIEW()), origAmount:amt, origCur:cur, pkrAmount: $("#e_pkr").value ? num($("#e_pkr").value) : "", invoiceNo:$("#e_inv").value.trim(),
       method:$("#e_method").value, bankId, ref:$("#e_desc").value.trim(), example:false, updatedAt:now, createdAt: old.createdAt || now};
     if (bankId && acctCur(bankId)===cur){ data.fxAmount = amt; data.fxCur = cur; } else { delete data.fxAmount; delete data.fxCur; }
-    try { await S.db.collection("ledger").doc(t?.id).set(data); close(); toast(t ? "Expense saved" : "Expense added"); } catch(x){ $("#eErr").textContent = "Could not save: " + (x.message||""); }
+    try { const docId = t?.id || newId(), files = [...($("#e_rc")?.files||[])];
+      if (files.length){ $("#eErr").textContent = "Uploading receipt…"; data.receipts = [...(old.receipts||[]), ...(await uploadReceipts("ledger", docId, files))]; }
+      await S.db.collection("ledger").doc(docId).set(data); close(); toast(t ? "Expense saved" : "Expense added"); } catch(x){ $("#eErr").textContent = "Could not save: " + (x.message||""); }
   };
   const del = $("#eDel"); if (del) del.onclick = async () => { if (!del.classList.contains("armed")){ del.classList.add("armed"); del.textContent = "Confirm delete"; return; }
     try { await S.db.collection("ledger").doc(t.id).delete(); close(); toast("Expense deleted"); } catch(x){ $("#eErr").textContent = "Could not delete."; } };
@@ -5175,17 +5207,60 @@ function investorCardsSection(){
     ${X.length > 8 ? `<div class="row" style="justify-content:center;margin-top:10px"><button class="btn sm" data-ivall type="button">${S.ivAll ? "Show top 8" : `Show all ${X.length} investors`}</button></div>` : ""}</section>${detail}`;
 }
 
+/* ---------- quick entry: phone home screen for the accountant ---------- */
+function viewQuick(){
+  const W = S.canWrite!==false, ym = lastFullYm(), lab = monthLabel(ym);
+  let due = 0, dueN = 0; try { for (const r of invMonthRows(ym)){ if (r.cf > 0.005){ due += r.cf; dueN++; } } } catch(e){}
+  const acO = accrList().filter(x=>x.out > 0.005), acDue = accrScheds().reduce((s,sc)=>s+accrDue(sc, ym).length,0);
+  const recent = S.led.filter(t=>!t.auto && t.createdAt).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,8);
+  const tile = (act, ic, l, sub, col) => `<button type="button" class="qtile" data-quick="${act}" style="--kc:${col}" ${W?"":"disabled"}><span class="qic">${nico(ic, 22)}</span><b>${l}</b><span>${sub}</span></button>`;
+  const todo = [
+    dueN ? `<button type="button" class="qtodo" data-quick="payinv"><span class="dot" style="background:var(--warn)"></span><span><b>Investor profit due for ${lab}</b><br><span class="note">${dueN} placements · ${money(due)}</span></span><span>›</span></button>` : "",
+    acO.length ? `<button type="button" class="qtodo" data-quick="payacc"><span class="dot" style="background:var(--c2)"></span><span><b>Accrued expenses to pay</b><br><span class="note">${acO.length} open · ${money(acO.reduce((s,x)=>s+x.out,0))}</span></span><span>›</span></button>` : "",
+    acDue ? `<button type="button" class="qtodo" data-quick="postacc"><span class="dot" style="background:var(--accent)"></span><span><b>Recurring accruals to post</b><br><span class="note">${acDue} due up to ${lab}</span></span><span>›</span></button>` : ""].join("");
+  const kind = t => ({"Operating Expense":"Expense","Expense Accrued":"Accrual","Accrued Expense Paid":"Accrual paid","Investor Profit Paid":"Investor paid","Other Income":"Other income","Investment Addition":"Investment","Investment Withdrawal":"Withdrawal","Profit Received":"Profit received"})[t.type] || t.type;
+  return `<div class="head"><div><span class="eyebrow">${new Date().toLocaleDateString("en-GB",{weekday:"long", day:"numeric", month:"long"})}</span><h1>Quick entry</h1><p>Record today's transactions from your phone. Everything goes straight into the ledger.</p></div></div>
+  <div class="stack">
+    <div class="qgrid">
+      ${tile("expense","cam","Expense","with receipt photo","var(--c2)")}
+      ${tile("accrual","cal","Accrual","one-off or recurring","var(--accent)")}
+      ${tile("payinv","inv","Pay investors","mark profit paid","var(--pos)")}
+      ${tile("oinc","oinc","Other income","fees, rent, other","var(--c7)")}
+      ${tile("withdraw","wd","Venture withdrawal","money received","var(--gold)")}
+      ${tile("invest","ven","Add investment","into a venture","var(--c6)")}
+      ${tile("payacc","exp","Pay accrual","clear a payable","var(--c5)")}
+      ${tile("bank","bankup","Bank statement","upload & match","var(--c1)")}
+    </div>
+    ${todo ? `<section class="sheet"><div class="sheet-h"><div><h2>To do</h2></div></div><div class="qtodos">${todo}</div></section>` : `<div class="alert ok"><span class="dot"></span><div><b>All caught up.</b> Nothing due for ${lab}.</div></div>`}
+    <section class="sheet"><div class="sheet-h"><div><h2>Recent entries</h2><p>Tap to open</p></div></div>
+      <div class="qrecent">${recent.map(t=>`<button type="button" class="qrow" data-edit="led:${t.id}"><span><b>${h(kind(t))}</b><span class="note">${fmtDate(t.date)} · ${h(String(t.ref||t.category||"").slice(0,48))}</span></span><b class="n">${money(t.amount)}</b></button>`).join("") || '<p class="note" style="padding:14px 20px">Nothing recorded yet.</p>'}</div></section>
+  </div>`;
+}
+function quickAction(a){
+  if (a==="expense") return openExpense();
+  if (a==="accrual") return openAccrual();
+  if (a==="oinc") return openOtherIncome(null);
+  if (a==="invest") return openVentureInvest("");
+  if (a==="payinv"){ S.tab = "investors"; S.sub.iv = "month"; render(); return window.scrollTo(0,0); }
+  if (a==="payacc"){ S.tab = "expenses"; S.sub.exp = "accr"; S.acF = "open"; render(); return window.scrollTo(0,0); }
+  if (a==="postacc") return postAccruals(lastFullYm()).then(()=>loadAll()).then(render);
+  if (a==="bank"){ S.tab = "bank"; render(); return window.scrollTo(0,0); }
+  if (a==="withdraw"){ const vs = S.biz.filter(b=>!inactive(b)); if (vs.length===1) return openVentureWithdrawals(vs[0].id);
+    ivDialog("qv", "Withdrawal from which venture?", `<label class="full">Venture<select id="qvB">${vs.map(b=>`<option value="${b.id}">${h(b.name)}</option>`).join("")}</select></label>`, async () => { S._qv = $("#qvB").value; setTimeout(()=>openVentureWithdrawals(S._qv), 450); return ""; }, "Continue"); }
+}
+
+if ("serviceWorker" in navigator && location.protocol==="https:") window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(()=>{}));
 /* ---------- render ---------- */
 function syncCur(){ const sel = $("#viewCur"); if (!sel) return; sel.innerHTML = CURS.map(c=>`<option ${c===VIEW()?"selected":""}>${c}</option>`).join(""); }
 function renderTabs(){
   syncCur();
   const pend = (S.members||[]).filter(m=>m.status==="pending").length;
   const sel = k => S.tab===k || (k==="settings" && ["users","import","logs","backups","fx"].includes(S.tab));
-  const btn = ([k, l, ic], cls="") => `<button role="tab" class="${cls}" data-tab="${k}" aria-selected="${sel(k)}">${nico(ic)}<span>${l}</span>${k==="settings"&&pend&&S.isAdmin?` <span class="pill warn">${pend}</span>`:""}</button>`;
+  const btn = ([k, l, ic, only], cls="") => `<button role="tab" class="${cls}${only?" "+only:""}" data-tab="${k}" aria-selected="${sel(k)}">${nico(ic)}<span>${l}</span>${k==="settings"&&pend&&S.isAdmin?` <span class="pill warn">${pend}</span>`:""}</button>`;
   const moreOn = NAV_MORE.some(([,L])=>L.some(([k])=>sel(k)));
   $("#tabs").innerHTML = `<div class="navlbl">Overview</div>${NAV_MAIN.map(t=>btn(t,"pri")).join("")}
     <button type="button" class="morebtn${moreOn?" on":""}" data-navmore aria-expanded="${$("#side").classList.contains("open")}">${nico("more")}<span>More</span></button>
-    <div class="navmore">${NAV_MORE.map(([g, L])=>`<div class="navlbl">${g}</div>${L.map(t=>btn(t,"sec")).join("")}`).join("")}</div>`;
+    <div class="navmore"><div class="mobx"><div class="navlbl">Overview</div>${btn(["capital","Shareholders","sh"],"sec")}${btn(["income","Other income","oinc"],"sec")}</div>${NAV_MORE.map(([g, L])=>`<div class="navlbl">${g}</div>${L.map(t=>btn(t,"sec")).join("")}`).join("")}</div>`;
   const cur = [...NAV_MAIN, ...NAV_MORE.flatMap(g=>g[1])].find(t=>sel(t[0]));
   $("#crumb").innerHTML = cur ? `<span class="cic">${nico(cur[2], 17)}</span><b>${h(cur[1])}</b><span class="mut">· ${h(S.cfg.entity || "Future Axis Holdings")}</span>` : "";
 }
@@ -5200,7 +5275,7 @@ function render(){
   if (S.tab==="returns"){ S.tab = "investors"; S.sub.iv = "pl"; } if (S.tab==="monthly") S.tab = "statements";
   if ((S.tab==="users" && !S.isAdmin) || (S.tab==="import" && !S.canWrite) || (["logs","backups"].includes(S.tab) && !S.isFull)) S.tab = "dashboard";
   S.csv = {};
-  const V = {dashboard:viewDashboard, ventures:viewVentures, investors:viewInvestors, ledger:viewLedger, returns:viewReturns, monthly:viewMonthly, statements:viewStatements, reports:viewReports, expenses:viewExpenses, capital:viewCapital, bank:viewBank, import:viewImport, users:viewUsers, settings:viewSettings, logs:viewLogs, backups:viewBackups, master:viewMaster, fx:viewFx, portfolio:viewPortfolio, income:viewOtherIncome}[S.tab] || viewDashboard;
+  const V = {dashboard:viewDashboard, ventures:viewVentures, investors:viewInvestors, ledger:viewLedger, returns:viewReturns, monthly:viewMonthly, statements:viewStatements, reports:viewReports, expenses:viewExpenses, capital:viewCapital, bank:viewBank, import:viewImport, users:viewUsers, settings:viewSettings, logs:viewLogs, backups:viewBackups, master:viewMaster, fx:viewFx, portfolio:viewPortfolio, income:viewOtherIncome, quick:viewQuick}[S.tab] || viewDashboard;
   const ro = S.canWrite===false ? `<div class="banner" style="margin-bottom:16px">You have view access. Ask the owner for edit access to record entries.</div>` : "";
   const fy = document.activeElement?.id, sel = fy && document.activeElement.selectionStart;
   $("#main").innerHTML = ro + (SET_SUBS.some(x=>x[0]===S.tab) ? settingsBar() : "") + V();
@@ -5302,6 +5377,7 @@ function wireView(){
 document.addEventListener("click", e => {
   if (e.target.closest("[data-ivall]")){ S.ivAll = !S.ivAll; render(); return; }
   const ic = e.target.closest("[data-ivcard]"); if (ic){ S.ivCard = S.ivCard===ic.dataset.ivcard ? "" : ic.dataset.ivcard; render(); if (S.ivCard) setTimeout(()=>document.querySelector(".idetail")?.scrollIntoView({behavior:"smooth", block:"nearest"}), 50); return; }
+  const qa = e.target.closest("[data-quick]"); if (qa){ quickAction(qa.dataset.quick); return; }
   const ex = e.target.closest("[data-export]"); if (ex){ exportPage(ex.dataset.export).catch(x=>toast("Export failed: " + (x.message||""))); return; }
   if (e.target.closest("[data-navmore]")){ $("#side").classList.toggle("open"); renderTabs(); return; }
   if (e.target.closest("#tabs [data-tab]")) $("#side").classList.remove("open");
@@ -5378,7 +5454,7 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-initcap]")){ openInitialCapital(); return; }
   if (e.target.closest("[data-posload]")){ openPositionLoad(); return; }
   const nc = e.target.closest("[data-newcap]"); if (nc){ openForm("led", null, {prefill:{type:nc.dataset.newcap, bizId:"", shareholderId:S.sh.length===1?S.sh[0].id:""}}); return; }
-  if (e.target.closest("[data-vptr],[data-vplac],[data-psxlist],[data-hnew],[data-hconv],[data-hsel],[data-hopen],[data-htrade],[data-hrecon],[data-hpsave],[data-hmv],[data-acnew],[data-acsched],[data-acpay],[data-acpause],[data-acpost],[data-acsel],[data-posload],[data-sub],[data-vopen],[data-oiprep],[data-initcap],[data-vinv],[data-rcash],[data-oinew],[data-oiedit],[data-ownplace],[data-vsel],[data-vwd],[data-ivpay],[data-ivedit],[data-iesave],[data-ivcur],[data-ivbulk],.ieditor,.paybar,[data-ipsel]")) return;
+  if (e.target.closest("[data-quick],[data-vptr],[data-vplac],[data-psxlist],[data-hnew],[data-hconv],[data-hsel],[data-hopen],[data-htrade],[data-hrecon],[data-hpsave],[data-hmv],[data-acnew],[data-acsched],[data-acpay],[data-acpause],[data-acpost],[data-acsel],[data-posload],[data-sub],[data-vopen],[data-oiprep],[data-initcap],[data-vinv],[data-rcash],[data-oinew],[data-oiedit],[data-ownplace],[data-vsel],[data-vwd],[data-ivpay],[data-ivedit],[data-iesave],[data-ivcur],[data-ivbulk],.ieditor,.paybar,[data-ipsel]")) return;
   if (e.target.closest("[data-rcpt],[data-rview],[data-rrm],[data-ivsel],[data-ivact],[data-mdtog],[data-mdpl],[data-mdk],[data-mdact],[data-fx],[data-fxdel],[data-ownfix]")) return;
   const t = e.target.closest("[data-tab],[data-go],[data-new],[data-edit],[data-csv],[data-goledger]"); if (!t) return;
   if (t.dataset.tab || t.dataset.go){ S.tab = t.dataset.tab || t.dataset.go; if (S.tab==="logs") S.lg.rows = null; if (S.tab==="backups") S.bk.rows = null; store.set("fa.tab", S.tab); render(); window.scrollTo(0,0); }
@@ -5508,10 +5584,11 @@ async function start(session, force){
   if (m.status === "disabled"){ gate("Access disabled", `Access for ${h(session.user.email)} has been switched off. Contact the administrator if this is a mistake.`); return; }
   if (m.must_reset){ authView("newpw", "Welcome. Replace your temporary password to continue."); return; }
   document.body.classList.remove("authmode"); S.tab = "dashboard";
+  { const q = new URLSearchParams(location.search); if (q.get("tab")==="quick" || (matchMedia("(max-width: 960px)").matches && m.role==="editor")) S.tab = "quick"; S._do = q.get("do"); }
   S.role = m.role; S.isAdmin = m.role === "admin"; S.isFull = m.role === "admin" || m.role === "cfo"; S.canWrite = S.isFull || m.role === "editor";
   S.db = DB; S.dl = fileSaver;
   $("#tabs").hidden = false; $("#periodBar").hidden = false; $("#curBar").hidden = false; $("#expBar").hidden = false;
-  try { await loadAll(); if (S.isAdmin) await loadMembers(); }
+  try { await loadAll(); if (S.isAdmin) await loadMembers(); if (S._do==="expense" && S.canWrite) setTimeout(()=>openExpense(), 400); }
   catch(x){ $("#main").innerHTML = `<div class="banner">Could not load the ledger: ${h(x.message||x)}. Check that schema.sql has been run in Supabase.</div>`; return; }
   try { if (!sessionStorage.getItem("fa.in")){ sessionStorage.setItem("fa.in","1"); logEvent("Signed in", ROLE_LABEL[S.role], "auth"); } } catch(e){}
   SB.rpc("take_daily_backup").then(()=>{}, ()=>{});

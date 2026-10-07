@@ -1,0 +1,21 @@
+{
+  "name": "Future Axis Ledger",
+  "short_name": "Future Axis",
+  "description": "Future Axis Holdings investor and venture ledger (internal)",
+  "id": "/",
+  "start_url": "/?source=app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1022",
+  "theme_color": "#0b1022",
+  "icons": [
+    {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ],
+  "shortcuts": [
+    {"name": "Quick entry", "url": "/?tab=quick", "icons": [{"src": "/icons/icon-192.png", "sizes": "192x192"}]},
+    {"name": "Add expense", "url": "/?tab=quick&do=expense", "icons": [{"src": "/icons/icon-192.png", "sizes": "192x192"}]}
+  ]
+}

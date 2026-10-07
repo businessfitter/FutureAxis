@@ -323,3 +323,10 @@ If cash shows negative, receipts such as venture withdrawals aren't recorded yet
   - **Financial statements → By month** now has **cumulative net profit** and **cash received** rows.
 - **Reports & email** (the monthly investor report emailed as Excel + PDF) stays in the sidebar.
 - **Investors at a glance**: cards at the top of the Investors tab show each investor's name, capital placed, average agreed rate, profit to date and amount due, largest first (top 8, then "Show all"). Click a card for that investor's month-by-month view: KPIs, an interactive chart of monthly profit accrued vs paid, and capital by month (new placements highlighted). **Show placements** jumps to their rows.
+
+## Phone app (installable web app) (7 Oct 2026)
+- **New files to upload:** `manifest.webmanifest`, `sw.js`, the `icons/` folder (5 PNGs) and the updated `vercel.json`, next to index.html.
+- **Install**: on iPhone, open the site in Safari → Share → **Add to Home Screen**. On Android, open it in Chrome → ⋮ → **Install app**. It opens full screen with the Future Axis icon and uses the same login and data.
+- **Quick entry** is the phone home screen (and the start screen for Editors on a phone). It has large buttons for expenses (with a receipt photo from the camera), accruals, paying investors, other income, venture withdrawals, investments, paying accruals and bank statements, a to-do list (investor profit due, accruals to pay or post) and recent entries.
+- **Offline**: the app shell is cached so it opens quickly, but data always comes live from Supabase and nothing is stored on the phone. `index.html` and `sw.js` are served with no-cache headers, so updates appear on the next open.
+- Give the accountant the **Editor** role (Settings → Users).
