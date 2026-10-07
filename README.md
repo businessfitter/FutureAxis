@@ -312,3 +312,4 @@ If cash shows negative, receipts such as venture withdrawals aren't recorded yet
   - Investment in the venture without a share name shows as "Not yet split by share".
 - **Listed Equities** is renamed to **PSX** and set up as a share portfolio automatically at the next sign-in.
 - **Dashboard**: a second allocation chart shows percentages only.
+- **PSX securities dropdown**: Buy in a share portfolio offers about 365 PSX-listed securities. You can type a symbol or a company name, and the company name shows under the symbol in holdings. **PSX list** updates it, either from the PSX data portal (if the browser can reach it) or from an uploaded file with Symbol and Name columns. New symbols are added and none are removed. You can still type a symbol that isn't in the list.
