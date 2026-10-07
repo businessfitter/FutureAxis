@@ -565,6 +565,14 @@ header.top .btn:hover{background:var(--sunk);color:var(--accent)}
 
 .mme{display:flex;gap:10px;align-items:center;padding:6px 12px 8px;color:#dfe4fb;font-size:12.5px}.mme .mmail{min-width:0;overflow:hidden;text-overflow:ellipsis}.mme .mmail span{color:var(--side-mut);font-size:11px}
 nav.tabs button.signout{color:#fda4af}
+
+.scanbox{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px;border:1px dashed color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:14px;background:color-mix(in srgb,var(--accent-soft) 60%,transparent)}
+.scanbox .note{flex:1 1 100%}
+.form label.scanbtn{display:inline-flex;flex-direction:row;align-items:center;gap:8px;cursor:pointer;color:inherit;font-size:13px}
+.form label.btn.primary.scanbtn{color:#fff}
+.autofill{outline:2px solid var(--pos)!important;background:color-mix(in srgb,var(--pos) 10%,var(--surface))!important;transition:background .4s}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:4px}
+@keyframes sp{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body class="authmode">
@@ -2243,7 +2251,7 @@ function openAccruals(){
 
 /* ---------- one-time investor sheet import: Sr. # · Investor · Rate · Placement date · Investment · one column per venture ---------- */
 const OWNER_HINT = {test: n => /famcon|futureaxis/i.test(String(n||"").replace(/[^a-z]/gi,""))};
-const APP_VERSION = "7 Oct 2026 · 23:45";
+const APP_VERSION = "8 Oct 2026 · 00:15";
 function findSimpleSheet(wb){
   for (const name of wb.SheetNames){
     const rows = sheetRows(wb.Sheets[name]);
@@ -2764,6 +2772,9 @@ function openExpense(id){
   $("#ovHost").innerHTML = `<div class="ov" id="ov"><div class="panel" role="dialog" aria-modal="true" aria-labelledby="eTitle">
     <div class="row" style="justify-content:space-between"><h2 id="eTitle">${t?"Edit":"Add"} expense</h2><button class="btn sm" id="eClose" type="button">Close</button></div>
     <form id="eForm" class="form">
+      ${t ? "" : `<div class="full scanbox"><label class="btn primary scanbtn">${nico("cam", 18)}<span>Scan receipt with camera</span><input id="e_scan" type="file" accept="image/*" capture="environment" hidden></label>
+        <label class="btn scanbtn">${nico("rep", 18)}<span>Choose photo</span><input id="e_scan2" type="file" accept="image/*" hidden></label>
+        <div class="note" id="e_scanMsg">Take a photo and the date, amount, currency, merchant, invoice no. and category fill in for you. Or type the details below.</div></div>`}
       <label>Date<input id="e_date" type="date" required value="${h(t?.date || todayIso())}"></label>
       <label>Category<select id="e_cat" required><option value="">Choose</option>${EXP_CATS.map(c=>`<option ${c===(t?.category||"")?"selected":""}>${c}</option>`).join("")}</select></label>
       <label class="full">Supplier / payee<select id="e_sup"><option value="">No supplier</option>${S.sup.filter(x=>!inactive(x)||x.id===(t?.supplierId||"")).map(x=>`<option value="${x.id}" ${x.id===(t?.supplierId||"")?"selected":""}>${h(x.name)}</option>`).join("")}</select></label>
@@ -2783,6 +2794,22 @@ function openExpense(id){
   const close = () => { $("#ovHost").innerHTML = ""; render(); };
   $("#eClose").onclick = close; $("#ov").onclick = e => { if (e.target.id==="ov") close(); };
   const usdUpd = () => { $("#e_usd").value = $("#e_amt").value ? fmt2(conv(num($("#e_amt").value), $("#e_cur").value, "USD")) : ""; };
+  S._scanFiles = [];
+  const onScan = async ev => { const f = ev.target.files[0]; if (!f) return; S._scanFiles = [f]; const msg = $("#e_scanMsg");
+    msg.innerHTML = `<span class="spin"></span> Reading the receipt… (first time takes a few seconds)`;
+    try { const text = await ocrReceipt(f, (st, pr) => { if (/recogniz/i.test(st)) msg.innerHTML = `<span class="spin"></span> Reading the receipt… ${Math.round(pr*100)}%`; });
+      const R2 = parseReceipt(text), got = [], mark = el => { el.classList.add("autofill"); setTimeout(()=>el.classList.remove("autofill"), 4000); };
+      if (R2.date){ $("#e_date").value = R2.date; mark($("#e_date")); got.push("date"); }
+      if (R2.cur && CURS.includes(R2.cur)){ $("#e_cur").value = R2.cur; mark($("#e_cur")); got.push(R2.cur); }
+      if (R2.amount){ if (R2.cur==="PKR"){ $("#e_pkr").value = R2.amount; mark($("#e_pkr")); got.push(`PKR ${fmt2(R2.amount)} (enter the USD/AED paid)`); } else { $("#e_amt").value = R2.amount; mark($("#e_amt")); got.push(`amount ${fmt2(R2.amount)}`); } }
+      if (R2.merchant && !$("#e_desc").value){ $("#e_desc").value = R2.merchant + (R2.vat ? ` (VAT ${fmt2(R2.vat)})` : ""); mark($("#e_desc")); got.push("merchant"); }
+      if (R2.inv && !$("#e_inv").value){ $("#e_inv").value = R2.inv; mark($("#e_inv")); got.push("invoice no."); }
+      if (R2.supplierId){ $("#e_sup").value = R2.supplierId; mark($("#e_sup")); got.push("supplier"); }
+      if (R2.category && !$("#e_cat").value){ $("#e_cat").value = R2.category; mark($("#e_cat")); got.push(R2.category); }
+      usdUpd();
+      msg.innerHTML = got.length ? `<b style="color:var(--pos)">✓ Filled from the photo:</b> ${h(got.join(" · "))}. <b>Please check</b> before saving. The photo is attached as the receipt.` : `Couldn't read the details. The photo will be attached; please type the details below.`; }
+    catch(x){ msg.innerHTML = `Couldn't read the photo (${h(x.message||"no connection")}). It will still be attached; please type the details.`; } };
+  $("#e_scan")?.addEventListener("change", onScan); $("#e_scan2")?.addEventListener("change", onScan);
   $("#e_amt").oninput = usdUpd; $("#e_cur").onchange = usdUpd; usdUpd();
   $("#e_sup").onchange = () => { const s = S.sup.find(x=>x.id===$("#e_sup").value); if (s && !$("#e_cat").value) $("#e_cat").value = s.category || "Supplier / service provider"; };
   $("#eForm").onsubmit = async ev => {
@@ -2793,7 +2820,7 @@ function openExpense(id){
       amount:conv(amt, cur, VIEW()), origAmount:amt, origCur:cur, pkrAmount: $("#e_pkr").value ? num($("#e_pkr").value) : "", invoiceNo:$("#e_inv").value.trim(),
       method:$("#e_method").value, bankId, ref:$("#e_desc").value.trim(), example:false, updatedAt:now, createdAt: old.createdAt || now};
     if (bankId && acctCur(bankId)===cur){ data.fxAmount = amt; data.fxCur = cur; } else { delete data.fxAmount; delete data.fxCur; }
-    try { const docId = t?.id || newId(), files = [...($("#e_rc")?.files||[])];
+    try { const docId = t?.id || newId(), files = [...(S._scanFiles||[]), ...($("#e_rc")?.files||[])];
       if (files.length){ $("#eErr").textContent = "Uploading receipt…"; data.receipts = [...(old.receipts||[]), ...(await uploadReceipts("ledger", docId, files))]; }
       await S.db.collection("ledger").doc(docId).set(data); close(); toast(t ? "Expense saved" : "Expense added"); } catch(x){ $("#eErr").textContent = "Could not save: " + (x.message||""); }
   };
@@ -2803,7 +2830,7 @@ function openExpense(id){
 
 /* ---------- PDF documents for finance ---------- */
 const JSPDF = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", JSPDF_AT = "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js";
-const loadScript = src => new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("The PDF tool didn't load. Check your connection and try again.")); document.head.appendChild(s); });
+const loadScript = src => new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("A required tool didn't load. Check your connection and try again.")); document.head.appendChild(s); });
 async function ensureJsPdf(){ if (!window.jspdf) await loadScript(JSPDF); if (!window.jspdf.jsPDF.API.autoTable) await loadScript(JSPDF_AT); return window.jspdf.jsPDF; }
 function pdfFrame(doc, title, sub){
   const W = doc.internal.pageSize.getWidth();
@@ -5258,13 +5285,13 @@ function viewQuick(){
   return `<div class="head"><div><span class="eyebrow">${new Date().toLocaleDateString("en-GB",{weekday:"long", day:"numeric", month:"long"})}</span><h1>Quick entry</h1><p>Record today's transactions from your phone. Everything goes straight into the ledger.</p></div></div>
   <div class="stack">
     <div class="qgrid">
-      ${tile("expense","cam","Expense","with receipt photo","var(--c2)")}
+      ${tile("scan","cam","Scan receipt","photo fills the expense","var(--c2)")}
+      ${tile("expense","exp","Expense","type it in","var(--c8)")}
       ${tile("accrual","cal","Accrual","one-off or recurring","var(--accent)")}
       ${tile("payinv","inv","Pay investors","mark profit paid","var(--pos)")}
       ${tile("oinc","oinc","Other income","fees, rent, other","var(--c7)")}
       ${tile("withdraw","wd","Venture withdrawal","money received","var(--gold)")}
       ${tile("invest","ven","Add investment","into a venture","var(--c6)")}
-      ${tile("payacc","exp","Pay accrual","clear a payable","var(--c5)")}
       ${tile("bank","bankup","Bank statement","upload & match","var(--c1)")}
     </div>
     ${todo ? `<section class="sheet"><div class="sheet-h"><div><h2>To do</h2></div></div><div class="qtodos">${todo}</div></section>` : `<div class="alert ok"><span class="dot"></span><div><b>All caught up.</b> Nothing due for ${lab}.</div></div>`}
@@ -5274,6 +5301,7 @@ function viewQuick(){
 }
 function quickAction(a){
   if (a==="expense") return openExpense();
+  if (a==="scan"){ openExpense(); const i = $("#e_scan"); if (i) i.click(); return; }
   if (a==="accrual") return openAccrual();
   if (a==="oinc") return openOtherIncome(null);
   if (a==="invest") return openVentureInvest("");
@@ -5286,6 +5314,56 @@ function quickAction(a){
 }
 
 if ("serviceWorker" in navigator && location.protocol==="https:") window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(()=>{}));
+/* ---------- receipt scanning: read a photo on the phone and fill the expense form ---------- */
+const TESS = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+async function shrinkImage(file, max=1800){
+  if (!/^image\//.test(file.type||"")) return file;
+  try { const bmp = await createImageBitmap(file), k = Math.min(1, max / Math.max(bmp.width, bmp.height)), c = document.createElement("canvas");
+    c.width = Math.round(bmp.width*k); c.height = Math.round(bmp.height*k); const g = c.getContext("2d"); g.filter = "grayscale(1) contrast(1.35)"; g.drawImage(bmp, 0, 0, c.width, c.height);
+    return await new Promise(r => c.toBlob(b => r(b || file), "image/jpeg", 0.9)); } catch(e){ return file; }
+}
+async function ocrReceipt(file, onProg){
+  if (!window.Tesseract) await loadScript(TESS);
+  const img = await shrinkImage(file);
+  const res = await Tesseract.recognize(img, "eng", {logger: m => { if (onProg && m.status) onProg(m.status, m.progress||0); }});
+  return res?.data?.text || "";
+}
+const RC_NUM = /(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:[.,]\d{2})(?!\d)|\d{1,3}(?:,\d{3})+(?!\d)/g;
+const rcNum = s => { let t = String(s).replace(/\s/g,""); if (/,\d{2}$/.test(t) && !/\./.test(t)) t = t.replace(/,(\d{2})$/, ".$1"); return parseFloat(t.replace(/,/g,"")); };
+function parseReceipt(text){
+  const lines = String(text||"").split(/\r?\n/).map(l=>l.replace(/[|]/g," ").replace(/\s+/g," ").trim()).filter(Boolean), up = lines.join("\n").toUpperCase(), out = {lines};
+  /* total: the last line that looks like a total, otherwise the largest amount */
+  const totRe = /(grand\s*total|total\s*(amount|due|payable|incl|inc\.?|aed|usd|pkr)?|net\s*(amount|total|payable)|amount\s*(due|payable|paid)|balance\s*due|to\s*pay|total\s*:)/i, notRe = /sub\s*-?\s*total|total\s*(qty|quantity|items?|vat|tax)\b|vat\s*total|discount/i;
+  let tot = null;
+  lines.forEach((l, i) => { if (totRe.test(l) && !notRe.test(l)){ const ns = (l.match(RC_NUM) || (lines[i+1]||"").match(RC_NUM) || []).map(rcNum).filter(n=>n>0); if (ns.length) tot = ns[ns.length-1]; } });
+  if (tot == null){ const all = (text.match(RC_NUM)||[]).map(rcNum).filter(n=>n>0 && n<1e7); if (all.length) tot = Math.max(...all); }
+  out.amount = tot;
+  out.vat = (() => { for (const l of lines) if (/\bvat\b|\btax\b/i.test(l) && !/trn|reg|no\b|%\s*$/i.test(l)){ const ns = (l.match(RC_NUM)||[]).map(rcNum); if (ns.length) return ns[ns.length-1]; } return null; })();
+  /* currency */
+  out.cur = /\bAED\b|\bDHS?\b|DIRHAM|\bD\.H\b/.test(up) ? "AED" : /\bPKR\b|\bRS\.?\s?\d|RUPEE/.test(up) ? "PKR" : /\bUSD\b|US\s?\$|\$\s?\d/.test(up) ? "USD" : /\bSAR\b|RIYAL|\bSR\b/.test(up) ? "SAR" : /\bGBP\b|£/.test(up) ? "GBP" : /\bEUR\b|€/.test(up) ? "EUR" : "";
+  /* date: first recognisable date */
+  out.date = "";
+  for (const l of lines){ const m = l.match(/\b(\d{4}[-\/.]\d{1,2}[-\/.]\d{1,2}|\d{1,2}[-\/.]\d{1,2}[-\/.]\d{2,4}|\d{1,2}[-\s](?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*[-\s,]*\d{2,4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s\d{1,2},?\s\d{4})\b/i);
+    if (m){ const d = parseDateAny(m[1].replace(/-(?=[a-z])/i," ").replace(/(?<=[a-z])-/i," ")); if (d && d > "2000-01-01" && d <= addDays(todayIso(), 2)){ out.date = d; break; } } }
+  /* invoice / receipt number */
+  out.inv = ""; for (const l of lines){ const m = l.match(/(?:invoice|inv|receipt|bill|ref|order|txn|transaction)\s*(?:no\.?|number|num|#)?\s*[:#.]?\s*([A-Z0-9][A-Z0-9\-\/]{2,})/i); if (m && /\d/.test(m[1])){ out.inv = m[1]; break; } }
+  out.trn = (text.match(/TRN\s*(?:no\.?)?\s*[:#]?\s*(\d{15})/i) || [])[1] || "";
+  /* merchant: first meaningful line near the top */
+  out.merchant = (lines.slice(0, 8).find(l => /[A-Za-z]{3}/.test(l) && !/tax\s*invoice|^invoice|^receipt|welcome|thank|^trn|^tel|phone|date|time|cashier|^vat|^www|@|^\d/.test(l.toLowerCase())) || "").replace(/[^A-Za-z0-9&.,'()\- ]/g,"").trim().slice(0, 48);
+  /* category from keywords */
+  const K = [[/uber|careem|taxi|cab\b|rta|salik|parking|fuel|petrol|adnoc|enoc|emarat|airline|flight|emirates|flydubai|air arabia|hotel|booking/i, "Travel"],
+    [/restaurant|cafe|coffee|starbucks|costa|kitchen|grill|food|meal|dining|bakery|pizza|burger/i, "Business meetings"],
+    [/licen[cs]e|shams|free\s*zone|ded\b|renewal|establishment card/i, "License fees"],
+    [/bank charge|service charge|transfer fee|swift|wio|commission/i, "Bank charges"],
+    [/etisalat|\bdu\b|internet|mobile|telecom|software|subscription|google|microsoft|adobe|zoom|aws|apple\.com/i, "Software & subscriptions"],
+    [/stationery|office|print|courier|aramex|dhl|fedex|post/i, "Office & admin"],
+    [/legal|lawyer|advocate|audit|notary|attestation|consult/i, "Legal & professional"],
+    [/marketing|advert|facebook|meta|instagram|linkedin|design/i, "Marketing consultancy fee"]];
+  out.category = (K.find(([re]) => re.test(text)) || [])[1] || "";
+  out.supplierId = (S.sup || []).find(x => x.name && x.name.length > 3 && up.includes(x.name.toUpperCase()))?.id || "";
+  return out;
+}
+
 /* ---------- render ---------- */
 function syncCur(){ const sel = $("#viewCur"); if (!sel) return; sel.innerHTML = CURS.map(c=>`<option ${c===VIEW()?"selected":""}>${c}</option>`).join(""); }
 function renderTabs(){
