@@ -294,3 +294,21 @@ If cash shows negative, receipts such as venture withdrawals aren't recorded yet
   - **Investor profit**: worked out per placement and matched to the P&L "Management expenses" each month. Paid up to the month before the last.
 - **Books are closed** to the last P&L month, so Run profit accruals only posts later months.
 - Investors' contact, bank and payout-currency details are kept. Bank accounts, suppliers and users are untouched.
+- **Initial paid-up capital** is USD 16,666 (Empyrean) + AED 35,000 (SK) per shareholder, i.e. USD 52,392.58 for both. The rest of the 1 Apr shareholder rows (USD 48,087.40) is shown as additional paid-up capital. The amounts invested are unchanged.
+
+## Expense accruals and allocation (7 Oct 2026)
+- **Expenses → Accruals**: record an expense before it is paid. It shows in the P&L in that month and as an **Accrued expenses** liability on the balance sheet until it is paid.
+  - **Add accrual** records a single accrual. Tick *Repeat this accrual* to make it recurring.
+  - **Recurring schedules** can be monthly, quarterly, half-yearly or annual, with an optional end month. Due accruals up to last month post automatically at sign-in, or use **Post due**. Schedules can be edited, paused or deleted; posted accruals stay.
+  - **Mark paid**, one at a time or for selected accruals together, records the payment (date, mode, bank, receipt) and clears the liability. Part payments are supported.
+- **Allocate to**: every expense, accrual and schedule is allocated to a venture or to **Head office**. Expenses paid → **By allocation** totals paid and accrued expenses for the period.
+- Accrual months on or before the books-closed month are skipped.
+
+## PSX, commodity trading and the allocation chart (7 Oct 2026)
+- **Ventures → Shares & commodities**: holdings for a share portfolio (PSX) or for commodity trading (units in Bags or Tons). Buy, sell and dividend entries record date, share or commodity, quantity, price, fees, amount in PKR and the USD booked, plus payment details and a receipt.
+  - **Holdings table**: share, quantity held, average purchase price, amount purchased, quantity sold, profit realised, market value at the reporting date, and unrealised profit.
+  - **Market value** defaults to cost. Edit it and save at the period end date, or load it from a report. Unrealised profit is shown here but not posted to the P&L. Realised profit on a sale (proceeds less average cost) and dividends go to venture profit.
+  - **Upload report to reconcile**: an .xlsx or .csv broker or stock report. Quantities are compared per share (matches / differs / missing), market prices can be updated from it, and the report file is kept.
+  - Investment in the venture without a share name shows as "Not yet split by share".
+- **Listed Equities** is renamed to **PSX** and set up as a share portfolio automatically at the next sign-in.
+- **Dashboard**: a second allocation chart shows percentages only.
