@@ -997,7 +997,7 @@ function viewVentures(){
   csvReg("venture-accounts",["ID","Venture","Invested","Withdrawn","Net investment","Investor capital","Own investment","Profit accrued (period)","Profit received (period)","Receivable","Investor share (period)","Investor payable","Net contribution","Actual yield p.a.","Expected p.a."], va.map(x=>[x.b.code,x.b.name,r0(x.added),r0(x.wd),r0(x.net),r0(x.icap),r0(x.own),r0(x.acc),r0(x.recd),r0(x.rec),r0(x.share),r0(x.pay),r0(x.contrib),p2(x.yld),p2(num(x.b.rate))]));
   const T = k => va.reduce((s,x)=>s+x[k],0);
   const acc = va.map(x=>`<tr class="click" data-goledger="${x.b.id}"><td>${h(x.b.name)}</td><td class="n">${money(x.added)}</td><td class="n">${money(x.wd)}</td><td class="n">${money(x.net)}</td><td class="n">${money(x.icap)}</td><td class="n">${money(x.own)}</td><td class="n">${money(x.acc)}</td><td class="n">${money(x.recd)}</td><td class="n">${money(x.rec)}</td><td class="n">${money(x.share)}</td><td class="n">${money(x.pay)}</td><td class="n">${money(x.contrib)}</td><td class="n">${pct(x.yld)}</td><td class="n">${x.net?pct(x.varr):'<span class="mut">–</span>'}</td></tr>`).join("");
-  const [V, seg] = subTabs("ven", [["overview","Overview","dash"],["monthly","Monthly position","cal"],["holdings","Shares & commodities","ret"],["accounts","Accounts","book"]], "overview");
+  const [V, seg] = subTabs("ven", [["overview","Overview","dash"],["monthly","Monthly position","cal"],["placements","Placements","book"],["holdings","Shares & commodities","ret"],["accounts","Accounts","rep"]], "overview");
   const vs = va.filter(x=>!inactive(x.b) || Math.abs(x.net) > 0.5 || x.acc), T0 = vs.reduce((s,x)=>s+Math.max(0,x.net),0);
   const card = x => { const b = x.b, iv = Math.max(0, x.icap), own = Math.max(0, x.net - x.icap), z = Math.abs(x.net) < 0.5;
     return `<div class="vcard${z?" zero":""}" style="--vc:${vcol(b.id)}"><div class="vh"><div class="vt"><span class="vi">${h(String(b.code||b.name||"?").replace(/[^A-Za-z0-9]/g,"").slice(0,2).toUpperCase())}</span><div><b>${h(b.name)}</b><span>${h([b.nature, profitMode(b)].filter(Boolean).join(" · "))}</span></div></div>
@@ -1005,10 +1005,10 @@ function viewVentures(){
       <div><span class="note">Invested · share capital ${nf.format(own)} + investors ${nf.format(iv)}</span><div class="vv">${money(x.net)}</div></div>
       <div class="vrow" style="grid-template-columns:1fr"${tipData(b.name, [["Share capital", `${fmtV(own)} · ${pc1(div(own,x.net))}`, "var(--accent)"], ["Investor money", `${fmtV(iv)} · ${pc1(div(iv,x.net))}`, "var(--gold)"]])}><span class="tr"><i style="width:${div(own,x.net)*100}%;background:var(--accent)"></i><i style="width:${div(iv,x.net)*100}%;background:var(--gold)"></i></span></div>
       <div class="vgrid"><div><span>Receivable</span><b>${nf.format(x.rec)}</b></div><div><span>Profit (period)</span><b>${nf.format(x.acc)}</b></div><div><span>Actual / expected</span><b>${z?"–":pc1(x.yld)}</b> <span class="note" style="display:inline">${pc1(num(b.rate))}</span></div></div>
-      <div class="vact">${holdKind(b)?`<button class="btn sm primary" data-hopen="${b.id}" type="button">Holdings</button>`:""}<button class="btn sm" data-vopen="${b.id}" type="button">Monthly</button>${W?`<button class="btn sm" data-vinv="${b.id}" type="button">Add investment</button><button class="btn sm" data-vwd="${b.id}" type="button">Withdrawals</button><button class="btn sm" data-edit="biz:${b.id}" type="button">Edit</button>`:""}</div></div>`; };
+      <div class="vact">${holdKind(b)?`<button class="btn sm primary" data-hopen="${b.id}" type="button">Holdings</button>`:""}<button class="btn sm" data-vopen="${b.id}" type="button">Monthly</button><button class="btn sm" data-vplac="${b.id}" type="button">Placements</button>${W?`<button class="btn sm" data-vinv="${b.id}" type="button">Add investment</button><button class="btn sm" data-vwd="${b.id}" type="button">Withdrawals</button><button class="btn sm" data-edit="biz:${b.id}" type="button">Edit</button>`:""}</div></div>`; };
   const tot = k => vs.reduce((s,x)=>s+x[k],0);
   const st = (lb, v, sub, ic, col) => `<div class="stat" style="--kc:${col}"><div class="sh"><span class="lb">${lb}</span><span class="ic">${nico(ic,19)}</span></div><span class="v">${v}</span><span class="s">${sub}</span></div>`;
-  const body = V==="monthly" ? ventureMonthlySection() : V==="holdings" ? holdingsSection() : V==="accounts" ? `  <section class="sheet"><div class="sheet-h"><div><h2>Venture accounts</h2><p>Receivable and payable position per venture. Balances at ${fmtDate(S.end)}; profit columns for the period. Click a row to open its ledger.</p></div>${csvBtn("venture-accounts")}</div>
+  const body = V==="monthly" ? ventureMonthlySection() : V==="placements" ? ventPlacementsSection() : V==="holdings" ? holdingsSection() : V==="accounts" ? `  <section class="sheet"><div class="sheet-h"><div><h2>Venture accounts</h2><p>Receivable and payable position per venture. Balances at ${fmtDate(S.end)}; profit columns for the period. Click a row to open its ledger.</p></div>${csvBtn("venture-accounts")}</div>
    <div class="tbl"><table><thead><tr><th>Venture</th><th class="n">Invested</th><th class="n">Withdrawn</th><th class="n">Net investment</th><th class="n">Investor capital</th><th class="n">Own investment</th><th class="n">Profit accrued</th><th class="n">Profit received</th><th class="n">Receivable</th><th class="n">Investor share</th><th class="n">Investor payable</th><th class="n">Net contribution</th><th class="n">Actual p.a.</th><th class="n">vs expected</th></tr></thead>
    <tbody>${acc || `<tr><td colspan="14" class="empty">No ventures yet.</td></tr>`}</tbody>
    <tfoot><tr><td>Total</td>${["added","wd","net","icap","own","acc","recd","rec","share","pay","contrib"].map(k=>`<td class="n">${money(T(k))}</td>`).join("")}<td></td><td></td></tr></tfoot></table></div></section>` : `
@@ -2160,7 +2160,7 @@ function openAccruals(){
 
 /* ---------- one-time investor sheet import: Sr. # · Investor · Rate · Placement date · Investment · one column per venture ---------- */
 const OWNER_HINT = {test: n => /famcon|futureaxis/i.test(String(n||"").replace(/[^a-z]/gi,""))};
-const APP_VERSION = "7 Oct 2026 · 20:10";
+const APP_VERSION = "7 Oct 2026 · 21:00";
 function findSimpleSheet(wb){
   for (const name of wb.SheetNames){
     const rows = sheetRows(wb.Sheets[name]);
@@ -5019,6 +5019,55 @@ function openHoldVenture(kind){
       S.hsel = id; return `${K.label} created`; }, conv ? "Save" : "Create");
 }
 
+/* ---------- ventures: placements register per venture (editable) ---------- */
+S.vpf = "in";
+function ventPlacementsSection(){
+  const vs = S.biz.filter(b => !inactive(b) || S.led.some(t=>t.bizId===b.id)); if (!vs.length) return `<section class="sheet"><div class="empty"><b>No ventures yet</b></div></section>`;
+  if (S.vsel!=="all" && !vs.some(b=>b.id===S.vsel)) S.vsel = "all";
+  const ALL = S.vsel==="all", W = S.canWrite!==false, F = S.vpf;
+  const IN = ["Investment Addition","Profit Reinvested"], OUT = ["Investment Withdrawal"], PR = ["Profit Accrued","Profit Received"];
+  const okT = t => F==="in" ? IN.includes(t.type) : F==="out" ? OUT.includes(t.type) : F==="profit" ? PR.includes(t.type) : [...IN, ...OUT, ...PR].includes(t.type);
+  const list = S.led.filter(t => t.bizId && (ALL || t.bizId===S.vsel) && okT(t) && t.date<=S.end).sort((a,b)=>a.date.localeCompare(b.date) || String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
+  const plOf = t => t.linkedPl ? S.pl.find(p=>p.id===t.linkedPl) : String(t.id).startsWith("pla-") ? S.pl.find(p=>p.id===String(t.id).slice(4)) : null;
+  const src = t => { const p = plOf(t); if (p) return {who:p.investor, kind:"Investor", rate:num(p.rate), edit:`pl:${p.id}`};
+    const b = S.biz.find(x=>x.id===t.bizId), sh = shName(t.shareholderId);
+    if (t.linkedOi) return {who:"Other income reinvested", kind:"Share capital", rate:num(b?.rate), edit:"", oi:t.linkedOi};
+    if (t.type==="Profit Reinvested") return {who: sh ? `${sh} · profit reinvested` : "Profit reinvested", kind:"Share capital", rate:num(b?.rate), edit:`led:${t.id}`};
+    if (PR.includes(t.type)) return {who: t.type==="Profit Accrued" ? "Profit accrued" : "Profit received / withdrawn", kind:"Profit", rate:num(b?.rate), edit:`led:${t.id}`};
+    if (t.type==="Investment Withdrawal") return {who: t.hItem ? `Sale ${t.hItem}` : "Withdrawal", kind:"Withdrawal", rate:num(b?.rate), edit:`led:${t.id}`};
+    return {who: t.hItem ? `Buy ${String(t.hItem).toUpperCase()}` : sh || (t.method==="Reinvested directly" ? "Owner money · reinvested" : "Owner money"), kind:"Share capital", rate:num(b?.rate), edit:`led:${t.id}`}; };
+  let run = 0;
+  const rowsData = list.map(t => { const x = src(t), sign = t.type==="Investment Withdrawal" ? -1 : t.type==="Profit Received" ? 0 : t.type==="Profit Accrued" ? 0 : 1; run += sign * num(t.amount); return {t, x, sign, bal: run}; });
+  const tot = k => rowsData.filter(r=>r.x.kind===k && r.sign>0).reduce((s,r)=>s+num(r.t.amount),0);
+  csvReg("venture-placements", ["Date","Venture","Type","From / description","Money of","Rate % p.a.","Mode of payment","Bank","Paid in","Amount (" + VIEW() + ")","Invested balance"],
+    rowsData.map(r=>[r.t.date, S.biz.find(b=>b.id===r.t.bizId)?.name||"", r.t.type, r.x.who, r.x.kind, p2(r.x.rate), r.t.method||"", bankCode(r.t.bankId)||r.t.payBank||"", r.t.payCur && r.t.payAmt ? `${r.t.payCur} ${r.t.payAmt}` : "", r0(r.t.amount), r0(r.bal)]));
+  if (F==="in"){ const g2 = {}; rowsData.forEach(r=>{ const k = r.t.bizId+"|"+r.t.date; const x = g2[k] ||= {date:r.t.date, ven:S.biz.find(b=>b.id===r.t.bizId)?.name||"", inv:0, own:0, n:0, bal:0}; x.n++; r.x.kind==="Investor" ? x.inv += num(r.t.amount) : x.own += num(r.t.amount); x.bal = r.bal; });
+    csvReg("venture-placements", ["Date","Venture","Entries","Investor money","Share capital","Total placed","Invested balance"], Object.values(g2).map(x=>[x.date, x.ven, x.n, r0(x.inv), r0(x.own), r0(x.inv+x.own), r0(x.bal)])); }
+  const pill = k => k==="Investor" ? '<span class="pill inv">Investor</span>' : k==="Share capital" ? '<span class="pill" style="color:var(--accent)">Share capital</span>' : k==="Withdrawal" ? '<span class="pill warn">Withdrawal</span>' : '<span class="pill ok">Profit</span>';
+  const rowHtml = r => { const t = r.t, x = r.x, ed = x.oi ? `data-oiedit="${x.oi}"` : x.edit ? `data-edit="${x.edit}"` : "";
+    return `<tr class="${W&&ed?"click":""}" ${W?ed:""} title="${W?"Click to edit":""}"><td class="n" style="text-align:left">${fmtDate(t.date)}</td>${ALL?`<td><i class="sw" style="display:inline-block;margin-right:6px;background:${vcol(t.bizId)}"></i>${h(S.biz.find(b=>b.id===t.bizId)?.name||"")}</td>`:""}
+      <td><b style="font-weight:600">${h(x.who)}</b><div class="note">${h(t.ref||"")}</div></td><td>${pill(x.kind)}</td><td class="n">${x.rate ? pct(x.rate, x.kind==="Investor"?2:1) : "–"}<div class="note">${x.kind==="Investor"?"agreed":"venture"}</div></td>
+      ${(()=>{ const q = plOf(t) || t; return `<td>${h(q.method||t.method||"–")}<div class="note">${h([bankCode(q.bankId||t.bankId), q.payBank||t.payBank].filter(Boolean).join(" · "))}</div></td><td class="n">${q.payCur && num(q.payAmt) && q.payCur!==VIEW() ? `${h(q.payCur)} ${fmt2(q.payAmt)}` : "–"}</td>`; })()}
+      <td class="n ${r.sign<0?"neg":""}">${money(r.sign<0 ? -num(t.amount) : num(t.amount))}${rcptBadge("ledger", t)}</td>${F==="profit"?"":`<td class="n">${money(r.bal)}</td>`}</tr>`; };
+  /* placements in: one line per tranche (venture + date), in total; click to see what made it up */
+  S.vpOpen = S.vpOpen || new Set();
+  const tr = []; if (F==="in") for (const r of rowsData){ const k = r.t.bizId + "|" + r.t.date; let g = tr.find(x=>x.k===k); if (!g) tr.push(g = {k, date:r.t.date, bizId:r.t.bizId, items:[], inv:0, own:0, rs:0, bal:0}); g.items.push(r); if (r.x.kind==="Investor"){ g.inv += num(r.t.amount); g.rs += num(r.t.amount)*r.x.rate; } else g.own += num(r.t.amount); g.bal = r.bal; }
+  const rows = F==="in" ? tr.slice().reverse().map((g, i) => { const open = S.vpOpen.has(g.k), tot = g.inv + g.own, n = tr.length - i;
+    return `<tr class="click${open?" selrow":""}" data-vptr="${h(g.k)}" title="Show what made up this tranche"><td class="n" style="text-align:left">${fmtDate(g.date)}</td>${ALL?`<td><i class="sw" style="display:inline-block;margin-right:6px;background:${vcol(g.bizId)}"></i>${h(S.biz.find(b=>b.id===g.bizId)?.name||"")}</td>`:""}
+      <td><b style="font-weight:600">Tranche ${n}</b> <span class="note">${open?"▾":"▸"} ${g.items.length} entr${g.items.length===1?"y":"ies"}</span></td><td>${g.inv?'<span class="pill inv">Investor</span> ':""}${g.own?'<span class="pill" style="color:var(--accent)">Share capital</span>':""}</td>
+      <td class="n">${g.inv ? pct(g.rs/g.inv, 2) : "–"}<div class="note">${g.inv?"avg agreed":""}</div></td><td class="n">${g.inv?money(g.inv):"–"}</td><td class="n">${g.own?money(g.own):"–"}</td><td class="n"><b>${money(tot)}</b></td><td class="n">${money(g.bal)}</td></tr>
+      ${open ? `<tr><td colspan="${ALL?9:8}" style="padding:0;background:var(--sunk)"><div class="tbl"><table><thead><tr><th>Date</th>${ALL?"<th>Venture</th>":""}<th>From / description</th><th>Money of</th><th class="n">Rate p.a.</th><th>Mode of payment</th><th class="n">Paid in</th><th class="n">Amount</th><th class="n">Invested balance</th></tr></thead><tbody>${g.items.map(rowHtml).join("")}</tbody></table></div></td></tr>` : ""}`; }).join("")
+    : rowsData.slice().reverse().map(rowHtml).join("");
+  const seg = `<div class="segctl" role="tablist" aria-label="Venture"><button role="tab" type="button" data-vsel="all" aria-selected="${ALL}"><b>All ventures</b></button>${vs.map(x=>`<button role="tab" type="button" data-vsel="${x.id}" aria-selected="${x.id===S.vsel}"><i class="sw" style="display:inline-block;margin-right:6px;background:${vcol(x.id)}"></i>${h(x.name)}</button>`).join("")}</div>`;
+  const b = ALL ? null : S.biz.find(x=>x.id===S.vsel);
+  return `${seg}<section class="sheet"><div class="sheet-h"><div><h2>Placements${b?` · ${h(b.name)}`:""}</h2><p>${F==="in" ? `Each tranche is the total placed${b?` in ${h(b.name)}`:""} on one date, investor money and share capital together. Click a tranche to see what made it up and edit any entry.` : "Click any row to edit it."}</p></div>
+    <div class="row"><select id="vpF" aria-label="Show"><option value="in" ${F==="in"?"selected":""}>Placements in</option><option value="out" ${F==="out"?"selected":""}>Withdrawals</option><option value="profit" ${F==="profit"?"selected":""}>Profit entries</option><option value="all" ${F==="all"?"selected":""}>All entries</option></select>
+    ${W?`<button class="btn sm primary" data-vinv="${b?b.id:""}" type="button">Add investment</button>${b?`<button class="btn sm" data-vwd="${b.id}" type="button">Withdrawals</button>`:""}`:""}${csvBtn("venture-placements")}</div></div>
+    ${F==="in" ? `<div class="kpis" style="padding:16px 20px"><div class="kpi"><span class="eyebrow">Investor money placed</span><span class="v">${money(tot("Investor"))}</span><span class="s">${rowsData.filter(r=>r.x.kind==="Investor").length} placements</span></div><div class="kpi"><span class="eyebrow">Share capital placed</span><span class="v">${money(tot("Share capital"))}</span><span class="s">incl. profit and other income reinvested</span></div><div class="kpi"><span class="eyebrow">Total placed</span><span class="v">${money(tot("Investor")+tot("Share capital"))}</span><span class="s">to ${fmtDate(S.end)}</span></div></div>` : ""}
+    <div class="tbl"><table><thead><tr><th>Date</th>${ALL?"<th>Venture</th>":""}${F==="in" ? `<th>Tranche</th><th>Money of</th><th class="n">Rate p.a.</th><th class="n">Investor money</th><th class="n">Share capital</th><th class="n">Total placed (${h(VIEW())})</th><th class="n">Invested balance</th>` : `<th>From / description</th><th>Money of</th><th class="n">Rate p.a.</th><th>Mode of payment</th><th class="n">Paid in</th><th class="n">Amount (${h(VIEW())})</th>${F==="profit"?"":`<th class="n">Invested balance</th>`}`}</tr></thead>
+    <tbody>${rows || `<tr><td colspan="9" class="empty">Nothing recorded.</td></tr>`}</tbody></table></div></section>`;
+}
+
 /* ---------- render ---------- */
 function syncCur(){ const sel = $("#viewCur"); if (!sel) return; sel.innerHTML = CURS.map(c=>`<option ${c===VIEW()?"selected":""}>${c}</option>`).join(""); }
 function renderTabs(){
@@ -5053,6 +5102,7 @@ function render(){
 function wireView(){
   const lb=$("#lfBiz"), lt=$("#lfType"), lq=$("#lfQ"), ys=$("#yearSel");
   if (lb) lb.onchange = e => { S.lf.biz = e.target.value; render(); };
+  const vpF = $("#vpF"); if (vpF) vpF.onchange = e => { S.vpf = e.target.value; render(); };
   const acT = $("#acThru"), acF = $("#acF"); if (acT) acT.onchange = e => { S.acThru = e.target.value; render(); }; if (acF) acF.onchange = e => { S.acF = e.target.value; render(); };
   if (lt) lt.onchange = e => { S.lf.type = e.target.value; render(); };
   if (lq) lq.oninput = e => { S.lf.q = e.target.value; clearTimeout(wireView.t); wireView.t = setTimeout(render, 200); };
@@ -5181,6 +5231,8 @@ document.addEventListener("click", e => {
   const oie = e.target.closest("[data-oiedit]"); if (oie){ openOtherIncome(oie.dataset.oiedit); return; }
   const vs = e.target.closest("[data-vsel]"); if (vs){ S.vsel = vs.dataset.vsel; render(); return; }
   const sb = e.target.closest("[data-sub]"); if (sb){ const [k, v] = sb.dataset.sub.split(":"); S.sub[k] = v; render(); return; }
+  const vt = e.target.closest("[data-vptr]"); if (vt){ S.vpOpen = S.vpOpen || new Set(); const k = vt.dataset.vptr; S.vpOpen.has(k) ? S.vpOpen.delete(k) : S.vpOpen.add(k); render(); return; }
+  const vpl = e.target.closest("[data-vplac]"); if (vpl){ S.vsel = vpl.dataset.vplac; S.sub.ven = "placements"; render(); window.scrollTo(0,0); return; }
   const vo = e.target.closest("[data-vopen]"); if (vo){ S.vsel = vo.dataset.vopen; S.sub.ven = "monthly"; render(); window.scrollTo(0,0); return; }
   const vw = e.target.closest("[data-vwd]"); if (vw){ openVentureWithdrawals(vw.dataset.vwd); return; }
   const vi = e.target.closest("[data-vinv]"); if (vi){ openVentureInvest(vi.dataset.vinv); return; }
@@ -5215,7 +5267,7 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-initcap]")){ openInitialCapital(); return; }
   if (e.target.closest("[data-posload]")){ openPositionLoad(); return; }
   const nc = e.target.closest("[data-newcap]"); if (nc){ openForm("led", null, {prefill:{type:nc.dataset.newcap, bizId:"", shareholderId:S.sh.length===1?S.sh[0].id:""}}); return; }
-  if (e.target.closest("[data-psxlist],[data-hnew],[data-hconv],[data-hsel],[data-hopen],[data-htrade],[data-hrecon],[data-hpsave],[data-hmv],[data-acnew],[data-acsched],[data-acpay],[data-acpause],[data-acpost],[data-acsel],[data-posload],[data-sub],[data-vopen],[data-oiprep],[data-initcap],[data-vinv],[data-rcash],[data-oinew],[data-oiedit],[data-ownplace],[data-vsel],[data-vwd],[data-ivpay],[data-ivedit],[data-iesave],[data-ivcur],[data-ivbulk],.ieditor,.paybar,[data-ipsel]")) return;
+  if (e.target.closest("[data-vptr],[data-vplac],[data-psxlist],[data-hnew],[data-hconv],[data-hsel],[data-hopen],[data-htrade],[data-hrecon],[data-hpsave],[data-hmv],[data-acnew],[data-acsched],[data-acpay],[data-acpause],[data-acpost],[data-acsel],[data-posload],[data-sub],[data-vopen],[data-oiprep],[data-initcap],[data-vinv],[data-rcash],[data-oinew],[data-oiedit],[data-ownplace],[data-vsel],[data-vwd],[data-ivpay],[data-ivedit],[data-iesave],[data-ivcur],[data-ivbulk],.ieditor,.paybar,[data-ipsel]")) return;
   if (e.target.closest("[data-rcpt],[data-rview],[data-rrm],[data-ivsel],[data-ivact],[data-mdtog],[data-mdpl],[data-mdk],[data-mdact],[data-fx],[data-fxdel],[data-ownfix]")) return;
   const t = e.target.closest("[data-tab],[data-go],[data-new],[data-edit],[data-csv],[data-goledger]"); if (!t) return;
   if (t.dataset.tab || t.dataset.go){ S.tab = t.dataset.tab || t.dataset.go; if (S.tab==="logs") S.lg.rows = null; if (S.tab==="backups") S.bk.rows = null; store.set("fa.tab", S.tab); render(); window.scrollTo(0,0); }
