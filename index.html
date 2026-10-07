@@ -530,6 +530,38 @@ nav.tabs button.mob,nav.tabs .mobx{display:none}
 header.top .btn{background:var(--surface);color:var(--ink);border-color:var(--line)}
 header.top .btn:hover{background:var(--sunk);color:var(--accent)}
 @media (max-width:640px){#expBar{display:none!important}}
+
+/* phone layout fixes */
+@media (max-width:760px){
+  .dk{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px}
+  .dgrid{grid-template-columns:1fr!important}
+  .stat{padding:14px 14px}
+  .stat::after{display:none}
+  .stat .lb{font-size:10px;letter-spacing:.06em}
+  .stat .ic{width:30px;height:30px;border-radius:10px}.stat .ic svg{width:16px;height:16px}
+  .stat .v,.kpi .v,.vcard .vv,.ic-v{font-size:clamp(17px,5.4vw,24px);overflow-wrap:anywhere}
+  .stat .s,.kpi .s{font-size:11.5px}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px}
+  .kpi{padding:14px}
+  .segctl{display:flex;flex-wrap:nowrap;overflow-x:auto;max-width:100%;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .segctl::-webkit-scrollbar{display:none}
+  .segctl button{flex:0 0 auto;white-space:nowrap;padding:8px 12px}
+  .vcards{grid-template-columns:1fr}
+  .vcard .vgrid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  .vcard .vgrid div{padding:8px}
+  .vcard .vgrid b{font-size:12.5px}
+  .vcard .vgrid span{font-size:10.5px}
+  .htiles{grid-template-columns:1fr}
+  .hero{padding:20px}
+  .head .row{width:100%}
+  .sheet-h{padding:14px 16px}
+  .tbl table{font-size:12.5px}
+  th,td{padding:9px 10px}
+  .icards{grid-template-columns:1fr 1fr;gap:10px}
+  .icard{padding:12px}
+}
+@media (max-width:380px){ .icards{grid-template-columns:1fr} }
+@media (hover:none){nav.tabs button:hover{background:none;color:var(--side-mut)} nav.tabs button[aria-selected="true"]:hover{background:linear-gradient(90deg,rgba(129,140,248,.26),rgba(129,140,248,.06));color:#fff}}
 </style>
 </head>
 <body class="authmode">
@@ -1047,7 +1079,7 @@ function viewVentures(){
   const [V, seg] = subTabs("ven", [["overview","Overview","dash"],["monthly","Monthly position","cal"],["placements","Placements","book"],["holdings","Shares & commodities","ret"],["accounts","Accounts","rep"]], "overview");
   const vs = va.filter(x=>!inactive(x.b) || Math.abs(x.net) > 0.5 || x.acc), T0 = vs.reduce((s,x)=>s+Math.max(0,x.net),0);
   const card = x => { const b = x.b, iv = Math.max(0, x.icap), own = Math.max(0, x.net - x.icap), z = Math.abs(x.net) < 0.5;
-    return `<div class="vcard${z?" zero":""}" style="--vc:${vcol(b.id)}"><div class="vh"><div class="vt"><span class="vi">${h(String(b.code||b.name||"?").replace(/[^A-Za-z0-9]/g,"").slice(0,2).toUpperCase())}</span><div><b>${h(b.name)}</b><span>${h([b.nature, profitMode(b)].filter(Boolean).join(" · "))}</span></div></div>
+    return `<div class="vcard${z?" zero":""}" style="--vc:${vcol(b.id)}"><div class="vh"><div class="vt"><span class="vi">${h(String(b.name||b.code||"?").split(/[\s&]+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase())}</span><div><b>${h(b.name)}</b><span>${h([b.nature, profitMode(b)].filter(Boolean).join(" · "))}</span></div></div>
       ${inactive(b)?'<span class="pill">Inactive</span>':`<span class="chip" style="--kc:${vcol(b.id)}">${pc1(div(Math.max(0,x.net), T0))}</span>`}</div>
       <div><span class="note">Invested · share capital ${nf.format(own)} + investors ${nf.format(iv)}</span><div class="vv">${money(x.net)}</div></div>
       <div class="vrow" style="grid-template-columns:1fr"${tipData(b.name, [["Share capital", `${fmtV(own)} · ${pc1(div(own,x.net))}`, "var(--accent)"], ["Investor money", `${fmtV(iv)} · ${pc1(div(iv,x.net))}`, "var(--gold)"]])}><span class="tr"><i style="width:${div(own,x.net)*100}%;background:var(--accent)"></i><i style="width:${div(iv,x.net)*100}%;background:var(--gold)"></i></span></div>
@@ -2207,7 +2239,7 @@ function openAccruals(){
 
 /* ---------- one-time investor sheet import: Sr. # · Investor · Rate · Placement date · Investment · one column per venture ---------- */
 const OWNER_HINT = {test: n => /famcon|futureaxis/i.test(String(n||"").replace(/[^a-z]/gi,""))};
-const APP_VERSION = "7 Oct 2026 · 23:10";
+const APP_VERSION = "7 Oct 2026 · 23:30";
 function findSimpleSheet(wb){
   for (const name of wb.SheetNames){
     const rows = sheetRows(wb.Sheets[name]);
