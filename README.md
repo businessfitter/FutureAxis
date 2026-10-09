@@ -333,3 +333,10 @@ If cash shows negative, receipts such as venture withdrawals aren't recorded yet
 - **Scan receipt** (Quick entry, and at the top of Add expense): take a photo or choose one. The phone reads the receipt and fills in date, amount, currency, merchant (with VAT), invoice number, category and supplier (if it's in master data). Filled fields are highlighted green. Check them, then save; the photo is attached as the receipt. Typing everything in by hand still works.
   - Reading happens in the browser with Tesseract (open-source OCR, loaded from cdn.jsdelivr.net), so nothing is sent to an outside service. The first scan downloads the reader (a few MB), and later scans are faster.
   - PKR receipts: the PKR amount goes into "PKR received by supplier"; enter the USD or AED paid.
+
+## IBKR stocks & ETFs (9 Oct 2026)
+- New holdings type **IBKR stocks & ETFs** (USD), working like PSX: Buy / Sell / Dividend, average cost, realised and unrealised gain, market value (defaults to cost, editable), report reconciliation.
+- A venture named "Interactive Brokers" / "IBKR" is set up automatically; otherwise Ventures → Shares & commodities → Create IBKR portfolio (or Use an existing venture).
+- Symbol list: `ibkr-symbols.txt` (11,998 US-listed stocks and ETFs on NASDAQ, NYSE, NYSE Arca, NYSE American, Cboe, plus popular LSE UCITS ETFs). Loaded only when needed. Add more with **IBKR list → upload** (any file with a Symbol column).
+- Reconcile by uploading the IBKR Activity Statement CSV (Open Positions section is read) or a Flex/positions export.
+- Buy box searches by symbol or company name (PSX too), showing the top matches.
